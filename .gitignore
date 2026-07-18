@@ -19,6 +19,8 @@ artifacts/evals/*.wav
 artifacts/evals/*.jsonl
 artifacts/evals/*.bak-*
 artifacts/evals/*-final.md
+artifacts/evals/*-style-eval*
+artifacts/songs/*.wav
 
 # Local diagnostic screenshots
 /image*.png

@@ -212,6 +212,12 @@ export async function masterSongManifestDelivery(
     ["master", "mix"],
     manifest.composition_hash,
   );
+  if (sourceArtifact.role === "mix" && sourceArtifact.metadata.source_mix_hash !== manifest.mix_hash) {
+    throw new Error(
+      `Mix artifact ${sourceArtifact.id} belongs to mix hash ${String(sourceArtifact.metadata.source_mix_hash)}, `
+      + `but the current mix hash is ${manifest.mix_hash}; render a new mix before delivery`,
+    );
+  }
   const sourcePath = await resolveVerifiedArtifact(sourceArtifact, ".wav");
   const outputPath = await resolveWritablePath(options.outputPath);
   if (extname(outputPath).toLowerCase() !== ".wav") throw new Error("outputPath must end in .wav");
@@ -245,12 +251,14 @@ export async function masterSongManifestDelivery(
         renderer: "ffmpeg-loudnorm-two-pass",
         timeline_origin: sourceArtifact.metadata.timeline_origin === "song_start" ? "song_start" : "project_start",
         source_role: sourceArtifact.role,
+        ...(sourceArtifact.role === "mix" ? { source_mix_hash: manifest.mix_hash } : {}),
         target_lufs: options.targetLufs,
         target_true_peak_dbfs: options.targetTruePeakDbfs,
         target_lra_lu: options.targetLoudnessRangeLu,
         integrated_lufs: mastering.output.integratedLufs,
         loudness_range_lu: mastering.output.loudnessRangeLu,
         true_peak_dbfs: mastering.output.truePeakDbfs,
+        true_peak_correction_db: mastering.truePeakCorrectionDb,
         sample_clipping: mastering.output.sampleClipping,
         source_clipping_accepted: options.allowClippedSource,
         stereo_balance_db: mastering.output.stereoBalanceDb ?? 0,

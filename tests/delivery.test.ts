@@ -4,12 +4,15 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { masterSongManifestDelivery } from "../src/delivery.js";
+import { preflightSongManifest } from "../src/song-preflight.js";
 import {
   createSongManifest,
   fileSha256,
   loadSongManifest,
+  inspectSongManifest,
   recordSongManifestArtifacts,
   upsertSongManifestArrangementTrack,
+  upsertSongManifestEffectChain,
   upsertSongManifestVocalPart,
 } from "../src/song-manifest.js";
 
@@ -149,4 +152,54 @@ test("manifest-aware delivery verifies provenance and atomically records masteri
   const recorded = after.artifacts.find((artifact) => artifact.id === result.artifact.id);
   assert.equal(recorded?.sha256, (await fileSha256(deliveryPath)).sha256);
   assert.equal(recorded?.source_composition_hash, compositionHash);
+
+  const staleMixPath = join(temporary, "delivery-song-stale-mix-r5.wav");
+  await writeFile(staleMixPath, stereoTone(3));
+  const beforeMixChange = (await loadSongManifest(manifestPath)).manifest;
+  await recordSongManifestArtifacts(manifestPath, 5, compositionHash, [{
+    id: "stem-mix-r5",
+    role: "mix",
+    path: staleMixPath,
+    ...(await fileSha256(staleMixPath)),
+    source_revision: 5,
+    source_composition_hash: compositionHash,
+    dependencies: ["lead"],
+    metadata: { renderer: "fixture", source_mix_hash: beforeMixChange.mix_hash },
+    created_at: new Date().toISOString(),
+  }]);
+  await upsertSongManifestEffectChain(
+    manifestPath,
+    manifestPath,
+    6,
+    {
+      id: "lead-chain",
+      target_id: "lead",
+      effects: [{ id: "lead-gain", type: "gain", parameters: { gain_db: -2 } }],
+    },
+    true,
+  );
+  const summary = await inspectSongManifest(manifestPath);
+  const staleSummary = summary.artifacts.find((artifact) => artifact.id === "stem-mix-r5");
+  assert.equal(staleSummary?.currentComposition, true);
+  assert.equal(staleSummary?.currentMix, false);
+  const stalePreflight = await preflightSongManifest(manifestPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  });
+  assert.ok(stalePreflight.issues.some((issue) => issue.code === "STALE_MIX_ARTIFACT"));
+  const staleDeliveryPath = join(temporary, "must-not-deliver-stale-mix.wav");
+  await assert.rejects(
+    masterSongManifestDelivery({
+      manifestPath,
+      expectedRevision: 7,
+      sourceArtifactId: "stem-mix-r5",
+      outputPath: staleDeliveryPath,
+      targetLufs: -16,
+      targetTruePeakDbfs: -1,
+      targetLoudnessRangeLu: 7,
+      allowClippedSource: false,
+    }),
+    /belongs to mix hash.*current mix hash/u,
+  );
+  assert.equal(await access(staleDeliveryPath).then(() => true, () => false), false);
 });

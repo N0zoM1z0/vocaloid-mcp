@@ -70,7 +70,8 @@ test("analyzes EBU loudness and masters to bounded targets", async (context) => 
   assert.equal(result.loudnessRangeTargetMet, false);
   assert.equal(result.targetLoudnessRangeLu, 7);
   assert.ok(Math.abs(result.output.integratedLufs - -16) <= 0.6);
-  assert.ok(result.output.truePeakDbfs <= -0.8);
+  assert.ok(result.output.truePeakDbfs <= -0.95);
+  assert.ok(result.truePeakCorrectionDb <= 0);
   assert.equal(result.output.clippedSampleValues, 0);
   assert.deepEqual((await readdir(temporary)).sort(), ["input.wav", "mastered.wav"]);
 

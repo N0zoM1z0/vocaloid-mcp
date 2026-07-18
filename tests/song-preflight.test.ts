@@ -222,3 +222,104 @@ test("preflight distinguishes score readiness from later artifact stages", async
     "CURRENT_INSTRUMENT_STEM_REQUIRED",
   ]);
 });
+
+test("preflight blocks native VSQX comments that exceed the compiler boundary", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-song-preflight-native-comment-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const manifestPath = join(temporary, "native-comment.song.json");
+  await createSongManifest({
+    outputPath: manifestPath,
+    songId: "preflight-native-comment",
+    slug: "preflight-native-comment",
+    title: "Preflight Native Comment",
+    format: "vsq3",
+    preMeasure: 1,
+    timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+    sections: [{
+      id: "verse",
+      name: "Verse",
+      kind: "verse",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 1, beat: 0 },
+    }],
+    sampleRate: 44_100,
+    gain: 0.18,
+    reverb: false,
+    chorus: false,
+    overwrite: false,
+  });
+  await upsertSongManifestVocalPart(
+    manifestPath,
+    manifestPath,
+    1,
+    { id: "voice-ia-rocks", name: "IA_ROCKS", component_id: "BDREB7P2KTWKYDC5" },
+    {
+      id: "lead",
+      name: "Lead",
+      comment: "t".repeat(257),
+      voice_id: "voice-ia-rocks",
+    },
+    {
+      id: "lead-part",
+      section_id: "verse",
+      name: "Lead Part",
+      comment: "p".repeat(257),
+      start: { measure: 0, beat: 0 },
+      end: { measure: 1, beat: 0 },
+      notes: [{
+        id: "lead-note",
+        position: { measure: 0, beat: 0 },
+        duration: 480,
+        note_number: 67,
+        lyric: "ら",
+        phonemes: "4 a",
+      }],
+    },
+    true,
+  );
+  await upsertSongManifestArrangementTrack(
+    manifestPath,
+    manifestPath,
+    2,
+    {
+      kind: "pitched",
+      id: "piano",
+      name: "Piano",
+      program: 0,
+      notes: [{
+        id: "piano-note",
+        position: { measure: 0, beat: 0 },
+        duration: 480,
+        note_number: 48,
+      }],
+    },
+    true,
+  );
+
+  const result = await preflightSongManifest(manifestPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  });
+  assert.equal(result.readiness.score.ready, true);
+  assert.equal(result.readiness.build.ready, false);
+  assert.deepEqual(result.readiness.build.blockers, [
+    "NATIVE_TRACK_COMMENT_TOO_LONG",
+    "NATIVE_PART_COMMENT_TOO_LONG",
+  ]);
+  assert.equal(result.counts.errors, 2);
+
+  const backingPath = join(temporary, "must-not-exist.wav");
+  const projectPath = join(temporary, "must-not-exist.vsqx");
+  await assert.rejects(
+    buildSongManifest({
+      manifestPath,
+      expectedRevision: 3,
+      backingOutputPath: backingPath,
+      projectOutputPath: projectPath,
+    }),
+    /(?=[\s\S]*NATIVE_TRACK_COMMENT_TOO_LONG)(?=[\s\S]*NATIVE_PART_COMMENT_TOO_LONG)/u,
+  );
+  assert.equal(await exists(backingPath), false);
+  assert.equal(await exists(projectPath), false);
+});

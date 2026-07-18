@@ -1228,7 +1228,33 @@ export async function createSongManifest(options: CreateSongManifestOptions): Pr
   return persistManifest(withHash(candidate), options.outputPath, options.overwrite);
 }
 
+export function currentMixArtifactIds(manifest: SongManifest): ReadonlySet<string> {
+  const artifactsById = new Map(manifest.artifacts.map((artifact) => [artifact.id, artifact]));
+  const currentMixMemo = new Map<string, boolean>();
+  const currentForMix = (artifact: ManifestArtifact, visiting = new Set<string>()): boolean => {
+    const memoized = currentMixMemo.get(artifact.id);
+    if (memoized !== undefined) return memoized;
+    if (artifact.source_composition_hash !== manifest.composition_hash || visiting.has(artifact.id)) {
+      return false;
+    }
+    let current = true;
+    if (artifact.role === "mix") {
+      current = artifact.metadata.source_mix_hash === manifest.mix_hash;
+    } else if (artifact.role === "delivery") {
+      const next = new Set(visiting).add(artifact.id);
+      current = artifact.dependencies.length > 0 && artifact.dependencies.every((dependency) => {
+        const source = artifactsById.get(dependency);
+        return source !== undefined && currentForMix(source, next);
+      });
+    }
+    currentMixMemo.set(artifact.id, current);
+    return current;
+  };
+  return new Set(manifest.artifacts.filter((artifact) => currentForMix(artifact)).map((artifact) => artifact.id));
+}
+
 function manifestSummary(path: string, manifest: SongManifest) {
+  const currentMixArtifacts = currentMixArtifactIds(manifest);
   return {
     path,
     schema: manifest.schema,
@@ -1287,7 +1313,12 @@ function manifestSummary(path: string, manifest: SongManifest) {
       role: artifact.role,
       path: artifact.path,
       sourceRevision: artifact.source_revision,
+      sourceCompositionHash: artifact.source_composition_hash,
       sha256: artifact.sha256,
+      dependencies: artifact.dependencies,
+      metadata: artifact.metadata,
+      currentComposition: artifact.source_composition_hash === manifest.composition_hash,
+      currentMix: currentMixArtifacts.has(artifact.id),
     })),
     reviewNotes: (manifest.review_notes ?? []).map((note) => ({
       id: note.id,

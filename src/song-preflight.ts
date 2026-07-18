@@ -3,6 +3,7 @@ import { isChordTone, parseChordSymbol } from "./harmony.js";
 import { resolveReadablePath } from "./paths.js";
 import {
   fileSha256,
+  currentMixArtifactIds,
   loadSongManifest,
   manifestExpectedVocalEvents,
   type ManifestArtifact,
@@ -650,6 +651,27 @@ export async function preflightSongManifest(
     ));
   }
   for (const track of manifest.vocal_tracks) {
+    if (track.comment.length > 256) {
+      issues.push(issue(
+        "NATIVE_TRACK_COMMENT_TOO_LONG",
+        "error",
+        "vocal",
+        `Vocal track ${track.id} comment has ${track.comment.length} characters; native VSQX accepts at most 256.`,
+        [track.id],
+        "Shorten the native track comment and keep full provenance in manifest artifacts, review notes, or phrase linguistic_source.",
+      ));
+    }
+    for (const part of track.parts) {
+      if (part.comment.length <= 256) continue;
+      issues.push(issue(
+        "NATIVE_PART_COMMENT_TOO_LONG",
+        "error",
+        "vocal",
+        `Vocal part ${part.id} comment has ${part.comment.length} characters; native VSQX accepts at most 256.`,
+        [track.id, part.id],
+        "Shorten the native part comment and keep full provenance in manifest artifacts, review notes, or phrase linguistic_source.",
+      ));
+    }
     if (track.mixer.pan <= 4 || track.mixer.pan >= 123) {
       issues.push(issue(
         "EXTREME_VOCAL_PAN",
@@ -688,6 +710,7 @@ export async function preflightSongManifest(
   }
 
   const knownIds = allStableIds(manifest);
+  const currentMixArtifacts = currentMixArtifactIds(manifest);
   for (const artifact of manifest.artifacts) {
     if (artifact.source_composition_hash !== manifest.composition_hash) {
       issues.push(issue(
@@ -699,6 +722,22 @@ export async function preflightSongManifest(
         "Keep it only as history; do not select it for a current render/mix dependency.",
       ));
     }
+    if (
+      artifact.source_composition_hash === manifest.composition_hash
+      && ["mix", "delivery"].includes(artifact.role)
+      && !currentMixArtifacts.has(artifact.id)
+    ) {
+      issues.push(issue(
+        artifact.role === "mix" ? "STALE_MIX_ARTIFACT" : "STALE_DELIVERY_ARTIFACT",
+        "warning",
+        "artifact",
+        `Artifact ${artifact.id} no longer matches the current mix intent/dependency chain.`,
+        [artifact.id],
+        artifact.role === "mix"
+          ? "Render a new stem mix from current stems and mix_hash before mastering."
+          : "Master a current mix/master dependency into a new immutable delivery artifact.",
+      ));
+    }
   }
   const checkedArtifacts = manifest.artifacts.filter((artifact) =>
     options.artifactCheck === "all"
@@ -708,7 +747,8 @@ export async function preflightSongManifest(
   }
 
   const currentArtifacts = manifest.artifacts.filter((artifact) =>
-    artifact.source_composition_hash === manifest.composition_hash);
+    artifact.source_composition_hash === manifest.composition_hash
+    && (!["mix", "delivery"].includes(artifact.role) || currentMixArtifacts.has(artifact.id)));
   const currentRoles = new Set(currentArtifacts.map((artifact) => artifact.role));
   const scoreCodes = [
     "PART_OVERLAP", "VOCAL_EVENT_OVERLAP", "ARRANGEMENT_EVENT_PAST_SONG_END",
@@ -716,7 +756,11 @@ export async function preflightSongManifest(
     "NO_PITCHED_ARRANGEMENT_TRACK",
   ];
   const score = gate(issues, scoreCodes);
-  const build = score;
+  const build = gate(issues, [
+    ...scoreCodes,
+    "NATIVE_TRACK_COMMENT_TOO_LONG",
+    "NATIVE_PART_COMMENT_TOO_LONG",
+  ]);
   const renderBlockers = [...build.blockers];
   if (!currentRoles.has("vsqx")) renderBlockers.push("CURRENT_VSQX_REQUIRED");
   if (issues.some((entry) => entry.code === "VOICE_NOT_VERIFIED" && entry.severity === "error")) {

@@ -45,6 +45,7 @@ export interface MasterWavResult {
   targetLoudnessRangeLu: number;
   loudnessRangeDeltaLu: number;
   loudnessRangeTargetMet: boolean;
+  truePeakCorrectionDb: number;
   measuredByLoudnorm: {
     inputLufs: number;
     inputTruePeakDbfs: number;
@@ -265,6 +266,7 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
     dirname(outputPath),
     `.${basename(outputPath)}.master-${process.pid}-${Date.now()}.wav`,
   );
+  let correctionTemporary: string | null = null;
   try {
     await execFileAsync(
       ffmpeg,
@@ -278,17 +280,42 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
       ],
       { timeout: 300_000, maxBuffer: 8 * 1024 * 1024 },
     );
-    const output = await analyzeAudioQuality(
+    let output = await analyzeAudioQuality(
       temporary,
       options.targetLufs,
       options.targetTruePeakDbfs,
     );
+    let truePeakCorrectionDb = 0;
+    if (output.truePeakDbfs > options.targetTruePeakDbfs) {
+      truePeakCorrectionDb = options.targetTruePeakDbfs - output.truePeakDbfs - 0.05;
+      correctionTemporary = `${temporary}.true-peak.wav`;
+      await execFileAsync(
+        ffmpeg,
+        [
+          "-hide_banner", "-nostats", "-y", "-i", temporary,
+          "-af", `volume=${truePeakCorrectionDb.toFixed(3)}dB`,
+          "-ar", String(source.sampleRate),
+          "-ac", String(source.channels),
+          "-c:a", "pcm_s16le",
+          correctionTemporary,
+        ],
+        { timeout: 300_000, maxBuffer: 8 * 1024 * 1024 },
+      );
+      await unlink(temporary);
+      await rename(correctionTemporary, temporary);
+      correctionTemporary = null;
+      output = await analyzeAudioQuality(
+        temporary,
+        options.targetLufs,
+        options.targetTruePeakDbfs,
+      );
+    }
     if (Math.abs(output.integratedLufs - options.targetLufs) > 0.6) {
       throw new Error(
         `Master output missed loudness target: ${output.integratedLufs} LUFS vs ${options.targetLufs} LUFS`,
       );
     }
-    if (output.truePeakDbfs > options.targetTruePeakDbfs + 0.2) {
+    if (output.truePeakDbfs > options.targetTruePeakDbfs + 0.05) {
       throw new Error(
         `Master output exceeded true-peak target: ${output.truePeakDbfs} dBFS vs ${options.targetTruePeakDbfs} dBFS`,
       );
@@ -310,10 +337,12 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
       loudnessRangeDeltaLu: output.loudnessRangeLu - options.targetLoudnessRangeLu,
       loudnessRangeTargetMet:
         Math.abs(output.loudnessRangeLu - options.targetLoudnessRangeLu) <= 1.5,
+      truePeakCorrectionDb,
       measuredByLoudnorm: measuredValues,
     };
   } catch (error) {
     await unlink(temporary).catch(() => undefined);
+    if (correctionTemporary) await unlink(correctionTemporary).catch(() => undefined);
     throw error;
   }
 }

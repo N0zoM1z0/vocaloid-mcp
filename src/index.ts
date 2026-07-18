@@ -447,7 +447,18 @@ const ManifestSummaryDataOutputSchema = z.object({
   sections: z.array(z.object({ id: z.string(), kind: z.string() }).passthrough()),
   vocalTracks: z.array(z.object({ id: z.string(), name: z.string(), voiceId: z.string() }).passthrough()),
   arrangementTracks: z.array(z.object({ id: z.string(), kind: z.string() }).passthrough()),
-  artifacts: z.array(z.object({ id: z.string(), role: z.string(), path: z.string() }).passthrough()),
+  artifacts: z.array(z.object({
+    id: z.string(),
+    role: z.string(),
+    path: z.string(),
+    sourceRevision: z.number().int(),
+    sourceCompositionHash: z.string(),
+    sha256: z.string(),
+    dependencies: z.array(z.string()),
+    metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+    currentComposition: z.boolean(),
+    currentMix: z.boolean(),
+  }).strict()),
 }).passthrough();
 
 const ManifestSectionDataOutputSchema = z.object({
@@ -503,8 +514,10 @@ const StemMixDataOutputSchema = z.object({
 }).passthrough();
 
 const ManifestMasterDataOutputSchema = z.object({
+  sourceRevision: z.number().int(),
   sourceCompositionHash: z.string(),
   manifestRevision: z.number().int(),
+  manifestContentHash: z.string(),
   projectArtifactId: z.string(),
   preflight: WorkflowReadinessOutputSchema,
   render: z.object({
@@ -522,8 +535,10 @@ const ManifestMasterDataOutputSchema = z.object({
 }).strict();
 
 const ManifestDeliveryDataOutputSchema = z.object({
+  sourceRevision: z.number().int(),
   sourceCompositionHash: z.string(),
   manifestRevision: z.number().int(),
+  manifestContentHash: z.string(),
   sourceArtifactId: z.string(),
   mastering: z.object({
     outputPath: z.string(),
