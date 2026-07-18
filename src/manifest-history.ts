@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
+import { optionalSongIntentHash } from "./intent/hash.js";
 import { loadSongManifest, type SongManifest } from "./song-manifest.js";
 
 
@@ -12,6 +13,7 @@ export interface ManifestHistoryEntry {
   parentHash: string | null;
   compositionHash: string;
   mixHash: string;
+  intentHash: string | null;
   updatedAt: string;
   fileModifiedAt: string;
   bytes: number;
@@ -49,6 +51,7 @@ export async function listManifestHistory(manifestPath: string) {
         parentHash: snapshot.manifest.parent_hash ?? null,
         compositionHash: snapshot.manifest.composition_hash,
         mixHash: snapshot.manifest.mix_hash,
+        intentHash: optionalSongIntentHash(snapshot.manifest.composition_intent),
         updatedAt: snapshot.manifest.updated_at,
         fileModifiedAt: info.mtime.toISOString(),
         bytes: info.size,
@@ -78,6 +81,7 @@ type DiffDomain =
   | "vocals"
   | "arrangement"
   | "mix"
+  | "intent"
   | "guidance"
   | "artifacts"
   | "review_notes";
@@ -143,6 +147,13 @@ function entities(manifest: SongManifest): Record<DiffDomain, Entity[]> {
       ]),
       ...manifest.mix.section_dynamics.map((entry) => ({ id: entry.id, value: entry })),
     ],
+    intent: manifest.composition_intent
+      ? [
+          { id: "composition-intent/song", value: manifest.composition_intent.song },
+          ...manifest.composition_intent.sections.map((entry) => ({ id: entry.id, value: entry })),
+          ...manifest.composition_intent.phrase_directions.map((entry) => ({ id: entry.id, value: entry })),
+        ]
+      : [],
     guidance: manifest.composition_guidance
       ? [{ id: "composition-guidance", value: manifest.composition_guidance }]
       : [],
@@ -190,6 +201,7 @@ export async function diffManifestSnapshots(fromPath: string, toPath: string) {
       contentHash: from.manifest.content_hash,
       compositionHash: from.manifest.composition_hash,
       mixHash: from.manifest.mix_hash,
+      intentHash: optionalSongIntentHash(from.manifest.composition_intent),
     },
     to: {
       path: to.path,
@@ -197,6 +209,7 @@ export async function diffManifestSnapshots(fromPath: string, toPath: string) {
       contentHash: to.manifest.content_hash,
       compositionHash: to.manifest.composition_hash,
       mixHash: to.manifest.mix_hash,
+      intentHash: optionalSongIntentHash(to.manifest.composition_intent),
     },
     compositionChanged: from.manifest.composition_hash !== to.manifest.composition_hash,
     mixChanged: from.manifest.mix_hash !== to.manifest.mix_hash,

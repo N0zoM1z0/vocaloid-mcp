@@ -33,6 +33,13 @@ test("theory contracts are strict, typed, and reject ambiguous exception targets
       version: "2026.07.19",
       pinned_at: "2026-07-19T00:00:00.000Z",
     },
+    intent_review_policy: {
+      mode: "required_for_delivery",
+      require_song_intent: true,
+      require_section_intent: true,
+      minimum_anchor_phrases: 1,
+      require_current_audition_review: true,
+    },
     exceptions: [{
       id: "exception-suspension-1",
       issue_code: "SUSTAINED_NON_CHORD_TONE_UNRESOLVED",
@@ -44,6 +51,7 @@ test("theory contracts are strict, typed, and reject ambiguous exception targets
     }],
   });
   assert.equal(guidance.style_profile?.id, "ia-rock-balanced");
+  assert.equal(guidance.intent_review_policy?.mode, "required_for_delivery");
   assert.throws(
     () => CompositionGuidanceSchema.parse({
       ...guidance,
@@ -164,6 +172,7 @@ test("optional composition guidance changes only content hash and remains absent
   assert.equal(guided.composition_hash, legacy.composition_hash);
   assert.equal(guided.mix_hash, legacy.mix_hash);
   assert.equal(guided.composition_guidance?.theory_ruleset_id, "core/v1");
+  assert.equal(Object.hasOwn(guided.composition_guidance ?? {}, "intent_review_policy"), false);
   const summary = await inspectSongManifest(guidedPath);
   assert.equal(summary.compositionGuidance?.exceptions[0]?.issueCode, "STYLE_FEATURE_OUTLIER");
 

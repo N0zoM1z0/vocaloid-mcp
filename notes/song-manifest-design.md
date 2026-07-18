@@ -25,6 +25,9 @@ Every manifest contains:
 - `mix_hash`: SHA-256 of `composition_hash` plus ordered effect chains and
   section dynamics, so a rendered mix becomes stale when either source music or
   downstream mix intent changes;
+- `intent_hash`: a derived SHA-256 of optional `composition_intent`, used to
+  invalidate artistic listening decisions without forcing a byte-identical
+  score or stem rebuild;
 - `parent_hash`: hash of the immediately preceding revision, when any;
 - stable IDs for the song, sections, voices, tracks, parts, phrases, notes,
   controls, patterns, placements, and artifacts;
@@ -36,15 +39,19 @@ paths are never replaced without explicit overwrite and a backup.
 
 ## Core domains
 
-1. Timeline: tempo and meter maps.
-2. Sections: semantic form, musical positions, energy, and descriptions.
-3. Harmony: key and chord events retained as compositional intent.
-4. Vocals: installed voices, track mixer state, parts, notes, phrase-level lyric
+1. Composition intent: song premise, section transitions, anchor-phrase
+   direction, listening questions, and optional stable realization links.
+2. Timeline: tempo and meter maps.
+3. Sections: semantic form, musical positions, energy, and descriptions.
+4. Harmony: key and chord events retained as compositional intent.
+5. Vocals: installed voices, track mixer state, parts, notes, phrase-level lyric
    and rhythm sources, expression, vibrato, and control curves.
-5. Arrangement: pitched and drum tracks, reusable patterns, placements, and
+6. Arrangement: pitched and drum tracks, reusable patterns, placements, and
    renderer settings.
-6. Mix: stems, reproducible effect chains, automation, and section dynamics.
-7. Artifacts: source revision, dependencies, SHA-256, size, and role.
+7. Mix: stems, reproducible effect chains, automation, and section dynamics.
+8. Artifacts: source revision, dependencies, SHA-256, size, and role.
+9. Review: qualitative notes plus optional intent/composition/artifact-bound
+   listening evidence.
 
 ## Tool boundary
 

@@ -6,10 +6,11 @@ This note defines the deterministic theory boundary introduced by `core/v1`. It 
 
 The production workflow uses lexicographic priorities:
 
-1. preserve the user's brief, lyric meaning, and declared formal intent;
-2. make form, timeline, harmony, singability, note allocation, voice leading, and arrangement internally coherent;
-3. pass novelty and provenance gates;
-4. optionally compare the completed symbolic composition with one pinned aggregate IA profile.
+1. preserve the user's brief, lyric meaning, and declared song/section/phrase intent;
+2. make the melody, harmony, rhythm, note allocation, IA delivery, and arrangement traceably serve that intent;
+3. make form, timeline, harmony, singability, note allocation, voice leading, and arrangement internally coherent;
+4. pass novelty and provenance gates;
+5. optionally compare the completed symbolic composition with one pinned aggregate IA profile.
 
 Style evidence never suppresses a structural error and never supplies the next note, chord, lyric allocation, or repair patch.
 
@@ -46,6 +47,8 @@ Changing a target makes the exception stale. Error-level structural issues canno
 ## Hash boundary
 
 `composition_guidance` is optional and has no parse-time default. It participates in `content_hash` and history diff, but not `composition_hash` or `mix_hash`. Adding or reviewing policy therefore does not make score/audio artifacts stale.
+
+`composition_intent` is a separate optional creative declaration. It participates in `content_hash` and has a derived `intent_hash`, but does not enter `composition_hash` or `mix_hash`. An intent-only edit invalidates intent-fidelity listening review instead of forcing a byte-identical score/audio rebuild. See `composition-intent-contract.md`.
 
 ## Style pin
 

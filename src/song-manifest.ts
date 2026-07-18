@@ -20,6 +20,19 @@ import {
   type DrumPatternInput,
   type DrumPatternPlacementInput,
 } from "./accompaniment.js";
+import { summarizeCompositionIntent } from "./intent/analyze.js";
+import { optionalSongIntentHash, songIntentHash } from "./intent/hash.js";
+import {
+  assertCurrentIntentFidelityReviewBasis,
+  resolveIntentReviewCurrentness,
+} from "./intent/review.js";
+import {
+  CompositionIntentSchema,
+  IntentFidelityReviewBasisSchema,
+  PhraseDirectionSchema,
+  PhraseRealizationLinksSchema,
+  SectionCreativeIntentSchema,
+} from "./intent/types.js";
 import { resolveReadablePath, resolveWritablePath } from "./paths.js";
 import { CompositionGuidanceSchema } from "./theory/types.js";
 import { compileVocalPhrase, rhythmValueTicks, type VocalPhraseInput } from "./vocal-phrase.js";
@@ -35,6 +48,8 @@ import {
   type SongTrackInput,
 } from "./vsqx.js";
 import type { CurveName, NoteInput, VibratoInput, VsqxFormat } from "./types.js";
+
+export { songIntentHash };
 
 
 const MANIFEST_SCHEMA = "vocaloid-song-manifest/v1" as const;
@@ -643,6 +658,7 @@ export const ManifestReviewNoteSchema = z
     object_ids: z.array(IdSchema).max(256).default([]),
     artifact_ids: z.array(IdSchema).max(64).default([]),
     position: ManifestPositionSchema.optional(),
+    intent_fidelity: IntentFidelityReviewBasisSchema.optional(),
     status: z.enum(["open", "resolved"]).default("open"),
     created_at: z.string().datetime(),
     resolved_at: z.string().datetime().optional(),
@@ -663,6 +679,7 @@ export const ManifestReviewNoteInputSchema = z
     object_ids: z.array(IdSchema).max(256).default([]),
     artifact_ids: z.array(IdSchema).max(64).default([]),
     position: ManifestPositionSchema.optional(),
+    intent_fidelity: IntentFidelityReviewBasisSchema.optional(),
   })
   .strict();
 
@@ -708,6 +725,7 @@ export const SongManifestSchema = z
         section_dynamics: z.array(ManifestSectionDynamicsSchema).max(5000),
       })
       .strict(),
+    composition_intent: CompositionIntentSchema.optional(),
     composition_guidance: CompositionGuidanceSchema.optional(),
     artifacts: z.array(ManifestArtifactSchema).max(10_000),
     review_notes: z.array(ManifestReviewNoteSchema).max(10_000).optional(),
@@ -725,6 +743,7 @@ export type ManifestReviewNote = z.infer<typeof ManifestReviewNoteSchema>;
 export type ManifestEffectChain = z.infer<typeof ManifestEffectChainSchema>;
 export type ManifestSectionDynamic = z.infer<typeof ManifestSectionDynamicsSchema>;
 export type ManifestCompositionGuidance = z.infer<typeof CompositionGuidanceSchema>;
+export type ManifestCompositionIntent = z.infer<typeof CompositionIntentSchema>;
 
 export interface CreateSongManifestOptions {
   outputPath: string;
@@ -870,6 +889,13 @@ function assertGloballyUniqueStableIds(manifest: SongManifest): void {
   for (const dynamic of manifest.mix.section_dynamics) add(dynamic.id, `section dynamic for ${dynamic.target_id}`);
   for (const artifact of manifest.artifacts) add(artifact.id, `artifact ${artifact.role}`);
   for (const note of manifest.review_notes ?? []) add(note.id, `review note by ${note.author_name}`);
+  for (const sectionIntent of manifest.composition_intent?.sections ?? []) {
+    add(sectionIntent.id, `creative intent for section ${sectionIntent.section_id}`);
+  }
+  for (const direction of manifest.composition_intent?.phrase_directions ?? []) {
+    add(direction.id, `phrase direction in section ${direction.section_id}`);
+    add(direction.listening_question.id, `listening question for ${direction.id}`);
+  }
   for (const exception of manifest.composition_guidance?.exceptions ?? []) {
     add(exception.id, `theory exception for ${exception.issue_code}`);
   }
@@ -1086,8 +1112,80 @@ function validateManifestSemantics(manifest: SongManifest): void {
     ...manifest.mix.effect_chains.flatMap((chain) => [chain.id, ...chain.effects.map((entry) => entry.id)]),
     ...manifest.mix.section_dynamics.map((entry) => entry.id),
     ...manifest.artifacts.map((entry) => entry.id),
+    ...(manifest.composition_intent?.sections ?? []).map((entry) => entry.id),
+    ...(manifest.composition_intent?.phrase_directions ?? []).flatMap((entry) => [
+      entry.id,
+      entry.listening_question.id,
+    ]),
     "mix-bus",
   ]);
+  if (manifest.composition_intent) {
+    const vocalPhraseIds = new Set(manifest.vocal_tracks.flatMap((track) =>
+      track.parts.flatMap((part) => part.phrases.map((phrase) => phrase.id))));
+    const lyricUnitIds = new Set(manifest.vocal_tracks.flatMap((track) =>
+      track.parts.flatMap((part) => part.phrases.flatMap((phrase) =>
+        phrase.lyrics.map((lyric) => lyric.id)))));
+    const vocalEventIds = new Set(manifest.vocal_tracks.flatMap((track) =>
+      track.parts.flatMap((part) => [
+        ...part.notes.map((note) => note.id),
+        ...part.phrases.flatMap((phrase) => phrase.cells.map((cell) => cell.id)),
+      ])));
+    const tuningGestureIds = new Set(manifest.vocal_tracks.flatMap((track) =>
+      track.parts.flatMap((part) => (part.tuning_gestures ?? []).map((gesture) => gesture.id))));
+    const chordIds = new Set(manifest.harmony.chord_changes.map((chord) => chord.id));
+    const semanticFocusIds = new Set([...lyricUnitIds, ...vocalEventIds]);
+    const assertIntentLinks = (
+      directionId: string,
+      kind: string,
+      ids: readonly string[] | undefined,
+      allowed: ReadonlySet<string>,
+    ): void => {
+      for (const id of ids ?? []) {
+        if (!allowed.has(id)) {
+          throw new Error(
+            `INTENT_REALIZATION_REFERENCE_INVALID: phrase direction ${directionId} `
+            + `${kind} references unknown object ${id}`,
+          );
+        }
+      }
+    };
+    for (const sectionIntent of manifest.composition_intent.sections) {
+      if (!sectionIds.has(sectionIntent.section_id)) {
+        throw new Error(
+          `INTENT_SECTION_REFERENCE_INVALID: section intent ${sectionIntent.id} `
+          + `references unknown section ${sectionIntent.section_id}`,
+        );
+      }
+    }
+    for (const direction of manifest.composition_intent.phrase_directions) {
+      if (!sectionIds.has(direction.section_id)) {
+        throw new Error(
+          `INTENT_SECTION_REFERENCE_INVALID: phrase direction ${direction.id} `
+          + `references unknown section ${direction.section_id}`,
+        );
+      }
+      assertIntentLinks(
+        direction.id,
+        "lyric_anchor.lyric_unit_ids",
+        direction.lyric_anchor?.lyric_unit_ids,
+        lyricUnitIds,
+      );
+      const links = direction.realization_links;
+      if (!links) continue;
+      assertIntentLinks(direction.id, "vocal_phrase_ids", links.vocal_phrase_ids, vocalPhraseIds);
+      assertIntentLinks(direction.id, "lyric_unit_ids", links.lyric_unit_ids, lyricUnitIds);
+      assertIntentLinks(direction.id, "event_ids", links.event_ids, vocalEventIds);
+      assertIntentLinks(
+        direction.id,
+        "semantic_focus_object_ids",
+        links.semantic_focus_object_ids,
+        semanticFocusIds,
+      );
+      assertIntentLinks(direction.id, "tuning_gesture_ids", links.tuning_gesture_ids, tuningGestureIds);
+      assertIntentLinks(direction.id, "chord_ids", links.chord_ids, chordIds);
+      assertIntentLinks(direction.id, "track_ids", links.track_ids, trackIds);
+    }
+  }
   for (const note of manifest.review_notes ?? []) {
     if (note.section_id && !sectionIds.has(note.section_id)) {
       throw new Error(`Review note ${note.id} references unknown section ${note.section_id}`);
@@ -1268,6 +1366,16 @@ export function currentMixArtifactIds(manifest: SongManifest): ReadonlySet<strin
 
 function manifestSummary(path: string, manifest: SongManifest) {
   const currentMixArtifacts = currentMixArtifactIds(manifest);
+  const compositionIntent = summarizeCompositionIntent(
+    manifest.composition_intent,
+    manifest.sections.map((section) => section.id),
+  );
+  const intentReviewContext = {
+    ...(manifest.composition_intent ? { compositionIntent: manifest.composition_intent } : {}),
+    compositionHash: manifest.composition_hash,
+    artifacts: manifest.artifacts,
+    currentArtifactIds: currentMixArtifacts,
+  };
   return {
     path,
     schema: manifest.schema,
@@ -1275,6 +1383,7 @@ function manifestSummary(path: string, manifest: SongManifest) {
     compositionHash: manifest.composition_hash,
     mixHash: manifest.mix_hash,
     contentHash: manifest.content_hash,
+    intentHash: optionalSongIntentHash(manifest.composition_intent),
     parentHash: manifest.parent_hash ?? null,
     songId: manifest.song_id,
     slug: manifest.slug,
@@ -1321,6 +1430,7 @@ function manifestSummary(path: string, manifest: SongManifest) {
         rampMs: dynamic.ramp_ms,
       })),
     },
+    compositionIntent,
     compositionGuidance: manifest.composition_guidance
       ? {
           theoryRulesetId: manifest.composition_guidance.theory_ruleset_id,
@@ -1328,6 +1438,7 @@ function manifestSummary(path: string, manifest: SongManifest) {
           harmonicLanguage: manifest.composition_guidance.harmonic_language,
           requiredReviewSeverities: manifest.composition_guidance.required_review_severities,
           styleProfile: manifest.composition_guidance.style_profile ?? null,
+          intentReviewPolicy: manifest.composition_guidance.intent_review_policy ?? null,
           exceptions: manifest.composition_guidance.exceptions.map((exception) => ({
             id: exception.id,
             issueCode: exception.issue_code,
@@ -1362,6 +1473,12 @@ function manifestSummary(path: string, manifest: SongManifest) {
       createdAt: note.created_at,
       resolvedAt: note.resolved_at ?? null,
       resolution: note.resolution ?? null,
+      intentFidelity: note.intent_fidelity
+        ? {
+            basis: note.intent_fidelity,
+            ...resolveIntentReviewCurrentness(note.intent_fidelity, intentReviewContext),
+          }
+        : null,
     })),
   };
 }
@@ -1470,7 +1587,17 @@ export async function getSongManifestSection(inputPath: string, sectionId: strin
     path,
     revision: manifest.revision,
     contentHash: manifest.content_hash,
+    intentHash: optionalSongIntentHash(manifest.composition_intent),
     section,
+    compositionIntent: manifest.composition_intent
+      ? {
+          song: manifest.composition_intent.song,
+          section: manifest.composition_intent.sections.find((entry) => entry.section_id === sectionId) ?? null,
+          phraseDirections: manifest.composition_intent.phrase_directions.filter(
+            (entry) => entry.section_id === sectionId,
+          ),
+        }
+      : null,
     harmony: {
       key_changes: manifest.harmony.key_changes.filter((event) => {
         const tick = positionTick(manifest, event.position);
@@ -1547,6 +1674,84 @@ export async function upsertSongManifestSection(
     if (index >= 0) draft.sections[index] = section;
     else draft.sections.push(section);
     draft.sections.sort((left, right) => positionTick(draft, left.start) - positionTick(draft, right.start));
+  });
+}
+
+export async function setSongManifestCompositionIntent(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  intentInput: z.input<typeof CompositionIntentSchema>,
+  overwrite: boolean,
+) {
+  const intent = CompositionIntentSchema.parse(intentInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    draft.composition_intent = intent;
+  });
+}
+
+export async function upsertSongManifestSectionIntent(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  sectionIntentInput: z.input<typeof SectionCreativeIntentSchema>,
+  overwrite: boolean,
+) {
+  const sectionIntent = SectionCreativeIntentSchema.parse(sectionIntentInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    if (!draft.composition_intent) {
+      throw new Error("Manifest has no composition_intent; set the song intent contract first");
+    }
+    const index = draft.composition_intent.sections.findIndex(
+      (candidate) => candidate.id === sectionIntent.id || candidate.section_id === sectionIntent.section_id,
+    );
+    if (index >= 0) draft.composition_intent.sections[index] = sectionIntent;
+    else draft.composition_intent.sections.push(sectionIntent);
+    draft.composition_intent.sections.sort(
+      (left, right) => left.section_id.localeCompare(right.section_id) || left.id.localeCompare(right.id),
+    );
+  });
+}
+
+export async function upsertSongManifestPhraseDirection(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  phraseDirectionInput: z.input<typeof PhraseDirectionSchema>,
+  overwrite: boolean,
+) {
+  const phraseDirection = PhraseDirectionSchema.parse(phraseDirectionInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    if (!draft.composition_intent) {
+      throw new Error("Manifest has no composition_intent; set the song intent contract first");
+    }
+    const index = draft.composition_intent.phrase_directions.findIndex(
+      (candidate) => candidate.id === phraseDirection.id,
+    );
+    if (index >= 0) draft.composition_intent.phrase_directions[index] = phraseDirection;
+    else draft.composition_intent.phrase_directions.push(phraseDirection);
+    draft.composition_intent.phrase_directions.sort(
+      (left, right) => left.section_id.localeCompare(right.section_id) || left.id.localeCompare(right.id),
+    );
+  });
+}
+
+export async function bindSongManifestPhraseRealization(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  phraseDirectionId: string,
+  realizationLinksInput: z.input<typeof PhraseRealizationLinksSchema>,
+  overwrite: boolean,
+) {
+  const directionId = IdSchema.parse(phraseDirectionId);
+  const realizationLinks = PhraseRealizationLinksSchema.parse(realizationLinksInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const direction = draft.composition_intent?.phrase_directions.find(
+      (candidate) => candidate.id === directionId,
+    );
+    if (!direction) throw new Error(`Manifest has no phrase direction ${directionId}`);
+    direction.realization_links = realizationLinks;
   });
 }
 
@@ -2493,6 +2698,14 @@ export async function addSongManifestReviewNote(
     (draft) => {
       if ((draft.review_notes ?? []).some((candidate) => candidate.id === note.id)) {
         throw new Error(`Review note ${note.id} already exists; use a new stable ID`);
+      }
+      if (note.intent_fidelity) {
+        assertCurrentIntentFidelityReviewBasis(note.intent_fidelity, {
+          ...(draft.composition_intent ? { compositionIntent: draft.composition_intent } : {}),
+          compositionHash: draft.composition_hash,
+          artifacts: draft.artifacts,
+          currentArtifactIds: currentMixArtifactIds(draft),
+        });
       }
       draft.review_notes = [...(draft.review_notes ?? []), note];
     },

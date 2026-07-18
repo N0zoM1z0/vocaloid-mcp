@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { IntentReviewPolicySchema } from "../intent/types.js";
+
 
 const StableObjectIdSchema = z
   .string()
@@ -157,6 +159,7 @@ export const CompositionGuidanceSchema = z
     harmonic_language: HarmonicLanguageSchema,
     required_review_severities: z.array(z.enum(["warning", "info"])).max(2),
     style_profile: StyleProfilePinSchema.optional(),
+    intent_review_policy: IntentReviewPolicySchema.optional(),
     exceptions: z.array(TheoryExceptionSchema).max(10_000),
   })
   .strict()
