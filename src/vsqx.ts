@@ -164,6 +164,29 @@ export interface SongMixerInput {
   sendEnabled?: boolean;
 }
 
+export interface VocalMixerUnitInfo {
+  trackNumber: number;
+  trackName: string;
+  volume: number;
+  pan: number;
+  panPosition: "left" | "center" | "right";
+  panOffsetFromCenter: number;
+  mute: boolean;
+  solo: boolean;
+  sendLevel: number;
+  sendEnabled: boolean;
+}
+
+export interface VocalMixerUpdate {
+  trackNumber: number;
+  volume?: number;
+  pan?: number;
+  mute?: boolean;
+  solo?: boolean;
+  sendLevel?: number;
+  sendEnabled?: boolean;
+}
+
 export interface SongTrackInput {
   name: string;
   comment?: string;
@@ -787,6 +810,70 @@ function appendMixer(
       appendElement(document, namespace, karaoke, name, value);
     }
   }
+}
+
+function mixerUnitFields(format: VsqxFormat): {
+  trackNumber: string;
+  volume: string;
+  pan: string;
+  mute: string;
+  solo: string;
+  sendLevel: string;
+  sendEnabled: string;
+} {
+  return format === "vsq4"
+    ? {
+        trackNumber: "tNo",
+        volume: "vol",
+        pan: "pan",
+        mute: "m",
+        solo: "s",
+        sendLevel: "sLvl",
+        sendEnabled: "sEnable",
+      }
+    : {
+        trackNumber: "vsTrackNo",
+        volume: "vol",
+        pan: "pan",
+        mute: "mute",
+        solo: "solo",
+        sendLevel: "sendLevel",
+        sendEnabled: "sendEnable",
+      };
+}
+
+function vocalTrackNames(project: LoadedProject): Map<number, string> {
+  const fields = trackFields(project.format);
+  return new Map(
+    directChildren(project.root, "vsTrack").map((track) => [
+      integer(track, fields.number),
+      text(track, fields.name),
+    ]),
+  );
+}
+
+function readVocalMixerUnits(project: LoadedProject): VocalMixerUnitInfo[] {
+  const mixer = requiredChild(project.root, "mixer");
+  const fields = mixerUnitFields(project.format);
+  const trackNames = vocalTrackNames(project);
+  return directChildren(mixer, "vsUnit")
+    .map((unit) => {
+      const trackNumber = integer(unit, fields.trackNumber);
+      const pan = integer(unit, fields.pan);
+      return {
+        trackNumber,
+        trackName: trackNames.get(trackNumber) ?? `Track ${trackNumber}`,
+        volume: integer(unit, fields.volume),
+        pan,
+        panPosition: pan === 64 ? "center" as const : pan < 64 ? "left" as const : "right" as const,
+        panOffsetFromCenter: pan - 64,
+        mute: integer(unit, fields.mute) !== 0,
+        solo: integer(unit, fields.solo) !== 0,
+        sendLevel: integer(unit, fields.sendLevel),
+        sendEnabled: integer(unit, fields.sendEnabled) !== 0,
+      };
+    })
+    .sort((left, right) => left.trackNumber - right.trackNumber);
 }
 
 function appendNote(
@@ -1596,6 +1683,98 @@ async function persist(
     ...(backupPath ? { backupPath } : {}),
     bytes: Buffer.byteLength(xml),
     format: project.format,
+  };
+}
+
+export async function inspectProjectMixer(inputPath: string): Promise<{
+  path: string;
+  format: VsqxFormat;
+  panSemantics: string;
+  vocalUnits: VocalMixerUnitInfo[];
+}> {
+  const project = await loadProject(inputPath);
+  return {
+    path: project.path,
+    format: project.format,
+    panSemantics: "0=hard left, 64=center, 127=hard right",
+    vocalUnits: readVocalMixerUnits(project),
+  };
+}
+
+function validateMixerUpdates(updates: VocalMixerUpdate[]): void {
+  if (updates.length === 0) throw new Error("updates must not be empty");
+  const tracks = new Set<number>();
+  for (const [index, update] of updates.entries()) {
+    assertIntegerRange(update.trackNumber, 0, 127, `updates[${index}].trackNumber`);
+    if (tracks.has(update.trackNumber)) {
+      throw new Error(`updates contains duplicate trackNumber ${update.trackNumber}`);
+    }
+    tracks.add(update.trackNumber);
+    if (
+      update.volume === undefined
+      && update.pan === undefined
+      && update.mute === undefined
+      && update.solo === undefined
+      && update.sendLevel === undefined
+      && update.sendEnabled === undefined
+    ) {
+      throw new Error(`updates[${index}] must change at least one mixer field`);
+    }
+    if (update.volume !== undefined) {
+      assertIntegerRange(update.volume, -898, 600, `updates[${index}].volume`);
+    }
+    if (update.pan !== undefined) {
+      assertIntegerRange(update.pan, 0, 127, `updates[${index}].pan`);
+    }
+    if (update.sendLevel !== undefined) {
+      assertIntegerRange(update.sendLevel, -898, 0, `updates[${index}].sendLevel`);
+    }
+  }
+}
+
+export async function updateProjectMixer(
+  inputPath: string,
+  outputPath: string,
+  updates: VocalMixerUpdate[],
+  overwrite: boolean,
+): Promise<WriteResult & {
+  panSemantics: string;
+  before: VocalMixerUnitInfo[];
+  after: VocalMixerUnitInfo[];
+  updatedTrackNumbers: number[];
+}> {
+  validateMixerUpdates(updates);
+  const project = await loadProject(inputPath);
+  const before = readVocalMixerUnits(project);
+  const mixer = requiredChild(project.root, "mixer");
+  const fields = mixerUnitFields(project.format);
+  const units = new Map(
+    directChildren(mixer, "vsUnit").map((unit) => [integer(unit, fields.trackNumber), unit]),
+  );
+  for (const update of updates) {
+    const unit = units.get(update.trackNumber);
+    if (!unit) {
+      throw new Error(
+        `Mixer has no vocal unit for track ${update.trackNumber}; available tracks: ${[...units.keys()].sort((a, b) => a - b).join(", ")}`,
+      );
+    }
+    if (update.volume !== undefined) setText(unit, fields.volume, update.volume);
+    if (update.pan !== undefined) setText(unit, fields.pan, update.pan);
+    if (update.mute !== undefined) setText(unit, fields.mute, update.mute ? 1 : 0);
+    if (update.solo !== undefined) setText(unit, fields.solo, update.solo ? 1 : 0);
+    if (update.sendLevel !== undefined) setText(unit, fields.sendLevel, update.sendLevel);
+    if (update.sendEnabled !== undefined) {
+      setText(unit, fields.sendEnabled, update.sendEnabled ? 1 : 0);
+    }
+  }
+  const after = readVocalMixerUnits(project);
+  const result = await persist(project, outputPath, overwrite);
+  return {
+    ...result,
+    panSemantics: "0=hard left, 64=center, 127=hard right",
+    before,
+    after,
+    updatedTrackNumbers: updates.map((update) => update.trackNumber),
   };
 }
 

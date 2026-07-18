@@ -16,18 +16,20 @@ import {
   addNotesToProject,
   createProject,
   createSong,
+  inspectProjectMixer,
   inspectProject,
   listControlPoints,
   listNotes,
   updateNoteExpressionsInProject,
+  updateProjectMixer,
   validateProject,
 } from "./vsqx.js";
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.4.0" },
+  { name: "vocaloid-mcp-server", version: "0.5.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a long song, design named sections plus a shared tempo/meter map and distinct grooves; use accompaniment patterns/placements to repeat and vary instrumental motifs without enumerating thousands of events, then vocaloid_render_accompaniment creates a real stereo WAV. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplet lyrics, while explicit lyric_index supports melisma with native '-' continuations. Call vocaloid_create_song with the backing as an audio_part, validate/inspect, then vocaloid_render_wav. Always call vocaloid_analyze_wav on backing and Master; lower source/mixer levels and re-render if clipped, otherwise vocaloid_master_wav can meet LUFS/true-peak targets. Use descriptive song slugs in every output name, for example hoshikuzu-letter-backing-v1.wav, hoshikuzu-letter.vsqx, hoshikuzu-letter-mix-v1.wav, and hoshikuzu-letter-master-v1.wav. Prefer new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
+    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a long song, design named sections plus a shared tempo/meter map and distinct grooves; use accompaniment patterns/placements to repeat and vary instrumental motifs without enumerating thousands of events, then vocaloid_render_accompaniment creates a real stereo WAV. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplet lyrics, while explicit lyric_index supports melisma with native '-' continuations. Call vocaloid_create_song with the backing as an audio_part, validate/inspect, then vocaloid_render_wav. VOCALOID vocal mixer pan is 0=hard left, 64=center, 127=hard right; use vocaloid_inspect_mixer before render and vocaloid_update_mixer when revising intentional placement. Always call vocaloid_analyze_wav on backing and Master; inspect per-channel RMS/peak and revise mixer routing if channelImbalance is true, lower source/mixer levels and re-render if clipped, otherwise vocaloid_master_wav can meet LUFS/true-peak targets. Use descriptive song slugs in every output name, for example hoshikuzu-letter-backing-v1.wav, hoshikuzu-letter.vsqx, hoshikuzu-letter-mix-v1.wav, and hoshikuzu-letter-master-v1.wav. Prefer new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
   },
 );
 
@@ -236,7 +238,13 @@ const SongTrackSchema = z
     mixer: z
       .object({
         volume: z.number().int().min(-898).max(600).default(0),
-        pan: z.number().int().min(0).max(127).default(64),
+        pan: z
+          .number()
+          .int()
+          .min(0)
+          .max(127)
+          .default(64)
+          .describe("VOCALOID pan: 0=hard left, 64=center, 127=hard right"),
         mute: z.boolean().default(false),
         solo: z.boolean().default(false),
         send_level: z.number().int().min(-898).max(0).default(-898),
@@ -308,7 +316,13 @@ const AccompanimentTrackSchema = z
     bank_msb: z.number().int().min(0).max(127).default(0),
     bank_lsb: z.number().int().min(0).max(127).default(0),
     volume: z.number().int().min(0).max(127).default(100),
-    pan: z.number().int().min(0).max(127).default(64),
+    pan: z
+      .number()
+      .int()
+      .min(0)
+      .max(127)
+      .default(64)
+      .describe("MIDI pan: 0=hard left, 64=center, 127=hard right"),
     notes: z.array(AccompanimentNoteSchema).max(20_000).default([]),
     patterns: z.array(AccompanimentPatternSchema).max(256).default([]),
     placements: z.array(AccompanimentPlacementSchema).max(5000).default([]),
@@ -656,6 +670,110 @@ Returns format/version, voices, tempo and time signatures, track/part layout, no
         response_format,
         `${summary.sequenceName || "Untitled"}: ${summary.tracks.length} vocal tracks`,
         summary.diagnostics,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_inspect_mixer",
+  {
+    title: "Inspect VOCALOID Vocal Mixer",
+    description: `Read every vocal mixer unit in a V3/V4 VSQX without modifying it.
+
+Returns track names/numbers, volume, pan, mute/solo, send routing, and an interpreted pan position. VOCALOID pan is not a signed value: 0=hard left, 64=center, 127=hard right. Use this before render and compare it with vocaloid_analyze_wav per-channel measurements so intentional stereo placement is distinguishable from an accidental one-sided mix.`,
+    inputSchema: z
+      .object({ path: PathSchema, response_format: ResponseFormatSchema })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ path, response_format }) => {
+    try {
+      const result = await inspectProjectMixer(path);
+      return textResult(
+        result,
+        response_format,
+        `Inspected ${result.vocalUnits.length} vocal mixer units`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_update_mixer",
+  {
+    title: "Update VOCALOID Vocal Mixer",
+    description: `Atomically revise vocal-track mixer placement and write a derived V3/V4 VSQX.
+
+Each update targets a VSQX track_number and may change volume, pan, mute/solo, or send routing while preserving every unspecified field. Pan uses the native 0..127 scale: 0=hard left, 64=center, 127=hard right. This tool does not force a centered mix; it gives the agent explicit artistic control. Call vocaloid_inspect_mixer before and after, validate the derived project, render to a new versioned mix path, then use vocaloid_analyze_wav to verify actual channel balance. Existing output requires overwrite=true and receives a timestamped backup.`,
+    inputSchema: z
+      .object({
+        input_path: PathSchema,
+        output_path: PathSchema,
+        updates: z
+          .array(
+            z
+              .object({
+                track_number: z.number().int().min(0).max(127),
+                volume: z.number().int().min(-898).max(600).optional(),
+                pan: z
+                  .number()
+                  .int()
+                  .min(0)
+                  .max(127)
+                  .optional()
+                  .describe("0=hard left, 64=center, 127=hard right"),
+                mute: z.boolean().optional(),
+                solo: z.boolean().optional(),
+                send_level: z.number().int().min(-898).max(0).optional(),
+                send_enabled: z.boolean().optional(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(128),
+        overwrite: z.boolean().default(false),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await updateProjectMixer(
+        params.input_path,
+        params.output_path,
+        params.updates.map((update) => ({
+          trackNumber: update.track_number,
+          ...(update.volume !== undefined ? { volume: update.volume } : {}),
+          ...(update.pan !== undefined ? { pan: update.pan } : {}),
+          ...(update.mute !== undefined ? { mute: update.mute } : {}),
+          ...(update.solo !== undefined ? { solo: update.solo } : {}),
+          ...(update.send_level !== undefined ? { sendLevel: update.send_level } : {}),
+          ...(update.send_enabled !== undefined ? { sendEnabled: update.send_enabled } : {}),
+        })),
+        params.overwrite,
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Updated mixer for tracks ${result.updatedTrackNumbers.join(", ")}`,
       );
     } catch (error) {
       return errorResult(error);
@@ -1299,7 +1417,7 @@ server.registerTool(
     title: "Analyze WAV Mix Quality",
     description: `Read a WAV and return actionable mix/master quality metrics without modifying it.
 
-Combines sample-domain RIFF analysis with FFmpeg EBU R128 measurement: integrated LUFS, loudness range, sample peak, true peak, RMS, crest factor, full-scale sample count/ratio, and target deltas. Recommendations distinguish source clipping from correctable loudness/true-peak issues. Use this on accompaniment and original-Editor Master renders before deciding whether to lower source levels, re-render, or call vocaloid_master_wav.`,
+Combines sample-domain RIFF analysis with FFmpeg EBU R128 measurement: integrated LUFS, loudness range, sample peak, true peak, RMS, crest factor, full-scale sample count/ratio, per-channel peak/RMS/clipping, stereo L-R RMS balance, and target deltas. A stereo difference above 3 dB sets channelImbalance=true and identifies the louder side; this is a review signal, not an assumption that every artistic mix must be centered. Recommendations distinguish accidental routing, source clipping, and correctable loudness/true-peak issues. Use this on accompaniment and original-Editor Master renders before deciding whether to call vocaloid_update_mixer, lower levels, re-render, or master.`,
     inputSchema: z
       .object({
         path: PathSchema,
@@ -1370,13 +1488,19 @@ The source is never modified and input_path must differ from output_path. The to
         targetLoudnessRangeLu: params.target_loudness_range_lu,
         overwrite: params.overwrite,
       });
+      const warnings = [
+        ...(result.sourceClipped
+          ? ["The source contained clipped samples; re-render the mix with more headroom to restore transient quality"]
+          : []),
+        ...(!result.loudnessRangeTargetMet
+          ? [`Output LRA is ${result.output.loudnessRangeLu.toFixed(1)} LU versus the requested ${result.targetLoudnessRangeLu.toFixed(1)} LU; revise section dynamics or bus compression rather than claiming the dynamic-range target was met`]
+          : []),
+      ];
       return textResult(
         result,
         params.response_format,
         `Mastered to ${result.output.integratedLufs.toFixed(1)} LUFS and ${result.output.truePeakDbfs.toFixed(1)} dBFS true peak`,
-        result.sourceClipped
-          ? ["The source contained clipped samples; re-render the mix with more headroom to restore transient quality"]
-          : [],
+        warnings,
       );
     } catch (error) {
       return errorResult(error);

@@ -33,6 +33,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_compile_vocal_phrase",
       "vocaloid_create_project",
       "vocaloid_create_song",
+      "vocaloid_inspect_mixer",
       "vocaloid_inspect_project",
       "vocaloid_list_control_points",
       "vocaloid_list_instruments",
@@ -41,6 +42,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_master_wav",
       "vocaloid_render_accompaniment",
       "vocaloid_render_wav",
+      "vocaloid_update_mixer",
       "vocaloid_update_note_expressions",
       "vocaloid_validate_project",
     ],
@@ -220,6 +222,35 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   });
   assert.notEqual(structured.isError, true);
   assert.equal((structured.structuredContent as { ok?: boolean } | undefined)?.ok, true);
+
+  const mixer = await client.callTool({
+    name: "vocaloid_inspect_mixer",
+    arguments: { path: songPath, response_format: "json" },
+  });
+  assert.notEqual(mixer.isError, true);
+  const mixerData = mixer.structuredContent as {
+    data?: { vocalUnits?: Array<{ trackNumber?: number; pan?: number; panPosition?: string }> };
+  };
+  assert.deepEqual(mixerData.data?.vocalUnits?.map((unit) => [unit.trackNumber, unit.pan]), [[0, 64]]);
+
+  const remixedSongPath = join(temporary, "mcp-structured-song-remixed.vsqx");
+  const remixed = await client.callTool({
+    name: "vocaloid_update_mixer",
+    arguments: {
+      input_path: songPath,
+      output_path: remixedSongPath,
+      updates: [{ track_number: 0, pan: 72, volume: -120 }],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(remixed.isError, true);
+  const remixedData = remixed.structuredContent as {
+    data?: { after?: Array<{ trackNumber?: number; pan?: number; volume?: number }> };
+  };
+  assert.deepEqual(
+    remixedData.data?.after?.map((unit) => [unit.trackNumber, unit.pan, unit.volume]),
+    [[0, 72, -120]],
+  );
 
   const validation = await client.callTool({
     name: "vocaloid_validate_project",

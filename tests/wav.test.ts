@@ -68,6 +68,22 @@ test("counts full-scale PCM sample values", async (context) => {
   assert.equal(result.clippedRatio, 0.5);
 });
 
+test("reports per-channel levels and stereo imbalance", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-wav-balance-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const path = join(temporary, "left-heavy.wav");
+  await writeFile(
+    path,
+    pcm16Wav([16_384, 1_638, -16_384, -1_638, 16_384, 1_638, -16_384, -1_638], 8_000, 2),
+  );
+  const result = await analyzeWav(path);
+  assert.equal(result.channelStats.length, 2);
+  assert.equal(result.channelStats[0]?.peak, 0.5);
+  assert.ok(Math.abs((result.channelStats[1]?.peak ?? 0) - 1_638 / 32_768) < 1e-12);
+  assert.ok((result.stereoBalanceDb ?? 0) > 19.9);
+  assert.ok((result.channelRmsSpreadDb ?? 0) > 19.9);
+});
+
 test("analyzes the manually exported VOCALOID fixture when present", async (context) => {
   const path = "/mnt/c/Users/21992/Downloads/test_2.wav";
   try {

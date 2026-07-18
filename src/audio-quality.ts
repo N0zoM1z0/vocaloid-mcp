@@ -22,6 +22,7 @@ export interface AudioQualityAnalysis extends WavAnalysis, LoudnessMetrics {
   loudnessDeltaLu: number;
   sampleClipping: boolean;
   truePeakExceeded: boolean;
+  channelImbalance: boolean;
   recommendations: string[];
 }
 
@@ -41,6 +42,9 @@ export interface MasterWavResult {
   sourceClipped: boolean;
   source: AudioQualityAnalysis;
   output: AudioQualityAnalysis;
+  targetLoudnessRangeLu: number;
+  loudnessRangeDeltaLu: number;
+  loudnessRangeTargetMet: boolean;
   measuredByLoudnorm: {
     inputLufs: number;
     inputTruePeakDbfs: number;
@@ -101,6 +105,12 @@ function recommendations(
       `Source contains ${wav.clippedSampleValues} full-scale sample values; lower track/backing levels and re-render before mastering because post-processing cannot restore clipped transients.`,
     );
   }
+  if (wav.stereoBalanceDb !== null && Math.abs(wav.stereoBalanceDb) > 3) {
+    const louder = wav.stereoBalanceDb > 0 ? "left" : "right";
+    output.push(
+      `Stereo RMS balance is ${Math.abs(wav.stereoBalanceDb).toFixed(2)} dB toward the ${louder} channel; inspect intentional panning and VOCALOID mixer routing (pan 0=hard left, 64=center, 127=hard right) before mastering.`,
+    );
+  }
   if (loudness.truePeakDbfs > targetTruePeakDbfs) {
     output.push(
       `True peak is ${loudness.truePeakDbfs.toFixed(2)} dBFS; reduce gain or use a true-peak limiter to stay at or below ${targetTruePeakDbfs.toFixed(2)} dBFS.`,
@@ -159,6 +169,7 @@ export async function analyzeAudioQuality(
     loudnessDeltaLu: targetLufs - loudness.integratedLufs,
     sampleClipping: wav.clippedSampleValues > 0,
     truePeakExceeded: loudness.truePeakDbfs > targetTruePeakDbfs,
+    channelImbalance: wav.stereoBalanceDb !== null && Math.abs(wav.stereoBalanceDb) > 3,
     recommendations: recommendations(wav, loudness, targetLufs, targetTruePeakDbfs),
   };
 }
@@ -295,6 +306,10 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
       sourceClipped: source.sampleClipping,
       source,
       output: { ...output, path: outputPath },
+      targetLoudnessRangeLu: options.targetLoudnessRangeLu,
+      loudnessRangeDeltaLu: output.loudnessRangeLu - options.targetLoudnessRangeLu,
+      loudnessRangeTargetMet:
+        Math.abs(output.loudnessRangeLu - options.targetLoudnessRangeLu) <= 1.5,
       measuredByLoudnorm: measuredValues,
     };
   } catch (error) {

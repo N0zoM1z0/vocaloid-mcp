@@ -9,7 +9,7 @@ import { analyzeAudioQuality, masterWav } from "../src/audio-quality.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-function stereoSine(durationSeconds: number, amplitude: number): Buffer {
+function stereoSine(durationSeconds: number, amplitude: number, rightScale = 1): Buffer {
   const channels = 2;
   const sampleRate = 44_100;
   const frames = Math.round(durationSeconds * sampleRate);
@@ -32,7 +32,7 @@ function stereoSine(durationSeconds: number, amplitude: number): Buffer {
   for (let frame = 0; frame < frames; frame += 1) {
     const value = Math.round(Math.sin((frame * Math.PI * 2 * 440) / sampleRate) * amplitude * 32_767);
     output.writeInt16LE(value, 44 + frame * blockAlign);
-    output.writeInt16LE(value, 44 + frame * blockAlign + 2);
+    output.writeInt16LE(Math.round(value * rightScale), 44 + frame * blockAlign + 2);
   }
   return output;
 }
@@ -52,6 +52,8 @@ test("analyzes EBU loudness and masters to bounded targets", async (context) => 
 
   const analysis = await analyzeAudioQuality(input, -16, -1);
   assert.equal(analysis.sampleClipping, false);
+  assert.equal(analysis.channelImbalance, false);
+  assert.ok(Math.abs(analysis.stereoBalanceDb ?? 0) < 0.01);
   assert.equal(analysis.clippedSampleValues, 0);
   assert.ok(Number.isFinite(analysis.integratedLufs));
   assert.ok(Number.isFinite(analysis.truePeakDbfs));
@@ -65,8 +67,19 @@ test("analyzes EBU loudness and masters to bounded targets", async (context) => 
     overwrite: false,
   });
   assert.equal(result.sourceClipped, false);
+  assert.equal(result.loudnessRangeTargetMet, false);
+  assert.equal(result.targetLoudnessRangeLu, 7);
   assert.ok(Math.abs(result.output.integratedLufs - -16) <= 0.6);
   assert.ok(result.output.truePeakDbfs <= -0.8);
   assert.equal(result.output.clippedSampleValues, 0);
   assert.deepEqual((await readdir(temporary)).sort(), ["input.wav", "mastered.wav"]);
+
+  const imbalanced = join(temporary, "imbalanced.wav");
+  await writeFile(imbalanced, stereoSine(3, 0.5, 0.1));
+  const imbalancedAnalysis = await analyzeAudioQuality(imbalanced, -16, -1);
+  assert.equal(imbalancedAnalysis.channelImbalance, true);
+  assert.ok((imbalancedAnalysis.stereoBalanceDb ?? 0) > 19);
+  assert.ok(
+    imbalancedAnalysis.recommendations.some((item) => item.includes("VOCALOID mixer routing")),
+  );
 });

@@ -433,3 +433,47 @@ FluidR3 preset inspection verified bank/program access to Shakuhachi (0/0/77),
 Shamisen (0/0/106), Koto (0/0/107), Taisho Koto (0/8/107), Taiko Drum
 (0/0/116), Timpani, Woodblock, and Shanai. These are draft composition colors,
 not a claim of realistic Japanese-instrument production quality.
+
+## Agent-created 96-measure song and stereo mixer revision (2026-07-18)
+
+A fresh Codex CLI session was restricted to the Vocaloid MCP and asked to write
+a named Japanese long-form song without reading or copying any source project.
+It created `月影疾走` (`tsukikage-shissou`) with the following structure:
+
+- 96 measures and 172.408 seconds of Editor-exported audio;
+- intro, verse 1, pre-chorus, chorus 1, interlude, verse 2, bridge, final
+  chorus, and outro;
+- ten tempo events from 96 to 156 BPM and a 4/4 to 6/8 to 4/4 meter map;
+- Shamisen, Koto, Shakuhachi, Taiko, pick bass, distortion guitar, synth
+  strings, piano, and channel-10 drums;
+- 81 patterns and 81 placements expanded into 3,128 pitched accompaniment
+  notes plus 861 drum hits;
+- IA_ROCKS lead (311 notes) and an independent harmony/counterline (85 notes),
+  all locked phonemes, with 1/16 and 1/32 lyrics, triplets, pickups, rests,
+  syncopation, four explicit melismas, selective vibrato, and 41 controls;
+- clean Yamaha XSD and structural validation with no overlaps or out-of-range
+  events.
+
+The first render revealed a semantic MCP failure that aggregate loudness did not
+catch. The stereo backing was balanced within 0.17 dB, but the VSQX vocal units
+used pan 0 and 10 because the agent treated zero as center. VOCALOID pan actually
+uses 0=hard left, 64=center, and 127=hard right. The resulting mix differed by
+17.196 dB RMS between channels. This was audible even though the WAV header said
+stereo and its aggregate loudness/clipping checks passed.
+
+The MCP now exposes read-only mixer inspection, atomic mixer updates, per-channel
+peak/RMS/clipping, signed L-minus-R RMS balance, and a review flag above 3 dB.
+A second MCP-only agent inspected the evidence and chose lead pan 64 plus harmony
+pan 96. The derived `tsukikage-shissou-v2.vsqx` remained XSD-valid. Its original
+Editor mix measures L/R RMS -28.627/-28.044 dBFS (0.583 dB toward the right),
+-21.4 LUFS, -6.0 dBTP, and zero clipped samples. The named v2 master measures
+L/R RMS -19.596/-19.114 dBFS (0.482 dB toward the right), -14.2 LUFS, -1.0 dBTP,
+and zero clipped samples. Its 12.6 LU loudness range does not meet the requested
+9 LU target; the tool now reports that separately rather than equating LUFS and
+true-peak success with full dynamic-range success.
+
+This eval also exercised failure honesty: the first v2 render attempt saw the
+Editor exit during synthesis and produced no committed WAV or fake master. A
+single bounded retry succeeded with normal Editor cleanup. The generated VSQX
+revisions are retained as evaluation fixtures; WAV files remain ignored build
+artifacts with descriptive song/version names.

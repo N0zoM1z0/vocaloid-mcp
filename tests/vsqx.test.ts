@@ -10,10 +10,12 @@ import {
   addNotesToProject,
   createProject,
   createSong,
+  inspectProjectMixer,
   inspectProject,
   listControlPoints,
   listNotes,
   updateNoteExpressionsInProject,
+  updateProjectMixer,
   validateProject,
 } from "../src/vsqx.js";
 
@@ -302,6 +304,25 @@ for (const format of ["vsq3", "vsq4"] as const) {
       ],
       overwrite: false,
     });
+    const mixer = await inspectProjectMixer(output);
+    assert.equal(mixer.panSemantics, "0=hard left, 64=center, 127=hard right");
+    assert.deepEqual(
+      mixer.vocalUnits.map((unit) => [unit.trackNumber, unit.pan, unit.panPosition]),
+      [[0, 64, "center"], [1, 80, "right"]],
+    );
+    const remixed = join(temporary, `structured-${format}-remixed.vsqx`);
+    const mixerUpdate = await updateProjectMixer(
+      output,
+      remixed,
+      [{ trackNumber: 0, pan: 60 }, { trackNumber: 1, pan: 68, volume: -180 }],
+      false,
+    );
+    assert.deepEqual(
+      mixerUpdate.after.map((unit) => [unit.trackNumber, unit.pan, unit.volume]),
+      [[0, 60, 0], [1, 68, -180]],
+    );
+    const remixedValidation = await validateProject(remixed);
+    assert.equal(remixedValidation.valid, true, remixedValidation.diagnostics.join("\n"));
     assert.deepEqual(
       { tracks: result.tracks, parts: result.parts, notes: result.notes, controls: result.controlPoints },
       { tracks: 2, parts: 3, notes: 3, controls: 2 },

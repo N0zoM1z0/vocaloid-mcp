@@ -19,7 +19,20 @@ export interface WavAnalysis {
   crestFactorDb: number | null;
   clippedSampleValues: number;
   clippedRatio: number;
+  channelStats: WavChannelAnalysis[];
+  stereoBalanceDb: number | null;
+  channelRmsSpreadDb: number | null;
   silent: boolean;
+}
+
+export interface WavChannelAnalysis {
+  channel: number;
+  peak: number;
+  peakDbfs: number | null;
+  rms: number;
+  rmsDbfs: number | null;
+  clippedSampleValues: number;
+  clippedRatio: number;
 }
 
 interface DataChunk {
@@ -135,6 +148,10 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
     let sampleValues = 0;
     let clippedSampleValues = 0;
     let dataBytes = 0;
+    const channelPeaks = new Array<number>(channels).fill(0);
+    const channelSquareSums = new Array<number>(channels).fill(0);
+    const channelSampleValues = new Array<number>(channels).fill(0);
+    const channelClippedValues = new Array<number>(channels).fill(0);
     const clipThreshold = audioFormat === 3
       ? 1
       : 1 - 1 / (2 ** (bitsPerSample - 1));
@@ -148,11 +165,18 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
         const length = Math.min(bufferBytes, chunk.size - cursor);
         const buffer = await readExactly(handle, length, chunk.offset + cursor);
         for (let sampleOffset = 0; sampleOffset < length; sampleOffset += bytesPerSample) {
+          const channelIndex = sampleValues % channels;
           const value = normalizedSample(buffer, sampleOffset, audioFormat, bitsPerSample);
           const magnitude = Math.abs(value);
           if (magnitude > peak) peak = magnitude;
-          if (magnitude >= clipThreshold) clippedSampleValues++;
+          if (magnitude > (channelPeaks[channelIndex] ?? 0)) channelPeaks[channelIndex] = magnitude;
+          if (magnitude >= clipThreshold) {
+            clippedSampleValues++;
+            channelClippedValues[channelIndex] = (channelClippedValues[channelIndex] ?? 0) + 1;
+          }
           squareSum += value * value;
+          channelSquareSums[channelIndex] = (channelSquareSums[channelIndex] ?? 0) + value * value;
+          channelSampleValues[channelIndex] = (channelSampleValues[channelIndex] ?? 0) + 1;
           sampleValues++;
         }
         cursor += length;
@@ -162,6 +186,34 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
     const durationSeconds = dataBytes / byteRate;
     const peakDbfs = decibels(peak);
     const rmsDbfs = decibels(rms);
+    const channelStats = channelPeaks.map((channelPeak, channelIndex) => {
+      const count = channelSampleValues[channelIndex] ?? 0;
+      const channelRms = count > 0
+        ? Math.sqrt((channelSquareSums[channelIndex] ?? 0) / count)
+        : 0;
+      const channelClipped = channelClippedValues[channelIndex] ?? 0;
+      return {
+        channel: channelIndex + 1,
+        peak: channelPeak,
+        peakDbfs: decibels(channelPeak),
+        rms: channelRms,
+        rmsDbfs: decibels(channelRms),
+        clippedSampleValues: channelClipped,
+        clippedRatio: count > 0 ? channelClipped / count : 0,
+      };
+    });
+    const finiteChannelRms = channelStats
+      .map((channel) => channel.rmsDbfs)
+      .filter((value): value is number => value !== null);
+    const channelRmsSpreadDb = finiteChannelRms.length >= 2
+      ? Math.max(...finiteChannelRms) - Math.min(...finiteChannelRms)
+      : null;
+    const leftRmsDbfs = channelStats[0]?.rmsDbfs;
+    const rightRmsDbfs = channelStats[1]?.rmsDbfs;
+    const stereoBalanceDb = channels === 2 && leftRmsDbfs !== null && leftRmsDbfs !== undefined
+      && rightRmsDbfs !== null && rightRmsDbfs !== undefined
+      ? leftRmsDbfs - rightRmsDbfs
+      : null;
     return {
       path,
       bytes: info.size,
@@ -180,6 +232,9 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
       crestFactorDb: peakDbfs !== null && rmsDbfs !== null ? peakDbfs - rmsDbfs : null,
       clippedSampleValues,
       clippedRatio: sampleValues > 0 ? clippedSampleValues / sampleValues : 0,
+      channelStats,
+      stereoBalanceDb,
+      channelRmsSpreadDb,
       silent: peak < 0.000_01 || rms < 0.000_001,
     };
   } finally {
