@@ -10,6 +10,7 @@ import type { ResponseFormat } from "./types.js";
 import { renderAccompaniment } from "./accompaniment.js";
 import { compareSongSectionArtifacts, renderSongSectionPreview } from "./audio-review.js";
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
+import { FROM_ZERO_AGENT_EXAMPLE } from "./agent-examples.js";
 import {
   masterSongManifestDelivery,
   renderSongManifestMaster,
@@ -242,6 +243,7 @@ server.registerResource(
           "Review sections or loudness-matched A/B and attach stable review notes",
           "Master a manifest delivery and verify loudness, true peak, clipping, channels, hashes, and dependencies",
         ],
+        examples: ["vocaloid://examples/from-zero"],
         agent_contract: {
           canonical_source: "*.song.json manifest",
           concurrency: "optimistic expected_revision plus a host-wide VOCALOID Editor render lease",
@@ -255,6 +257,23 @@ server.registerResource(
           authentic_instruments: "Use external sampled/VST or recorded renderers for idiomatic shamisen, koto, shakuhachi, guitar, and orchestral articulation",
         },
       }, null, 2),
+    }],
+  }),
+);
+
+server.registerResource(
+  "vocaloid-example-from-zero",
+  "vocaloid://examples/from-zero",
+  {
+    title: "From-zero production-profile call example",
+    description: "Exact minimal payload shapes for Japanese alignment, previewed IA_ROCKS vocal insertion, arrangement insertion, and preflight.",
+    mimeType: "application/json",
+  },
+  async (uri) => ({
+    contents: [{
+      uri: uri.href,
+      mimeType: "application/json",
+      text: JSON.stringify(FROM_ZERO_AGENT_EXAMPLE, null, 2),
     }],
   }),
 );
@@ -2649,7 +2668,7 @@ server.registerTool(
     title: "Edit Canonical Song",
     description: `Single high-level mutation router for timeline, section, vocal, tuning, arrangement, seeded groove, mix intent, transform, and removal edits.
 
-Every write uses optimistic revision control and stable IDs. Set dry_run=true on any mutation to receive the predicted content/composition/mix hashes, music-aware object diff, full preflight, and zero canonical mutation. expand_tempo_curve is a pure deterministic helper. This compact production tool replaces nine granular routing decisions; the full profile retains the individual tools for diagnostics.`,
+Every write uses optimistic revision control and stable IDs. Same-path writes create a timestamped backup and history restore is monotonic, so no prior canonical state is destroyed. Set dry_run=true on any mutation to receive the predicted content/composition/mix hashes, music-aware object diff, full preflight, and zero canonical mutation. expand_tempo_curve is a pure deterministic helper. This compact production tool replaces nine granular routing decisions; the full profile retains the individual tools for diagnostics.`,
     inputSchema: z.discriminatedUnion("action", [
       z.object({
         action: z.literal("expand_tempo_curve"),
@@ -2692,7 +2711,7 @@ Every write uses optimistic revision control and stable IDs. Set dry_run=true on
     outputSchema: workflowOutputSchema(EditSongDataOutputSchema),
     annotations: {
       readOnlyHint: false,
-      destructiveHint: true,
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
     },

@@ -51,6 +51,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
     assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
     assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
   }
+  const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
+  assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
 
   const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
   const capabilityEntry = capabilities.contents[0];
@@ -62,6 +64,12 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
   const lyricEntry = lyricResource.contents[0];
   assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+
+  const exampleResource = await client.readResource({ uri: "vocaloid://examples/from-zero" });
+  const exampleEntry = exampleResource.contents[0];
+  const example = JSON.parse(exampleEntry && "text" in exampleEntry ? exampleEntry.text : "null");
+  assert.equal(example.calls[2].arguments.voice.component_id, "BDREB7P2KTWKYDC5");
+  assert.equal(example.calls[2].arguments.dry_run, true);
 });
 
 test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
