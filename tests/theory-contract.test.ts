@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -14,6 +14,11 @@ import {
   SongManifestSchema,
 } from "../src/song-manifest.js";
 import {
+  THEORY_RULE_REGISTRY,
+  theoryFindingBlocks,
+  theoryRuleDefinition,
+} from "../src/theory/rules.js";
+import {
   CompositionGuidanceSchema,
   TheoryIssueSchema,
   TheoryReportSchema,
@@ -21,6 +26,27 @@ import {
 
 
 const HASH = "a".repeat(64);
+
+test("theory rule registry owns every analyzer code, severity class, and structural gate", async () => {
+  const directory = join(process.cwd(), "src/theory");
+  const files = (await readdir(directory)).filter((name) => name.endsWith(".ts")
+    && !["rules.ts", "types.ts"].includes(name));
+  const codes = new Set<string>();
+  for (const file of files) {
+    const source = await readFile(join(directory, file), "utf8");
+    for (const match of source.matchAll(/code: "([A-Z][A-Z0-9_]+)"/gu)) codes.add(match[1]!);
+  }
+  assert.equal(THEORY_RULE_REGISTRY.length, 33);
+  assert.deepEqual(
+    THEORY_RULE_REGISTRY.map((entry) => entry.code).sort(),
+    [...codes].sort(),
+  );
+  assert.deepEqual(theoryRuleDefinition("CHORD_SYMBOL_UNPARSED_STRICT").allowedSeverities, ["error", "warning"]);
+  assert.equal(theoryFindingBlocks({ code: "KEY_INVALID", severity: "error" }, "build"), true);
+  assert.equal(theoryFindingBlocks({ code: "CHORD_SYMBOL_UNPARSED_STRICT", severity: "warning" }, "build"), false);
+  assert.equal(theoryFindingBlocks({ code: "SUSTAINED_NON_CHORD_TONE_UNRESOLVED", severity: "warning" }, "score"), false);
+  assert.throws(() => theoryRuleDefinition("UNREGISTERED_RULE"), /Unregistered theory issue code/u);
+});
 
 test("theory contracts are strict, typed, and reject ambiguous exception targets", () => {
   const guidance = CompositionGuidanceSchema.parse({

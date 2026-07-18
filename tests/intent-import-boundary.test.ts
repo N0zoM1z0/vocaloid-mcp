@@ -60,3 +60,19 @@ test("restricted corpus and style modules cannot import intent mutation capabili
     );
   }
 });
+
+test("preflight and dry-run analysis remain theory-only at the composition boundary", async () => {
+  const files = [
+    join(SOURCE_ROOT, "song-preflight.ts"),
+    join(SOURCE_ROOT, "mutation-preview.ts"),
+    ...(await typescriptFiles(join(SOURCE_ROOT, "theory"))),
+  ];
+  for (const path of files) {
+    const source = await readFile(path, "utf8");
+    assert.doesNotMatch(
+      source,
+      /(?:from|import\s*\()["'][^"']*(?:corpus|style-profile|style-palettes)[^"']*["']/u,
+      `${path} must not consult corpus/profile evidence during preflight or dry-run`,
+    );
+  }
+});

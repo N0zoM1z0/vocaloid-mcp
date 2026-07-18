@@ -1,5 +1,7 @@
 import { VOCALOID3_JAPANESE_PHONEMES } from "./japanese.js";
 import { isChordTone, parseChordSymbol } from "./harmony.js";
+import { analyzeCompositionIntent } from "./intent/analyze.js";
+import type { CreativeReadinessReport } from "./intent/report-types.js";
 import { resolveReadablePath } from "./paths.js";
 import {
   fileSha256,
@@ -9,29 +11,47 @@ import {
   type ManifestArtifact,
   type SongManifest,
 } from "./song-manifest.js";
+import { analyzeManifestTheory } from "./theory/analyze.js";
+import { theoryFindingBlocks } from "./theory/rules.js";
+import type { CandidateRepair, TheoryEvidence, TheoryIssue, TheoryReport } from "./theory/types.js";
 import { musicalPositionToTick, type MusicalPosition } from "./vsqx.js";
 
 
 export type PreflightSeverity = "error" | "warning" | "info";
 export type PreflightDomain =
   | "structure"
+  | "form"
+  | "timeline"
+  | "key"
   | "vocal"
   | "phoneme"
   | "performance"
   | "harmony"
+  | "melody"
+  | "rhythm"
+  | "note_allocation"
+  | "voice_leading"
   | "arrangement"
   | "mix"
   | "artifact"
-  | "host";
+  | "host"
+  | "policy";
 
 export interface SongPreflightIssue {
+  origin: "workflow" | "theory";
   code: string;
   severity: PreflightSeverity;
   domain: PreflightDomain;
   message: string;
   objectIds: string[];
   position?: MusicalPosition;
+  endPosition?: MusicalPosition;
   suggestedAction: string;
+  ruleVersion?: string;
+  confidence?: number;
+  targetFingerprint?: string;
+  evidence?: TheoryEvidence[];
+  suggestedRepairs?: CandidateRepair[];
 }
 
 export interface ReadinessGate {
@@ -55,6 +75,8 @@ export interface SongPreflightResult {
     errors: number;
     warnings: number;
     infos: number;
+    theoryIssues: number;
+    creativeFindings: number;
   };
   readiness: {
     score: ReadinessGate;
@@ -63,6 +85,8 @@ export interface SongPreflightResult {
     mix: ReadinessGate;
     delivery: ReadinessGate;
   };
+  theory: TheoryReport;
+  creativeReadiness: CreativeReadinessReport;
   checkedArtifactIds: string[];
   issues: SongPreflightIssue[];
 }
@@ -92,6 +116,7 @@ function issue(
   position?: MusicalPosition,
 ): SongPreflightIssue {
   return {
+    origin: "workflow",
     code,
     severity,
     domain,
@@ -102,8 +127,33 @@ function issue(
   };
 }
 
+function theoryPreflightIssue(entry: TheoryIssue): SongPreflightIssue {
+  return {
+    origin: "theory",
+    code: entry.code,
+    severity: entry.severity,
+    domain: entry.domain,
+    message: entry.message,
+    objectIds: entry.objectIds,
+    ...(entry.position ? { position: entry.position } : {}),
+    ...(entry.endPosition ? { endPosition: entry.endPosition } : {}),
+    suggestedAction: entry.suggestedRepairs[0]?.summary
+      ?? "Review the exact symbolic evidence and either revise the score or preserve the choice through the later exception workflow.",
+    ruleVersion: entry.ruleVersion,
+    confidence: entry.confidence,
+    targetFingerprint: entry.targetFingerprint,
+    evidence: entry.evidence,
+    suggestedRepairs: entry.suggestedRepairs,
+  };
+}
+
 function allStableIds(manifest: SongManifest): Set<string> {
   const ids = new Set<string>([manifest.song_id, ...manifest.sections.map((entry) => entry.id)]);
+  for (const sectionIntent of manifest.composition_intent?.sections ?? []) ids.add(sectionIntent.id);
+  for (const direction of manifest.composition_intent?.phrase_directions ?? []) {
+    ids.add(direction.id);
+    ids.add(direction.listening_question.id);
+  }
   for (const entry of manifest.harmony.key_changes) ids.add(entry.id);
   for (const entry of manifest.harmony.chord_changes) ids.add(entry.id);
   for (const voice of manifest.voices) ids.add(voice.id);
@@ -625,6 +675,8 @@ export async function preflightSongManifest(
   const manifest = loaded.manifest;
   const issues: SongPreflightIssue[] = [];
   const songEndTick = Math.max(...manifest.sections.map((section) => tick(manifest, section.end)));
+  const theory = analyzeManifestTheory(manifest);
+  const creativeReadiness = analyzeCompositionIntent(manifest);
 
   const vocalEvents = addVocalIssues(manifest, issues, options.includePerformanceWarnings);
   addHarmonyIssues(manifest, issues, options.includePerformanceWarnings);
@@ -746,6 +798,15 @@ export async function preflightSongManifest(
     await Promise.all(checkedArtifacts.map((artifact) => verifyArtifact(artifact, knownIds, issues)));
   }
 
+  // Prefer the richer shared analyzer whenever an older workflow lint emits the
+  // same stable code. This keeps one severity/fingerprint source without
+  // removing unrelated legacy structural checks in the same migration.
+  const theoryCodes = new Set(theory.issues.map((entry) => entry.code));
+  const mergedIssues = [
+    ...issues.filter((entry) => !theoryCodes.has(entry.code)),
+    ...theory.issues.map(theoryPreflightIssue),
+  ];
+
   const currentArtifacts = manifest.artifacts.filter((artifact) =>
     artifact.source_composition_hash === manifest.composition_hash
     && (!["mix", "delivery"].includes(artifact.role) || currentMixArtifacts.has(artifact.id)));
@@ -755,15 +816,22 @@ export async function preflightSongManifest(
     "PATTERN_EVENT_OUT_OF_BOUNDS", "PLACEMENT_PAST_SONG_END", "NO_VOCAL_TRACK",
     "NO_PITCHED_ARRANGEMENT_TRACK",
   ];
-  const score = gate(issues, scoreCodes);
-  const build = gate(issues, [
+  const theoryScoreCodes = theory.issues
+    .filter((entry) => theoryFindingBlocks(entry, "score"))
+    .map((entry) => entry.code);
+  const theoryBuildCodes = theory.issues
+    .filter((entry) => theoryFindingBlocks(entry, "build"))
+    .map((entry) => entry.code);
+  const score = gate(mergedIssues, [...scoreCodes, ...theoryScoreCodes]);
+  const build = gate(mergedIssues, [
     ...scoreCodes,
+    ...theoryBuildCodes,
     "NATIVE_TRACK_COMMENT_TOO_LONG",
     "NATIVE_PART_COMMENT_TOO_LONG",
   ]);
   const renderBlockers = [...build.blockers];
   if (!currentRoles.has("vsqx")) renderBlockers.push("CURRENT_VSQX_REQUIRED");
-  if (issues.some((entry) => entry.code === "VOICE_NOT_VERIFIED" && entry.severity === "error")) {
+  if (mergedIssues.some((entry) => entry.code === "VOICE_NOT_VERIFIED" && entry.severity === "error")) {
     renderBlockers.push("VOICE_NOT_VERIFIED");
   }
   const mixBlockers: string[] = [];
@@ -771,11 +839,11 @@ export async function preflightSongManifest(
   if (!currentRoles.has("instrument_stem")) mixBlockers.push("CURRENT_INSTRUMENT_STEM_REQUIRED");
   const deliveryBlockers: string[] = [];
   if (!currentRoles.has("delivery")) deliveryBlockers.push("CURRENT_DELIVERY_REQUIRED");
-  if (issues.some((entry) => entry.domain === "artifact" && entry.severity === "error")) {
+  if (mergedIssues.some((entry) => entry.domain === "artifact" && entry.severity === "error")) {
     deliveryBlockers.push("ARTIFACT_INTEGRITY_ERROR");
   }
 
-  const sorted = [...issues].sort((left, right) => {
+  const sorted = [...mergedIssues].sort((left, right) => {
     const severityOrder: Record<PreflightSeverity, number> = { error: 0, warning: 1, info: 2 };
     return severityOrder[left.severity] - severityOrder[right.severity]
       || left.domain.localeCompare(right.domain)
@@ -798,6 +866,8 @@ export async function preflightSongManifest(
       errors: sorted.filter((entry) => entry.severity === "error").length,
       warnings: sorted.filter((entry) => entry.severity === "warning").length,
       infos: sorted.filter((entry) => entry.severity === "info").length,
+      theoryIssues: theory.issues.length,
+      creativeFindings: creativeReadiness.findings.length,
     },
     readiness: {
       score,
@@ -806,6 +876,8 @@ export async function preflightSongManifest(
       mix: { ready: mixBlockers.length === 0, blockers: mixBlockers },
       delivery: { ready: deliveryBlockers.length === 0, blockers: [...new Set(deliveryBlockers)] },
     },
+    theory,
+    creativeReadiness,
     checkedArtifactIds: checkedArtifacts.map((artifact) => artifact.id),
     issues: sorted,
   };

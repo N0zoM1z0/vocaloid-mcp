@@ -9,6 +9,10 @@ import { analyzeMelody } from "./melody.js";
 import { analyzePerformance } from "./performance.js";
 import { analyzeRhythm } from "./rhythm.js";
 import {
+  assertRegisteredTheoryFinding,
+  theoryRuleRegistryDescriptor,
+} from "./rules.js";
+import {
   TheoryReportSchema,
   type CandidateRepair,
   type TheoryIssue,
@@ -33,6 +37,7 @@ const RULESET_DESCRIPTOR = {
     arrangement: "1.0.0",
     performance: "1.0.0",
   },
+  rules: theoryRuleRegistryDescriptor(),
 } as const;
 
 function canonicalize(value: unknown): unknown {
@@ -80,10 +85,11 @@ function repairForFinding(finding: RawTheoryFinding, targetFingerprint: string):
 }
 
 function issueFromFinding(manifest: SongManifest, finding: RawTheoryFinding): TheoryIssue {
+  const definition = assertRegisteredTheoryFinding(finding);
   const objectIds = uniqueObjectIds(finding.objectIds);
   const targetFingerprint = fingerprint({
     code: finding.code,
-    ruleVersion: finding.ruleVersion,
+    ruleVersion: definition.version,
     objectIds,
     startTick: finding.startTick,
     endTick: finding.endTick,
@@ -91,10 +97,10 @@ function issueFromFinding(manifest: SongManifest, finding: RawTheoryFinding): Th
   });
   return {
     code: finding.code,
-    ruleVersion: finding.ruleVersion,
+    ruleVersion: definition.version,
     severity: finding.severity,
     confidence: finding.confidence,
-    domain: finding.domain,
+    domain: definition.domain,
     message: finding.message,
     objectIds,
     ...(finding.startTick !== undefined ? { position: positionAtTick(manifest, finding.startTick) } : {}),

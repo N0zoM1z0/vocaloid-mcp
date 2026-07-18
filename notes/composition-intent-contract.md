@@ -42,14 +42,14 @@ A phrase direction is a score-independent logical object. It may be written befo
 
 An absent `realization_links` is an incomplete but valid planning state and does not block audition. Once links are supplied, every typed reference must exist. An unknown section emits `INTENT_SECTION_REFERENCE_INVALID`; an unknown score/tuning/arrangement target emits `INTENT_REALIZATION_REFERENCE_INVALID` before the manifest is written.
 
-The current internal mutation entry points are:
+The canonical mutation entry points are:
 
 - `setSongManifestCompositionIntent`;
 - `upsertSongManifestSectionIntent`;
 - `upsertSongManifestPhraseDirection`;
 - `bindSongManifestPhraseRealization`.
 
-They use the existing expected-revision, backup, canonical validation, and atomic write path. Public MCP actions and dry-run deltas are intentionally deferred until the analyzer/preflight integration milestone.
+They use the existing expected-revision, backup, canonical validation, and atomic write path. The same four operations are public `vocaloid_edit_song` actions: `set_composition_intent`, `upsert_section_intent`, `upsert_phrase_direction`, and `bind_phrase_realization`. The production tool keeps a compact `{ action, payload, response_format }` envelope; read `vocaloid://edit-song-contract/{action}` for the exact strict payload schema, and use `dry_run=true` before writing.
 
 ## Hash boundary
 
@@ -96,6 +96,8 @@ New A/B reviews should use digest-bound `comparison_artifacts`; legacy ID-only c
 - `composition_guidance.intent_review_policy` is optional and has no parse-time default. Old manifests retain old delivery behavior.
 - A future explicit `required_for_delivery` policy may require anchor coverage and a current listening review before final delivery.
 - Style outliers never satisfy or override creative readiness.
+
+`vocaloid_preflight_song` returns the shared `core/v1` theory report beside the creative-readiness report. Its score/build gates consume only registered error-level structural theory findings; missing intent, missing audition layers, and listening status remain visible but advisory at this milestone. Every edit dry-run compares before/after reports and returns introduced/resolved issue codes, changed theory metrics, changed phrase evidence, creative status, and whether a current listening decision would become stale. This comparison cannot create a new listening outcome.
 
 ## Audition discipline
 

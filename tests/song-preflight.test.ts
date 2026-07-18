@@ -24,6 +24,67 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+async function createTheoryPreflightFixture(
+  path: string,
+  tonic: string,
+  notes: Array<{
+    id: string;
+    position: { measure: number; beat: number };
+    duration: number;
+    note_number: number;
+    lyric: string;
+    phonemes: string;
+  }>,
+): Promise<void> {
+  await createSongManifest({
+    outputPath: path,
+    songId: `theory-${tonic.toLowerCase()}`,
+    slug: `theory-${tonic.toLowerCase()}`,
+    title: `Theory ${tonic}`,
+    format: "vsq3",
+    preMeasure: 1,
+    timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+    sections: [{
+      id: "verse",
+      name: "Verse",
+      kind: "verse",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 2, beat: 0 },
+    }],
+    keyChanges: [{ id: "key-main", position: { measure: 0, beat: 0 }, tonic, mode: "major" }],
+    chordChanges: [{ id: "chord-c", position: { measure: 0, beat: 0 }, symbol: "C", duration_ticks: 3840 }],
+    sampleRate: 44_100,
+    gain: 0.2,
+    reverb: false,
+    chorus: false,
+    overwrite: false,
+  });
+  await upsertSongManifestVocalPart(
+    path,
+    path,
+    1,
+    { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+    { id: "lead", name: "Lead", voice_id: "voice-ia" },
+    {
+      id: "lead-part",
+      section_id: "verse",
+      name: "Lead",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 2, beat: 0 },
+      notes,
+    },
+    true,
+  );
+  await upsertSongManifestArrangementTrack(path, path, 2, {
+    kind: "pitched",
+    id: "piano",
+    name: "Piano",
+    program: 0,
+    notes: [{ id: "piano-c", position: { measure: 0, beat: 0 }, duration: 480, note_number: 48 }],
+  }, true);
+}
+
 test("preflight aggregates vocal overlap and readiness before expensive build output", async (context) => {
   const temporary = await mkdtemp(join(ROOT, ".test-song-preflight-"));
   context.after(async () => rm(temporary, { recursive: true, force: true }));
@@ -221,6 +282,51 @@ test("preflight distinguishes score readiness from later artifact stages", async
     "CURRENT_VOCAL_STEM_REQUIRED",
     "CURRENT_INSTRUMENT_STEM_REQUIRED",
   ]);
+});
+
+test("shared theory errors block build while intent absence and unresolved color warnings remain advisory", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-song-preflight-theory-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+
+  const suspensionPath = join(temporary, "suspension.song.json");
+  await createTheoryPreflightFixture(suspensionPath, "C", [{
+    id: "suspension-d",
+    position: { measure: 0, beat: 0 },
+    duration: 480,
+    note_number: 62,
+    lyric: "ね",
+    phonemes: "n e",
+  }]);
+  const suspension = await preflightSongManifest(suspensionPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: true,
+  });
+  const color = suspension.issues.find((entry) => entry.code === "SUSTAINED_NON_CHORD_TONE_UNRESOLVED");
+  assert.equal(color?.origin, "theory");
+  assert.equal(color?.severity, "warning");
+  assert.match(color?.targetFingerprint ?? "", /^[a-f0-9]{64}$/u);
+  assert.equal(suspension.readiness.score.ready, true);
+  assert.equal(suspension.readiness.build.ready, true);
+  assert.equal(suspension.creativeReadiness.status, "missing_intent");
+  assert.equal(suspension.theory.rulesetId, "core/v1");
+
+  const invalidKeyPath = join(temporary, "invalid-key.song.json");
+  await createTheoryPreflightFixture(invalidKeyPath, "H", [{
+    id: "lead-c",
+    position: { measure: 0, beat: 0 },
+    duration: 480,
+    note_number: 60,
+    lyric: "ら",
+    phonemes: "4 a",
+  }]);
+  const invalidKey = await preflightSongManifest(invalidKeyPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: true,
+  });
+  assert.equal(invalidKey.issues.find((entry) => entry.code === "KEY_INVALID")?.origin, "theory");
+  assert.equal(invalidKey.readiness.score.ready, false);
+  assert.equal(invalidKey.readiness.build.ready, false);
+  assert.ok(invalidKey.readiness.build.blockers.includes("KEY_INVALID"));
 });
 
 test("preflight blocks native VSQX comments that exceed the compiler boundary", async (context) => {

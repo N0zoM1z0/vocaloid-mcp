@@ -5,6 +5,45 @@ import { diffManifestSnapshots } from "./manifest-history.js";
 import { PROJECT_ROOT } from "./paths.js";
 import { loadSongManifest } from "./song-manifest.js";
 import { preflightSongManifest } from "./song-preflight.js";
+import type { CreativeReadinessReport, IntentRealizationEvidence } from "./intent/report-types.js";
+import type { TheoryException, TheoryMetric, TheoryReport } from "./theory/types.js";
+
+
+export interface TheoryMetricDelta {
+  id: string;
+  before?: TheoryMetric;
+  after?: TheoryMetric;
+}
+
+export interface IntentEvidenceDelta {
+  phraseDirectionId: string;
+  dimension: IntentRealizationEvidence["dimension"];
+  feature: string;
+  before?: IntentRealizationEvidence;
+  after?: IntentRealizationEvidence;
+}
+
+export interface CreativeReviewTransition {
+  phraseDirectionId: string;
+  reviewNoteId?: string;
+  before: string;
+  after: string;
+  staleReasons: string[];
+}
+
+export interface MutationAnalysisDelta {
+  introducedIssueCodes: string[];
+  resolvedIssueCodes: string[];
+  changedMetrics: TheoryMetricDelta[];
+  changedIntentEvidence: IntentEvidenceDelta[];
+  creativeReviewWouldBecomeStale: boolean;
+  creativeReviewTransitions: CreativeReviewTransition[];
+  creativeStatus: {
+    before: CreativeReadinessReport["status"];
+    after: CreativeReadinessReport["status"];
+  };
+  staleExceptions: TheoryException[];
+}
 
 
 export interface MutationPreviewResult {
@@ -26,6 +65,109 @@ export interface MutationPreviewResult {
   totalChanges: number;
   readiness: Awaited<ReturnType<typeof preflightSongManifest>>["readiness"];
   issues: Awaited<ReturnType<typeof preflightSongManifest>>["issues"];
+  theory: TheoryReport;
+  creativeReadiness: CreativeReadinessReport;
+  analysisDelta: MutationAnalysisDelta;
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function issueIdentity(
+  entry: Awaited<ReturnType<typeof preflightSongManifest>>["issues"][number],
+): string {
+  const target = entry.targetFingerprint
+    ?? `${[...entry.objectIds].sort().join(",")}@${entry.position?.measure ?? -1}:${entry.position?.beat ?? -1}:${entry.position?.tick ?? -1}`;
+  return `${entry.origin}:${entry.code}:${target}`;
+}
+
+function changedMetrics(before: TheoryReport, after: TheoryReport): TheoryMetricDelta[] {
+  const beforeById = new Map(before.metrics.map((entry) => [entry.id, entry]));
+  const afterById = new Map(after.metrics.map((entry) => [entry.id, entry]));
+  return uniqueSorted([...beforeById.keys(), ...afterById.keys()]).flatMap((id) => {
+    const previous = beforeById.get(id);
+    const next = afterById.get(id);
+    if (JSON.stringify(previous) === JSON.stringify(next)) return [];
+    return [{ id, ...(previous ? { before: previous } : {}), ...(next ? { after: next } : {}) }];
+  });
+}
+
+function intentEvidenceByKey(report: CreativeReadinessReport): Map<string, {
+  phraseDirectionId: string;
+  evidence: IntentRealizationEvidence;
+}> {
+  const values = new Map<string, { phraseDirectionId: string; evidence: IntentRealizationEvidence }>();
+  for (const direction of report.directions) for (const evidence of direction.evidence) {
+    const key = `${direction.phraseDirectionId}\u0000${evidence.dimension}\u0000${evidence.feature}`;
+    values.set(key, { phraseDirectionId: direction.phraseDirectionId, evidence });
+  }
+  return values;
+}
+
+function changedIntentEvidence(
+  before: CreativeReadinessReport,
+  after: CreativeReadinessReport,
+): IntentEvidenceDelta[] {
+  const beforeByKey = intentEvidenceByKey(before);
+  const afterByKey = intentEvidenceByKey(after);
+  return uniqueSorted([...beforeByKey.keys(), ...afterByKey.keys()]).flatMap((key) => {
+    const previous = beforeByKey.get(key);
+    const next = afterByKey.get(key);
+    if (JSON.stringify(previous?.evidence) === JSON.stringify(next?.evidence)) return [];
+    const identity = next ?? previous;
+    if (!identity) return [];
+    return [{
+      phraseDirectionId: identity.phraseDirectionId,
+      dimension: identity.evidence.dimension,
+      feature: identity.evidence.feature,
+      ...(previous ? { before: previous.evidence } : {}),
+      ...(next ? { after: next.evidence } : {}),
+    }];
+  });
+}
+
+function creativeReviewTransitions(
+  before: CreativeReadinessReport,
+  after: CreativeReadinessReport,
+): CreativeReviewTransition[] {
+  const afterByDirection = new Map(after.directions.map((entry) => [entry.phraseDirectionId, entry]));
+  return before.directions.flatMap((previous) => {
+    if (!previous.review.state.startsWith("current_")) return [];
+    const next = afterByDirection.get(previous.phraseDirectionId);
+    if (next?.review.state.startsWith("current_")) return [];
+    return [{
+      phraseDirectionId: previous.phraseDirectionId,
+      ...(previous.review.reviewNoteId ? { reviewNoteId: previous.review.reviewNoteId } : {}),
+      before: previous.review.state,
+      after: next?.review.state ?? "direction_removed",
+      staleReasons: next?.review.staleReasons ?? ["PHRASE_DIRECTION_REMOVED"],
+    }];
+  }).sort((left, right) => left.phraseDirectionId.localeCompare(right.phraseDirectionId));
+}
+
+function analysisDelta(
+  before: Awaited<ReturnType<typeof preflightSongManifest>>,
+  after: Awaited<ReturnType<typeof preflightSongManifest>>,
+): MutationAnalysisDelta {
+  const beforeIssues = new Map(before.issues.map((entry) => [issueIdentity(entry), entry]));
+  const afterIssues = new Map(after.issues.map((entry) => [issueIdentity(entry), entry]));
+  const introduced = [...afterIssues].filter(([identity]) => !beforeIssues.has(identity));
+  const resolved = [...beforeIssues].filter(([identity]) => !afterIssues.has(identity));
+  const reviewTransitions = creativeReviewTransitions(before.creativeReadiness, after.creativeReadiness);
+  return {
+    introducedIssueCodes: uniqueSorted(introduced.map(([, entry]) => entry.code)),
+    resolvedIssueCodes: uniqueSorted(resolved.map(([, entry]) => entry.code)),
+    changedMetrics: changedMetrics(before.theory, after.theory),
+    changedIntentEvidence: changedIntentEvidence(before.creativeReadiness, after.creativeReadiness),
+    creativeReviewWouldBecomeStale: reviewTransitions.length > 0,
+    creativeReviewTransitions: reviewTransitions,
+    creativeStatus: {
+      before: before.creativeReadiness.status,
+      after: after.creativeReadiness.status,
+    },
+    staleExceptions: after.theory.staleExceptions,
+  };
 }
 
 export async function previewSongManifestMutation(
@@ -47,9 +189,13 @@ export async function previewSongManifestMutation(
   try {
     await copyFile(source.path, temporaryManifest);
     await mutateTemporary(temporaryManifest);
-    const [predicted, diff, preflight] = await Promise.all([
+    const [predicted, diff, beforePreflight, preflight] = await Promise.all([
       loadSongManifest(temporaryManifest),
       diffManifestSnapshots(source.path, temporaryManifest),
+      preflightSongManifest(source.path, {
+        artifactCheck: "none",
+        includePerformanceWarnings: true,
+      }),
       preflightSongManifest(temporaryManifest, {
         artifactCheck: "none",
         includePerformanceWarnings: true,
@@ -74,6 +220,9 @@ export async function previewSongManifestMutation(
       totalChanges: diff.totalChanges,
       readiness: preflight.readiness,
       issues: preflight.issues,
+      theory: preflight.theory,
+      creativeReadiness: preflight.creativeReadiness,
+      analysisDelta: analysisDelta(beforePreflight, preflight),
     };
   } finally {
     await rm(temporary, { recursive: true, force: true });

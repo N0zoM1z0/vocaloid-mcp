@@ -22,6 +22,8 @@ Style evidence never suppresses a structural error and never supplies the next n
 
 Every rule has a stable uppercase code and an explicit rule version. A ruleset has a stable ID and content hash. Reports are sorted deterministically so an unchanged composition produces byte-stable findings.
 
+`src/theory/rules.ts` is the single registry for each analyzer code, version, domain, allowed severity class, and structural status. Domain analyzers locate evidence, but report construction rejects an unregistered code or a version/domain/severity that disagrees with the registry. Only registry-owned structural findings that actually resolve to `error` enter score/build blockers; a warning-level partial chord parse or unresolved color tone remains auditionable.
+
 ## Symbolic analyzer boundary
 
 `analyzeManifestTheory` builds one read-only symbolic index, then reports separate form, timeline, key/harmony, melody, rhythm, vocal/note-allocation, voice-leading, arrangement, and performance metrics. Its interval queries and register occupancy use bounded indexes/sweeps; a 20,000-event vocal fixture and a 20,000-event overlapping-arrangement fixture are required to finish within two seconds on the development host without mutating the manifest.
@@ -29,6 +31,8 @@ Every rule has a stable uppercase code and an explicit rule version. A ruleset h
 The analyzer can locate such things as incomplete harmonic coverage, unresolved sustained non-chord tones, unbalanced leaps, missing breath windows, mora/consonant timing budgets, unsuitable melisma phonemes, compound-meter/pattern conflicts, cross-voice collisions, slash-bass conflicts, register crowding, duplicated accompaniment roles, and section-density mismatches. Practical instrument and IA tessitura ranges are conservative warnings, not renderer facts.
 
 These findings describe symbolic coherence and audition risks. They do not infer whether a phrase is moving, authentically "IA-like", or faithful to the declared intent; they never read the corpus/style profile and never write `keep`, `accepted`, or another listening conclusion. Intent-realization evidence and the human listening gate are separate contracts.
+
+The same analyzer runs inside `vocaloid_preflight_song`, build preflight, and mutation dry-run. A dry-run evaluates both the current and predicted manifests, then reports issue identities/codes, changed metrics, changed intent evidence, and listening-review staleness without mutating the canonical file. This prevents a repair path from using a different theory implementation than the final build gate.
 
 ## Evidence
 

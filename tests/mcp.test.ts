@@ -46,13 +46,16 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), PRODUCTION_TOOLS);
-  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 80_000, "production tools/list exceeded 80 KB");
+  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 90_000, "production tools/list exceeded 90 KB");
   for (const tool of tools.tools) {
     assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
     assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
   }
   const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
   assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
+  assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_intent/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /edit-song-contract/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /payload/u);
   const audioReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_audio");
   assert.match(JSON.stringify(audioReviewTool?.inputSchema), /anchor_preview/u);
   assert.match(JSON.stringify(audioReviewTool?.inputSchema), /compare_anchor_ab/u);
@@ -72,6 +75,24 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const theoryEntry = theoryPolicy.contents[0];
   assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Style evidence never suppresses/u);
 
+  const editContract = await client.readResource({ uri: "vocaloid://edit-song-contract" });
+  const editContractEntry = editContract.contents[0];
+  assert.match(editContractEntry && "text" in editContractEntry ? editContractEntry.text : "", /bind_phrase_realization/u);
+  const intentActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/set_composition_intent",
+  });
+  const intentActionEntry = intentActionContract.contents[0];
+  assert.match(intentActionEntry && "text" in intentActionEntry ? intentActionEntry.text : "", /composition_intent/u);
+  const invalidIntentEdit = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: { action: "set_composition_intent", payload: {}, response_format: "json" },
+  });
+  assert.equal(invalidIntentEdit.isError, true);
+  assert.match(
+    JSON.stringify(invalidIntentEdit.structuredContent),
+    /(?:input_path|composition_intent)/u,
+  );
+
   const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
   const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
   const lyricEntry = lyricResource.contents[0];
@@ -80,8 +101,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const exampleResource = await client.readResource({ uri: "vocaloid://examples/from-zero" });
   const exampleEntry = exampleResource.contents[0];
   const example = JSON.parse(exampleEntry && "text" in exampleEntry ? exampleEntry.text : "null");
-  assert.equal(example.calls[2].arguments.voice.component_id, "BDREB7P2KTWKYDC5");
-  assert.equal(example.calls[2].arguments.dry_run, true);
+  assert.equal(example.calls[2].arguments.payload.voice.component_id, "BDREB7P2KTWKYDC5");
+  assert.equal(example.calls[2].arguments.payload.dry_run, true);
 });
 
 test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
@@ -516,6 +537,51 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     (manifestInspect.structuredContent as { data?: { revision?: number } }).data?.revision,
     8,
   );
+
+  const intentDryRun = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "set_composition_intent",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        composition_intent: {
+          schema: "vocaloid-composition-intent/v1",
+          song: {
+            premise: "One line moves from uncertainty into a direct answer.",
+            central_tension: "The answer changes what can remain unsaid.",
+            state_at_start: "Uncertain.",
+            intended_destination: "Direct and restrained.",
+          },
+          sections: [{
+            id: "intent-verse",
+            section_id: "verse",
+            dramatic_function: "Move into the answer.",
+            state_before: "Indirect.",
+            intended_transition: "State one answer plainly.",
+            state_after: "The answer is present.",
+          }],
+          phrase_directions: [],
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(intentDryRun.isError, true);
+  const intentDryRunData = intentDryRun.structuredContent as {
+    data?: {
+      preview?: {
+        analysisDelta?: { creativeStatus?: { before?: string; after?: string } };
+      };
+    };
+  };
+  assert.deepEqual(intentDryRunData.data?.preview?.analysisDelta?.creativeStatus, {
+    before: "missing_intent",
+    after: "incomplete",
+  });
 
   const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r8.wav");
   const manifestProjectPath = join(temporary, "mcp-agent-song-r8.vsqx");
