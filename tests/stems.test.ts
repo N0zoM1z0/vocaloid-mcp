@@ -15,6 +15,7 @@ import {
   renderSongManifestInstrumentStems,
   renderSongManifestVocalStems,
 } from "../src/stems.js";
+import { analyzeSongManifestVocalStem } from "../src/vocal-analysis.js";
 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -250,4 +251,22 @@ test("exports isolated lead and harmony stems through the original VOCALOID Edit
       .map((artifact) => artifact.dependencies),
     [["vsqx-r4", "lead"], ["vsqx-r4", "harmony"]],
   );
+  const analysis = await analyzeSongManifestVocalStem({
+    manifestPath,
+    expectedRevision: 6,
+    stemArtifactId: "vocal-stem-lead-r5",
+    outputPath: join(temporary, "vocal-stem-song-lead-r6.vocal-analysis.json"),
+    sectionId: "verse",
+    eventIds: ["lead-note"],
+    timelineOffsetSeconds: 0,
+    minimumPitchHz: 60,
+    maximumPitchHz: 1_200,
+    pitchToleranceCents: 120,
+    onsetToleranceMilliseconds: 250,
+    offsetToleranceMilliseconds: 250,
+  });
+  assert.equal(analysis.manifestRevision, 7);
+  assert.equal(analysis.summary.events, 1);
+  assert.equal(analysis.summary.eventsWithPitch, 1);
+  assert.ok((analysis.events[0]?.pitchContour as unknown[] | undefined)?.length);
 });

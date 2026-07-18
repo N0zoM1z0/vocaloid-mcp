@@ -1393,6 +1393,89 @@ function compileManifestPhrase(
   return compileVocalPhrase(manifest.time_signatures, normalized);
 }
 
+export interface ManifestExpectedVocalEvent {
+  id: string;
+  source: "direct_note" | "phrase_cell";
+  trackId: string;
+  partId: string;
+  sectionId?: string;
+  phraseId?: string;
+  position: z.infer<typeof ManifestPositionSchema>;
+  duration: number;
+  noteNumber: number;
+  lyric: string;
+  phonemes: string;
+  velocity: number;
+  vibrato?: VibratoInput;
+}
+
+export function manifestExpectedVocalEvents(
+  manifest: SongManifest,
+  vocalTrackId: string,
+): ManifestExpectedVocalEvent[] {
+  const track = manifest.vocal_tracks.find((candidate) => candidate.id === vocalTrackId);
+  if (!track) throw new Error(`Manifest has no vocal track ${vocalTrackId}`);
+  const events: ManifestExpectedVocalEvent[] = [];
+  for (const part of track.parts) {
+    for (const note of part.notes) {
+      events.push({
+        id: note.id,
+        source: "direct_note",
+        trackId: track.id,
+        partId: part.id,
+        ...(part.section_id ? { sectionId: part.section_id } : {}),
+        position: note.position,
+        duration: note.duration,
+        noteNumber: note.note_number,
+        lyric: note.lyric,
+        phonemes: note.phonemes,
+        velocity: note.velocity,
+        ...(note.vibrato
+          ? {
+              vibrato: {
+                type: note.vibrato.type,
+                length: note.vibrato.length,
+                ...(note.vibrato.depth.length > 0 ? { depth: note.vibrato.depth } : {}),
+                ...(note.vibrato.rate.length > 0 ? { rate: note.vibrato.rate } : {}),
+              },
+            }
+          : {}),
+      });
+    }
+    for (const phrase of part.phrases) {
+      const compiled = compileManifestPhrase(manifest, phrase);
+      let noteIndex = 0;
+      for (const cell of phrase.cells) {
+        if (cell.rest) continue;
+        const note = compiled.notes[noteIndex++];
+        if (!note) throw new Error(`Internal phrase mapping failed for ${phrase.id}/${cell.id}`);
+        events.push({
+          id: cell.id,
+          source: "phrase_cell",
+          trackId: track.id,
+          partId: part.id,
+          ...(part.section_id ? { sectionId: part.section_id } : {}),
+          phraseId: phrase.id,
+          position: {
+            measure: note.position.measure,
+            beat: note.position.beat,
+            tick: note.position.tick ?? 0,
+          },
+          duration: note.duration,
+          noteNumber: note.noteNumber,
+          lyric: note.lyric,
+          phonemes: note.phonemes ?? note.lyric,
+          velocity: note.velocity ?? 64,
+          ...(note.vibrato ? { vibrato: note.vibrato } : {}),
+        });
+      }
+    }
+  }
+  return events.sort((left, right) =>
+    positionTick(manifest, left.position) - positionTick(manifest, right.position)
+      || left.id.localeCompare(right.id));
+}
+
 function manifestNote(note: z.infer<typeof ManifestVocalNoteSchema>): PositionedNoteInput {
   return {
     position: note.position,

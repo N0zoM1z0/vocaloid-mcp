@@ -29,6 +29,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     [
       "vocaloid_add_control_points",
       "vocaloid_add_notes",
+      "vocaloid_analyze_vocal_stem",
       "vocaloid_analyze_wav",
       "vocaloid_build_song_manifest",
       "vocaloid_compile_vocal_phrase",

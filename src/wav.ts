@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { open } from "node:fs/promises";
 
 
@@ -33,6 +34,15 @@ export interface WavChannelAnalysis {
   rmsDbfs: number | null;
   clippedSampleValues: number;
   clippedRatio: number;
+}
+
+export interface DecodedMonoWav {
+  path: string;
+  sourceSampleRate: number;
+  sampleRate: number;
+  sourceChannels: number;
+  durationSeconds: number;
+  samples: Float32Array;
 }
 
 interface DataChunk {
@@ -240,4 +250,79 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
   } finally {
     await handle.close();
   }
+}
+
+export async function decodeWavMono(
+  path: string,
+  targetSampleRate = 8_000,
+  maximumDurationSeconds = 900,
+): Promise<DecodedMonoWav> {
+  if (!Number.isInteger(targetSampleRate) || targetSampleRate < 4_000 || targetSampleRate > 48_000) {
+    throw new Error(`targetSampleRate must be an integer in 4000..48000, got ${targetSampleRate}`);
+  }
+  const analysis = await analyzeWav(path);
+  if (analysis.durationSeconds > maximumDurationSeconds) {
+    throw new Error(
+      `WAV duration ${analysis.durationSeconds.toFixed(3)}s exceeds analysis limit ${maximumDurationSeconds}s`,
+    );
+  }
+  const ffmpeg = process.env.FFMPEG_PATH ?? "/usr/bin/ffmpeg";
+  const chunks: Buffer[] = [];
+  const errors: Buffer[] = [];
+  let outputBytes = 0;
+  const maximumBytes = Math.ceil(maximumDurationSeconds * targetSampleRate * 4) + 4096;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      ffmpeg,
+      [
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-i", path,
+        "-map", "0:a:0",
+        "-ac", "1",
+        "-ar", String(targetSampleRate),
+        "-f", "f32le",
+        "pipe:1",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    child.stdout.on("data", (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > maximumBytes) {
+        child.kill("SIGKILL");
+        reject(new Error(`Decoded PCM exceeds ${maximumBytes} byte safety limit`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (errors.reduce((sum, entry) => sum + entry.length, 0) < 1024 * 1024) errors.push(chunk);
+    });
+    child.on("error", (error) => reject(new Error(`Could not launch FFmpeg decoder: ${error.message}`)));
+    child.on("close", (code, signal) => {
+      if (code === 0) resolve();
+      else {
+        const detail = Buffer.concat(errors).toString("utf8").trim();
+        reject(new Error(`FFmpeg mono decode failed (${code ?? signal ?? "unknown"}): ${detail}`));
+      }
+    });
+  });
+  const pcm = Buffer.concat(chunks);
+  if (pcm.length === 0 || pcm.length % 4 !== 0) {
+    throw new Error(`FFmpeg returned invalid f32le sample bytes: ${pcm.length}`);
+  }
+  const samples = new Float32Array(pcm.length / 4);
+  for (let index = 0; index < samples.length; index += 1) {
+    const value = pcm.readFloatLE(index * 4);
+    samples[index] = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+  }
+  return {
+    path,
+    sourceSampleRate: analysis.sampleRate,
+    sampleRate: targetSampleRate,
+    sourceChannels: analysis.channels,
+    durationSeconds: samples.length / targetSampleRate,
+    samples,
+  };
 }

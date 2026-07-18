@@ -37,6 +37,7 @@ import {
   renderSongManifestVocalStems,
 } from "./stems.js";
 import { discoverVoices } from "./voices.js";
+import { analyzeSongManifestVocalStem } from "./vocal-analysis.js";
 import {
   addControlPointsToProject,
   addNotesToProject,
@@ -53,9 +54,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.7.0" },
+  { name: "vocaloid-mcp-server", version: "0.8.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a new long song, use vocaloid_create_song_manifest as the canonical source, then add one vocal part or arrangement track per upsert; inspect its revision/hash before every mutation and use vocaloid_get_song_section for bounded context. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX with vocaloid_build_song_manifest; use vocaloid_create_song directly only for small one-shot projects. For a revisionable mix or score-vs-render work, render selected instrument stems and original-Editor vocal stems. Explicitly choose preserve_pan/center and effects/dry; never assume the artistic routing. A VSQX artifact and every stem must match the current composition_hash. Design named sections plus a shared tempo/meter map and distinct grooves; patterns/placements repeat and vary motifs without enumerating thousands of events. Vocal phrase rhythm cells support rapid 1/16-1/64, tuplets, and melisma. VOCALOID mixer pan is 0=hard left, 64=center, 127=hard right. Analyze backing, stems, and Master per channel; re-render clipped or unintended imbalanced sources, then master to requested LUFS/true peak. Use the song slug in every output name and new revision paths. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
+    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with voice/instrument discovery. For a new long song, use a song manifest as canonical source, add one vocal part or arrangement track per upsert, and inspect revision/hash before every mutation. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX from the manifest; use one-shot create_song only for small projects. For revisionable mixing or listening feedback, render selected instrument stems and original-Editor vocal stems. Explicitly choose preserve_pan/center and effects/dry; never assume artistic routing. Artifacts must match the current composition_hash. Run score-vs-render analysis on an isolated vocal stem before tuning: distinguish energy onset, voiced onset/consonant lead, sustained pitch center, contour, release, and vibrato. Treat rapid-note limited-resolution and estimated global offsets honestly; analysis proposes evidence and never auto-quantizes expression. Named sections, tempo/meter maps, patterns, rapid rhythm cells, tuplets, and melisma remain agent decisions. VOCALOID pan is 0=hard left, 64=center, 127=hard right. Analyze stems and Master per channel, fix clipped/unintended imbalance, then master to requested LUFS/true peak. Use slugged revision names. The bundled GM SoundFont is draft quality.`,
   },
 );
 
@@ -2133,6 +2134,79 @@ The source must be a hash-verified VSQX artifact whose composition_hash matches 
         result,
         params.response_format,
         `Rendered ${result.stems.length} isolated VOCALOID stems from ${result.sourceProjectArtifact}`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_analyze_vocal_stem",
+  {
+    title: "Analyze Vocal Score Versus Render",
+    description: `Compare stable manifest vocal events against an isolated, hash-verified VOCALOID stem.
+
+Returns per-note F0 contours, median/p95 cents error, voiced ratio, energy and voiced onsets, consonant lead, release timing, observed vibrato depth/rate/regularity, phrase timing, and actionable issue codes. Rapid notes are explicitly marked as limited-resolution instead of receiving false precision. The project pre-measure and tempo map are applied automatically; timeline_offset_seconds is an explicit calibration, while the reported global energy offset remains observational. Analysis never auto-quantizes expression. A reproducible .vocal-analysis.json and provenance artifact are written on success.`,
+    inputSchema: z
+      .object({
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        stem_artifact_id: ManifestIdSchema.describe("vocal_stem artifact ID from manifest inspect"),
+        output_path: PathSchema.describe("New slugged filename ending in .vocal-analysis.json"),
+        section_id: ManifestIdSchema.optional(),
+        event_ids: z.array(ManifestIdSchema).min(1).max(5000).optional()
+          .describe("Optional direct-note or phrase-cell stable IDs; omitted analyzes the selected section/track"),
+        timeline_offset_seconds: z.number().min(-10).max(10).default(0)
+          .describe("Explicit additional offset after automatic pre-measure/tempo mapping"),
+        minimum_pitch_hz: z.number().min(30).max(500).default(60),
+        maximum_pitch_hz: z.number().min(200).max(3000).default(1200),
+        pitch_tolerance_cents: z.number().min(5).max(600).default(80),
+        onset_tolerance_ms: z.number().min(10).max(1000).default(120),
+        offset_tolerance_ms: z.number().min(10).max(2000).default(160),
+        response_format: ResponseFormatSchema,
+      })
+      .strict()
+      .refine((value) => value.maximum_pitch_hz > value.minimum_pitch_hz, {
+        message: "maximum_pitch_hz must exceed minimum_pitch_hz",
+      }),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await analyzeSongManifestVocalStem({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        stemArtifactId: params.stem_artifact_id,
+        outputPath: params.output_path,
+        ...(params.section_id !== undefined ? { sectionId: params.section_id } : {}),
+        ...(params.event_ids !== undefined ? { eventIds: params.event_ids } : {}),
+        timelineOffsetSeconds: params.timeline_offset_seconds,
+        minimumPitchHz: params.minimum_pitch_hz,
+        maximumPitchHz: params.maximum_pitch_hz,
+        pitchToleranceCents: params.pitch_tolerance_cents,
+        onsetToleranceMilliseconds: params.onset_tolerance_ms,
+        offsetToleranceMilliseconds: params.offset_tolerance_ms,
+      });
+      const warnings = [
+        ...(result.audio.clippedSampleValues > 0
+          ? [`Stem contains ${result.audio.clippedSampleValues} clipped sample values; pitch/timing evidence may be distorted`]
+          : []),
+        ...(result.summary.issueCounts.error > 0
+          ? [`Analysis found ${result.summary.issueCounts.error} error-severity score/render deviations`]
+          : []),
+      ];
+      return textResult(
+        result,
+        params.response_format,
+        `Analyzed ${result.summary.events} score events (${result.summary.eventsWithPitch} with confident F0)`,
+        warnings,
       );
     } catch (error) {
       return errorResult(error);
