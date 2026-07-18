@@ -22,8 +22,10 @@ const EXAMPLE_ALIGNED_PHRASE = alignJapanesePhrase({
 
 export const FROM_ZERO_AGENT_EXAMPLE = {
   schema: "vocaloid-mcp-agent-example/v1",
-  purpose: "Minimal production-profile route with exact field names and no hidden whole-song generator.",
+  purpose: "Mechanical payload reference with exact field names; it is not evidence that the phrase or song is creatively complete.",
   invariants: [
+    "For a new work, declare song/section/anchor-phrase intent and one listening question before treating these mechanical score calls as composition.",
+    "Close a 20-30 second lead_solo, lead_harmony, and minimal_band anchor ladder before expanding full-song infrastructure or consulting optional style observations.",
     "Copy data.phrase from align_japanese_phrase as an object; do not reconstruct its phonemes.",
     "For every edit, use the current manifest revision, preview first, then repeat the same payload with dry_run=false.",
     "Same-path writes require overwrite=true and create a timestamped backup.",

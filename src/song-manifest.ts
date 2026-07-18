@@ -20,10 +20,11 @@ import {
   type DrumPatternInput,
   type DrumPatternPlacementInput,
 } from "./accompaniment.js";
-import { summarizeCompositionIntent } from "./intent/analyze.js";
+import { summarizeCompositionIntent } from "./intent/summary.js";
 import { optionalSongIntentHash, songIntentHash } from "./intent/hash.js";
 import {
   assertCurrentIntentFidelityReviewBasis,
+  currentTechnicalArtifactIds,
   resolveIntentReviewCurrentness,
 } from "./intent/review.js";
 import {
@@ -1340,28 +1341,11 @@ export async function createSongManifest(options: CreateSongManifestOptions): Pr
 }
 
 export function currentMixArtifactIds(manifest: SongManifest): ReadonlySet<string> {
-  const artifactsById = new Map(manifest.artifacts.map((artifact) => [artifact.id, artifact]));
-  const currentMixMemo = new Map<string, boolean>();
-  const currentForMix = (artifact: ManifestArtifact, visiting = new Set<string>()): boolean => {
-    const memoized = currentMixMemo.get(artifact.id);
-    if (memoized !== undefined) return memoized;
-    if (artifact.source_composition_hash !== manifest.composition_hash || visiting.has(artifact.id)) {
-      return false;
-    }
-    let current = true;
-    if (artifact.role === "mix") {
-      current = artifact.metadata.source_mix_hash === manifest.mix_hash;
-    } else if (artifact.role === "delivery") {
-      const next = new Set(visiting).add(artifact.id);
-      current = artifact.dependencies.length > 0 && artifact.dependencies.every((dependency) => {
-        const source = artifactsById.get(dependency);
-        return source !== undefined && currentForMix(source, next);
-      });
-    }
-    currentMixMemo.set(artifact.id, current);
-    return current;
-  };
-  return new Set(manifest.artifacts.filter((artifact) => currentForMix(artifact)).map((artifact) => artifact.id));
+  return currentTechnicalArtifactIds(
+    manifest.artifacts,
+    manifest.composition_hash,
+    manifest.mix_hash,
+  );
 }
 
 function manifestSummary(path: string, manifest: SongManifest) {
@@ -2793,6 +2777,7 @@ export interface ManifestExpectedVocalEvent {
   partId: string;
   sectionId?: string;
   phraseId?: string;
+  lyricUnitId?: string;
   position: z.infer<typeof ManifestPositionSchema>;
   duration: number;
   noteNumber: number;
@@ -2838,10 +2823,15 @@ export function manifestExpectedVocalEvents(
     for (const phrase of part.phrases) {
       const compiled = compileManifestPhrase(manifest, phrase);
       let noteIndex = 0;
+      let sequentialLyricIndex = 0;
       for (const cell of phrase.cells) {
         if (cell.rest) continue;
         const note = compiled.notes[noteIndex++];
         if (!note) throw new Error(`Internal phrase mapping failed for ${phrase.id}/${cell.id}`);
+        const lyricIndex = cell.lyric_index ?? sequentialLyricIndex;
+        const lyricUnit = phrase.allocation === "sequential" || cell.lyric_index !== undefined
+          ? phrase.lyrics[lyricIndex]
+          : undefined;
         events.push({
           id: cell.id,
           source: "phrase_cell",
@@ -2849,6 +2839,7 @@ export function manifestExpectedVocalEvents(
           partId: part.id,
           ...(part.section_id ? { sectionId: part.section_id } : {}),
           phraseId: phrase.id,
+          ...(lyricUnit ? { lyricUnitId: lyricUnit.id } : {}),
           position: {
             measure: note.position.measure,
             beat: note.position.beat,
@@ -2861,6 +2852,7 @@ export function manifestExpectedVocalEvents(
           velocity: note.velocity ?? 64,
           ...(note.vibrato ? { vibrato: note.vibrato } : {}),
         });
+        if (phrase.allocation === "sequential") sequentialLyricIndex += 1;
       }
     }
   }

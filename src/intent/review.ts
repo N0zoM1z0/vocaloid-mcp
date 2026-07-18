@@ -11,11 +11,20 @@ export type IntentReviewStaleReason =
   | "ARTIFACT_MISSING"
   | "ARTIFACT_DIGEST_MISMATCH"
   | "ARTIFACT_NOT_CURRENT"
-  | "COMPARISON_ARTIFACT_MISSING";
+  | "COMPARISON_ARTIFACT_MISSING"
+  | "COMPARISON_ARTIFACT_DIGEST_MISMATCH"
+  | "COMPARISON_ARTIFACT_NOT_CURRENT";
 
 export interface IntentReviewArtifact {
   id: string;
   sha256: string;
+}
+
+export interface TechnicalArtifact extends IntentReviewArtifact {
+  role: string;
+  source_composition_hash: string;
+  dependencies: readonly string[];
+  metadata: Readonly<Record<string, string | number | boolean>>;
 }
 
 export interface IntentReviewContext {
@@ -31,6 +40,36 @@ export interface IntentReviewCurrentness {
   outcome: IntentFidelityReviewBasis["outcome"];
   reasons: IntentReviewStaleReason[];
   currentIntentHash: string | null;
+}
+
+export function currentTechnicalArtifactIds(
+  artifacts: readonly TechnicalArtifact[],
+  compositionHash: string,
+  mixHash: string,
+): ReadonlySet<string> {
+  const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const currentMemo = new Map<string, boolean>();
+  const resolve = (artifact: TechnicalArtifact, visiting = new Set<string>()): boolean => {
+    const memoized = currentMemo.get(artifact.id);
+    if (memoized !== undefined) return memoized;
+    if (artifact.source_composition_hash !== compositionHash || visiting.has(artifact.id)) return false;
+    const next = new Set(visiting).add(artifact.id);
+    let current = artifact.role !== "mix" || artifact.metadata.source_mix_hash === mixHash;
+    if (artifact.role === "delivery") {
+      current = artifact.dependencies.length > 0 && artifact.dependencies.every((dependency) => {
+        const source = artifactsById.get(dependency);
+        return source !== undefined && resolve(source, next);
+      });
+    } else if (current) {
+      current = artifact.dependencies
+        .map((dependency) => artifactsById.get(dependency))
+        .filter((dependency) => dependency !== undefined)
+        .every((dependency) => resolve(dependency, next));
+    }
+    currentMemo.set(artifact.id, current);
+    return current;
+  };
+  return new Set(artifacts.filter((artifact) => resolve(artifact)).map((artifact) => artifact.id));
 }
 
 export function resolveIntentReviewCurrentness(
@@ -59,8 +98,24 @@ export function resolveIntentReviewCurrentness(
     && !context.currentArtifactIds.has(selectedArtifact.id)) {
     reasons.push("ARTIFACT_NOT_CURRENT");
   }
-  if ((basis.comparison_artifact_ids ?? []).some((id) => !artifacts.has(id))) {
+  const comparisonArtifacts = basis.comparison_artifacts
+    ?? (basis.comparison_artifact_ids ?? []).map((artifact_id) => ({ artifact_id }));
+  if (comparisonArtifacts.some((comparison) => !artifacts.has(comparison.artifact_id))) {
     reasons.push("COMPARISON_ARTIFACT_MISSING");
+  }
+  if (comparisonArtifacts.some((comparison) => {
+    const artifact = artifacts.get(comparison.artifact_id);
+    return artifact !== undefined
+      && "artifact_sha256" in comparison
+      && artifact.sha256 !== comparison.artifact_sha256;
+  })) {
+    reasons.push("COMPARISON_ARTIFACT_DIGEST_MISMATCH");
+  }
+  if (context.currentArtifactIds && comparisonArtifacts.some((comparison) => {
+    const artifact = artifacts.get(comparison.artifact_id);
+    return artifact !== undefined && !context.currentArtifactIds!.has(artifact.id);
+  })) {
+    reasons.push("COMPARISON_ARTIFACT_NOT_CURRENT");
   }
 
   return {

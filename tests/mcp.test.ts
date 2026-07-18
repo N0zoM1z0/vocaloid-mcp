@@ -53,12 +53,24 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   }
   const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
   assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
+  const audioReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_audio");
+  assert.match(JSON.stringify(audioReviewTool?.inputSchema), /anchor_preview/u);
+  assert.match(JSON.stringify(audioReviewTool?.inputSchema), /compare_anchor_ab/u);
+  const songReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_song");
+  assert.match(JSON.stringify(songReviewTool?.inputSchema), /intent_fidelity/u);
 
   const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
   const capabilityEntry = capabilities.contents[0];
   const capabilityText = capabilityEntry && "text" in capabilityEntry ? capabilityEntry.text : undefined;
   assert.equal(typeof capabilityText, "string");
   assert.equal(JSON.parse(capabilityText as string).profile, "production");
+
+  const intentContract = await client.readResource({ uri: "vocaloid://composition-intent-contract" });
+  const intentEntry = intentContract.contents[0];
+  assert.match(intentEntry && "text" in intentEntry ? intentEntry.text : "", /What is IA meant to sing out/u);
+  const theoryPolicy = await client.readResource({ uri: "vocaloid://music-theory-policy" });
+  const theoryEntry = theoryPolicy.contents[0];
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Style evidence never suppresses/u);
 
   const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
   const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");

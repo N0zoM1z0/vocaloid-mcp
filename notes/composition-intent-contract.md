@@ -28,6 +28,8 @@ Every section should eventually have a concise section intent. A song initially 
 
 The schema is `vocaloid-composition-intent/v1` and is defined in `src/intent/types.ts`. Free text is bounded, strict objects reject unknown fields, and controlled tags do not form a closed emotion ontology. Ambiguity, restraint, and deliberate non-resolution remain valid creative choices.
 
+An optional `realization_hypothesis.symbolic_targets` makes only musical claims that code can actually test: melody contour/range, onset or note-duration trajectory, harmonic-tension direction, DYN direction, arrangement-density direction, and semantic-focus duration/beat placement. These targets do not encode emotion. Without a structured target, the analyzer reports the observed musical evidence with relation `unknown`; it never converts prose such as “more moving” into a fake score.
+
 ## Plan-before-score lifecycle
 
 A phrase direction is a score-independent logical object. It may be written before a VOCALOID phrase, lyric unit, note, tuning gesture, chord, or arrangement track exists. This makes the intended order possible:
@@ -75,10 +77,15 @@ An existing manifest review note may carry an optional `intent_fidelity` basis:
       artifact_id,
       artifact_sha256,
       comparison_artifact_ids?,
+      comparison_artifacts?: [{ artifact_id, artifact_sha256 }],
+      hypothesis_family?,
+      layer_assessment?,
       outcome: "keep" | "reject" | "revise"
     }
 
 Adding a structured review requires a current phrase direction, question, intent hash, composition hash, selected artifact digest, and technically current selected artifact. Stored reviews remain readable after later edits. Inspection resolves them as current or stale with stable reasons such as `INTENT_HASH_MISMATCH`, `COMPOSITION_HASH_MISMATCH`, or `ARTIFACT_NOT_CURRENT`.
+
+New A/B reviews should use digest-bound `comparison_artifacts`; legacy ID-only comparisons remain readable. A changed comparison digest or a stale comparison dependency also stales the decision. `layer_assessment` can explicitly record that a layer supports the question, obscures it, is uncertain, or causes no audible loss when muted, together with a `keep`/`remove`/`revise`/`defer` action. This is authored listening evidence, never an analyzer inference.
 
 `keep` is accepted only when the full basis is current. A deterministic analyzer, corpus worker, or audio metric cannot create acceptance. `reject` and `revise` are first-class listening outcomes rather than failed tool calls.
 
@@ -101,6 +108,8 @@ The first creative closure should be a 20–30 second anchor passage:
 5. timbre and mix refinement.
 
 One loudness-matched A/B answers one registered listening question. A musical choice is a hypothesis, not an emotion recipe: rising contour does not always mean hope, minor does not always mean sadness, and the presence of DYN/PIT/vibrato data does not prove a phrase is alive.
+
+`vocaloid_review_audio` keeps this inside the existing compact tool surface. `anchor_preview` derives the same bounded passage from stable realization links and records its layer/question/intent provenance. `compare_anchor_ab` fixes that passage and question, permits one declared hypothesis family, loudness-matches the two outputs, and returns both digests as a review-binding template. Neither action chooses a winner. `vocaloid_review_song` is the only step that persists the listener's outcome.
 
 ## Anti-copy and import boundary
 

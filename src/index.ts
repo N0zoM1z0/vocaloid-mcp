@@ -8,7 +8,12 @@ import { z } from "zod";
 
 import type { ResponseFormat } from "./types.js";
 import { renderAccompaniment } from "./accompaniment.js";
-import { compareSongSectionArtifacts, renderSongSectionPreview } from "./audio-review.js";
+import {
+  compareSongAnchorPassageArtifacts,
+  compareSongSectionArtifacts,
+  renderSongAnchorPassagePreview,
+  renderSongSectionPreview,
+} from "./audio-review.js";
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { FROM_ZERO_AGENT_EXAMPLE } from "./agent-examples.js";
 import {
@@ -18,6 +23,11 @@ import {
 import { EditorBusyError, inspectEditorLease } from "./editor-lease.js";
 import { listGeneralMidi } from "./gm.js";
 import { importVsqxToSongManifest } from "./importer.js";
+import {
+  IntentAuditionLayerSchema,
+  IntentFidelityReviewBasisSchema,
+  IntentHypothesisFamilySchema,
+} from "./intent/types.js";
 import { diffManifestSnapshots, listManifestHistory } from "./manifest-history.js";
 import { resolveReadablePath } from "./paths.js";
 import { previewSongManifestMutation } from "./mutation-preview.js";
@@ -161,7 +171,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest; use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master through manifest-aware tools. Read vocaloid://capabilities and a vocaloid://styles/* resource before a new song. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
@@ -196,6 +206,38 @@ for (const palette of STYLE_PALETTES) {
     }),
   );
 }
+
+server.registerResource(
+  "vocaloid-composition-intent-contract",
+  "vocaloid://composition-intent-contract",
+  {
+    title: "Composition intent and anchor-listening contract",
+    description: "Intent hierarchy, hash/review binding, symbolic evidence limits, and the 20–30 second anchor-passage discipline.",
+    mimeType: "text/markdown; charset=utf-8",
+  },
+  async (uri) => {
+    const path = await resolveReadablePath("notes/composition-intent-contract.md");
+    return {
+      contents: [{ uri: uri.href, mimeType: "text/markdown; charset=utf-8", text: await readFile(path, "utf8") }],
+    };
+  },
+);
+
+server.registerResource(
+  "vocaloid-music-theory-policy",
+  "vocaloid://music-theory-policy",
+  {
+    title: "Core music-theory policy",
+    description: "Deterministic symbolic evidence, severity, exception, anti-copy, and corpus/style boundaries.",
+    mimeType: "text/markdown; charset=utf-8",
+  },
+  async (uri) => {
+    const path = await resolveReadablePath("notes/music-theory-policy.md");
+    return {
+      contents: [{ uri: uri.href, mimeType: "text/markdown; charset=utf-8", text: await readFile(path, "utf8") }],
+    };
+  },
+);
 
 server.registerResource(
   "hanairo-biyori-lyrics",
@@ -233,14 +275,18 @@ server.registerResource(
           "legacy-vsqx": "Low-level direct VSQX inspection and mutation for recovery or reverse-engineering",
         },
         canonical_workflow: [
-          "Read a style palette and authoritative lyric resource",
+          "Read the composition-intent contract, core theory policy, and any authoritative lyric resource",
           "Check host readiness and cached IA_ROCKS availability",
           "Create or import a canonical manifest",
+          "Declare song/section intent plus 1-3 anchor phrase purposes, semantic focuses, transitions, delivery arcs, and single listening questions",
+          "Establish form, meter/tempo, key/harmony/bass, lead melody, and Japanese note allocation without corpus/style input",
           "Align explicit Japanese readings; preserve original lyric provenance",
           "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
           "Run vocaloid_preflight_song until the requested readiness gate passes",
           "Build VSQX/backing and render either stems or a manifest master",
-          "Review sections or loudness-matched A/B and attach stable review notes",
+          "Render a 20-30 second lead_solo, lead_harmony, and minimal_band anchor ladder",
+          "Run one-question loudness-matched A/B and attach an explicit digest-bound keep/reject/revise review",
+          "Optionally inspect an aggregate style palette only after the symbolic composition and anchor question are established",
           "Master a manifest delivery and verify loudness, true peak, clipping, channels, hashes, and dependencies",
         ],
         examples: ["vocaloid://examples/from-zero"],
@@ -250,6 +296,8 @@ server.registerResource(
           mutation: "one bounded domain per call; dry-run returns predicted diff and preflight",
           provenance: "composition_hash, mix_hash, file SHA-256, dependency hashes, Editor/helper fingerprints",
           lyrics: "original surface text, explicit kana reading, alignment, and V3 phonemes remain distinct evidence",
+          creative_judgement: "symbolic/audio metrics locate evidence; only an explicit listening author records keep/reject/revise",
+          style_boundary: "optional post-composition observation; never writes intent or supplies melody/chord continuation",
         },
         renderer_boundaries: {
           vocal: "Original VOCALOID3 Editor with a verified IA_ROCKS voice probe",
@@ -665,9 +713,13 @@ const SongTimelineDataOutputSchema = z.discriminatedUnion("action", [
 ]);
 
 const AudioReviewDataOutputSchema = z.object({
-  action: z.enum(["section_preview", "compare_ab"]),
+  action: z.enum(["section_preview", "compare_ab", "anchor_preview", "compare_anchor_ab"]),
   manifestRevision: z.number().int(),
   sectionId: z.string(),
+  phraseDirectionId: z.string().optional(),
+  listeningQuestionId: z.string().optional(),
+  auditionLayer: z.string().optional(),
+  hypothesisFamily: z.string().optional(),
   outputPath: z.string().optional(),
   artifact: ArtifactOutputSchema.optional(),
   A: z.object({ sourceArtifactId: z.string(), outputPath: z.string(), gainDb: z.number() }).passthrough().optional(),
@@ -1410,9 +1462,7 @@ server.registerTool(
   "vocaloid_host_readiness",
   {
     title: "Inspect VOCALOID Host Readiness",
-    description: `Read the exact Editor/helper fingerprint, current host-wide render lease, and non-expired voice-probe cache without launching VOCALOID.
-
-Use this at the beginning of an agent session. A VVD file only proves metadata presence; verifiedComponentIds contains the voices that this exact Editor/helper pair has rendered successfully within the cache lifetime.`,
+    description: "Read the Editor/helper fingerprint, host render lease, and verified voice cache without launching VOCALOID.",
     inputSchema: z.object({
       include_expired_voice_records: z.boolean().default(false)
         .describe("Include expired historical records for diagnosis; they never count as verified"),
@@ -1455,9 +1505,7 @@ server.registerTool(
   "vocaloid_probe_voice",
   {
     title: "Probe Voice in Original Editor",
-    description: `Explicitly verify one local voice through a generated, bounded, locked-phoneme \"ら\" render in the original VOCALOID3 Editor.
-
-The generated VSQX/WAV are temporary and no song manifest is mutated. Results are cached by component ID plus Editor/helper hash with expiry. Cached reads do not launch the Editor; force=true repeats the bounded probe. A completed unavailable/error probe is returned as typed evidence rather than silently substituting a singer.`,
+    description: "Verify one local voice with a bounded temporary render in the original Editor; cache the result by voice and host fingerprint.",
     inputSchema: z.object({
       component_id: z.string().length(16).describe("Exact 16-character VVD component ID"),
       force: z.boolean().default(false).describe("Ignore a non-expired matching cache entry"),
@@ -2010,9 +2058,7 @@ server.registerTool(
   "vocaloid_align_japanese_phrase",
   {
     title: "Align Japanese Morae to Vocal Rhythm",
-    description: `Create a manifest-compatible vocal phrase from Japanese text/reading and stable rhythm slots.
-
-Sequential mode requires one voiced slot per mora and supports dense 1/16–1/64 lyrics. Explicit mode assigns mora_index per voiced slot; consecutive repeated indices compile to native '-' melisma continuations, so lyric and note counts need not be one-to-one. Rests never consume lyrics. Kanji requires explicit kana reading. If small っ occurs, the agent must explicitly choose a timed rest or the documented experimental repeated-next-consonant strategy. The phrase retains original text, normalized reading, and pronunciation decisions as linguistic_source while native note lyrics use kana. This is a read-only compiler: include the first phrase when creating a vocal part, then use vocaloid_upsert_manifest_vocal_phrase for later lines.`,
+    description: "Align Japanese morae to stable rhythm slots as a manifest-compatible phrase, with explicit melisma and small-っ timing decisions.",
     inputSchema: JapanesePhraseAlignmentInputSchema.extend({ response_format: ResponseFormatSchema }).strict(),
     outputSchema: typedToolOutputSchema(JapaneseAlignmentDataOutputSchema),
     annotations: {
@@ -2384,9 +2430,7 @@ server.registerTool(
   "vocaloid_analyze_wav",
   {
     title: "Analyze WAV Mix Quality",
-    description: `Read a WAV and return actionable mix/master quality metrics without modifying it.
-
-Combines sample-domain RIFF analysis with FFmpeg EBU R128 measurement: integrated LUFS, loudness range, sample peak, true peak, RMS, crest factor, full-scale sample count/ratio, per-channel peak/RMS/clipping, stereo L-R RMS balance, and target deltas. A stereo difference above 3 dB sets channelImbalance=true and identifies the louder side; this is a review signal, not an assumption that every artistic mix must be centered. Recommendations distinguish accidental routing, source clipping, and correctable loudness/true-peak issues. Use this on accompaniment and original-Editor Master renders before deciding whether to call vocaloid_update_mixer, lower levels, re-render, or master.`,
+    description: "Measure WAV loudness, dynamics, peaks, clipping, and stereo balance without modifying the file.",
     inputSchema: z
       .object({
         path: PathSchema,
@@ -2631,9 +2675,7 @@ server.registerTool(
   "vocaloid_import_vsqx_manifest",
   {
     title: "Import VSQX into Canonical Manifest",
-    description: `Convert an existing V3/V4 VSQX vocal score into a new stable-ID canonical manifest without treating its backing as a finished arrangement.
-
-Tempo/meter, voices, parts, notes, locked phonemes, note expression, vibrato, and supported control curves are reconstructed at canonical 480 PPQ. Per-part singer changes become separate canonical tracks; native WAV parts and unsupported curves are returned as explicit warnings. The original file is hash-recorded as an analysis/source artifact, never mislabeled as a current derived VSQX.`,
+    description: "Import a V3/V4 VSQX vocal score into a new stable-ID manifest and record the source with warnings for unsupported data.",
     inputSchema: z.object({
       source_path: PathSchema,
       output_manifest_path: PathSchema.describe("New .song.json path"),
@@ -2681,9 +2723,7 @@ server.registerTool(
   "vocaloid_edit_song",
   {
     title: "Edit Canonical Song",
-    description: `Single high-level mutation router for timeline, section, vocal, tuning, arrangement, seeded groove, mix intent, transform, and removal edits.
-
-Every write uses optimistic revision control and stable IDs. Same-path writes create a timestamped backup and history restore is monotonic, so no prior canonical state is destroyed. Set dry_run=true on any mutation to receive the predicted content/composition/mix hashes, music-aware object diff, full preflight, and zero canonical mutation. expand_tempo_curve is a pure deterministic helper. This compact production tool replaces nine granular routing decisions; the full profile retains the individual tools for diagnostics.`,
+    description: "Apply bounded stable-ID song edits with optimistic revision control; dry_run returns hashes, a music-aware diff, and preflight without writing.",
     inputSchema: z.discriminatedUnion("action", [
       z.object({
         action: z.literal("expand_tempo_curve"),
@@ -2925,9 +2965,7 @@ server.registerTool(
   "vocaloid_create_song_manifest",
   {
     title: "Create Canonical Song Manifest",
-    description: `Create the canonical, revisioned source for an agent-composed song.
-
-The manifest retains semantic sections, timeline, harmony, stable IDs, vocal sources, arrangement intent, mix intent, and artifact provenance. VSQX/WAV files are derived later with vocaloid_build_song_manifest. IDs are lowercase and globally unique across the manifest. Create only the song skeleton here; add one vocal part or arrangement track per bounded upsert call.`,
+    description: "Create the revisioned canonical song manifest; derive VSQX/WAV artifacts later through the build workflow.",
     inputSchema: z
       .object({
         output_path: PathSchema.describe("New .song.json path"),
@@ -2993,9 +3031,7 @@ server.registerTool(
   "vocaloid_inspect_song_manifest",
   {
     title: "Inspect Song Manifest",
-    description: `Read a canonical .song.json and verify its SHA-256 content hash and semantic references.
-
-Returns the current revision/hash, stable section IDs, vocal/arrangement inventory, and artifact provenance. Always inspect immediately before a mutation and pass its revision as expected_revision.`,
+    description: "Verify and summarize a canonical song manifest, including its revision, stable IDs, inventories, intent, and artifact provenance.",
     inputSchema: z.object({ path: PathSchema, response_format: ResponseFormatSchema }).strict(),
     outputSchema: typedToolOutputSchema(ManifestSummaryDataOutputSchema),
     annotations: {
@@ -3019,9 +3055,7 @@ server.registerTool(
   "vocaloid_preflight_song",
   {
     title: "Preflight Complete Song Workflow",
-    description: `Read one canonical manifest and aggregate structural, vocal, phoneme, performance, harmony, arrangement, mix, artifact, and optional cached-host issues in one call.
-
-No Editor process is launched and nothing is mutated. Every issue has a stable code, severity, affected stable IDs, musical position when applicable, and a bounded suggested repair. Separate readiness gates tell the agent whether score, build, Editor render, stem mix, and final delivery are presently closed.`,
+    description: "Run non-mutating structural, theory, vocal, arrangement, mix, artifact, intent, and host readiness checks with stable issue codes.",
     inputSchema: z.object({
       manifest_path: PathSchema.describe("Canonical .song.json to lint"),
       artifact_check: z.enum(["none", "current", "all"]).default("current")
@@ -3067,9 +3101,7 @@ server.registerTool(
   "vocaloid_render_manifest_master",
   {
     title: "Render and Record Manifest Master",
-    description: `Render one current, hash-verified VSQX artifact through the original Editor, independently analyze the WAV, and atomically record a role=master artifact in the canonical manifest.
-
-The operation enforces optimistic revision control, core preflight, the host-wide Editor lease, client cancellation, executable fingerprinting, explicit Pre-Send policy, non-silence, immutable output naming, and provenance. Permission to adjust Pre-Send and whether the dialog was actually seen/accepted are recorded separately.`,
+    description: "Render a current VSQX through the original Editor, verify the WAV, and atomically record a provenance-bound master artifact.",
     inputSchema: z.object({
       manifest_path: PathSchema,
       expected_revision: z.number().int().min(1).describe("Latest inspected manifest revision"),
@@ -3148,9 +3180,7 @@ server.registerTool(
   "vocaloid_master_manifest_delivery",
   {
     title: "Master and Record Manifest Delivery",
-    description: `Two-pass loudness-master one current, hash-verified master/mix artifact and atomically record the checked role=delivery dependency.
-
-The server computes every hash and quality field. By default a clipped source is rejected after analysis and the uncommitted output is removed; any explicit acceptance is persisted in provenance.`,
+    description: "Two-pass loudness-master a current mix/master and atomically record the verified delivery dependency and provenance.",
     inputSchema: z.object({
       manifest_path: PathSchema,
       expected_revision: z.number().int().min(1),
@@ -3207,9 +3237,7 @@ server.registerTool(
   "vocaloid_manifest_history",
   {
     title: "List, Diff, or Restore Manifest History",
-    description: `Operate on automatic immutable .song.json backups through one bounded history workflow.
-
-list verifies every snapshot hash; diff reports music-aware added/removed/modified stable IDs by timeline, sections, harmony, vocals, arrangement, mix, artifacts, and review notes; restore creates a new monotonic revision whose parent is the current hash instead of moving revision numbers backward.`,
+    description: "List, music-diff, or monotonically restore verified immutable song-manifest history snapshots.",
     inputSchema: z.discriminatedUnion("action", [
       z.object({
         action: z.literal("list"),
@@ -3273,44 +3301,83 @@ list verifies every snapshot hash; diff reports music-aware added/removed/modifi
   },
 );
 
+const AudioReviewInputSchema = z.object({
+  action: z.enum(["section_preview", "compare_ab", "anchor_preview", "compare_anchor_ab"]),
+  manifest_path: PathSchema,
+  expected_revision: z.number().int().min(1),
+  source_artifact_id: ManifestIdSchema.optional(),
+  section_id: ManifestIdSchema.optional(),
+  artifact_a_id: ManifestIdSchema.optional(),
+  artifact_b_id: ManifestIdSchema.optional(),
+  phrase_direction_id: ManifestIdSchema.optional(),
+  audition_layer: IntentAuditionLayerSchema.optional(),
+  hypothesis_family: IntentHypothesisFamilySchema.optional(),
+  output_path: PathSchema.optional(),
+  output_a_path: PathSchema.optional(),
+  output_b_path: PathSchema.optional(),
+  handle_before_seconds: z.number().min(0).max(15).default(1),
+  handle_after_seconds: z.number().min(0).max(15).default(2),
+  target_duration_seconds: z.number().min(20).max(30).default(25),
+  reference_lufs: z.number().min(-36).max(-5).default(-16),
+  match_lufs: z.number().min(-36).max(-8).optional(),
+  reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1),
+  response_format: ResponseFormatSchema,
+}).strict().superRefine((input, context) => {
+  const requiredByAction: Record<typeof input.action, readonly (keyof typeof input)[]> = {
+    section_preview: ["source_artifact_id", "section_id", "output_path"],
+    compare_ab: ["artifact_a_id", "artifact_b_id", "section_id", "output_a_path", "output_b_path"],
+    anchor_preview: ["source_artifact_id", "phrase_direction_id", "audition_layer", "output_path"],
+    compare_anchor_ab: [
+      "artifact_a_id", "artifact_b_id", "phrase_direction_id", "audition_layer",
+      "hypothesis_family", "output_a_path", "output_b_path",
+    ],
+  };
+  for (const field of requiredByAction[input.action]) {
+    if (input[field] === undefined) {
+      context.addIssue({ code: "custom", path: [field], message: `${field} is required for ${input.action}` });
+    }
+  }
+});
+
+const ReviewSongInputSchema = z.object({
+  action: z.enum(["list", "add", "resolve"]),
+  manifest_path: PathSchema,
+  status: z.enum(["open", "resolved", "all"]).default("open"),
+  section_id: ManifestIdSchema.optional(),
+  expected_revision: z.number().int().min(1).optional(),
+  note: z.object({
+    id: ManifestIdSchema,
+    author_type: z.enum(["human", "agent"]),
+    author_name: z.string().min(1).max(128),
+    observation: z.string().min(1).max(4000),
+    section_id: ManifestIdSchema.optional(),
+    object_ids: z.array(ManifestIdSchema).max(256).default([]),
+    artifact_ids: z.array(ManifestIdSchema).max(64).default([]),
+    position: MusicalPositionSchema.optional(),
+    intent_fidelity: IntentFidelityReviewBasisSchema.optional(),
+  }).strict().optional(),
+  note_id: ManifestIdSchema.optional(),
+  resolution: z.string().min(1).max(4000).optional(),
+  response_format: ResponseFormatSchema,
+}).strict().superRefine((input, context) => {
+  const required = input.action === "add"
+    ? ["expected_revision", "note"] as const
+    : input.action === "resolve"
+      ? ["expected_revision", "note_id", "resolution"] as const
+      : [];
+  for (const field of required) {
+    if (input[field] === undefined) {
+      context.addIssue({ code: "custom", path: [field], message: `${field} is required for ${input.action}` });
+    }
+  }
+});
+
 server.registerTool(
   "vocaloid_review_audio",
   {
     title: "Render Section Preview or Loudness-Matched A/B",
-    description: `Create provenance-bound listening material for one semantic section from current, hash-verified audio artifacts.
-
-section_preview trims with explicit handles and correct song_start/project_start offset. compare_ab produces two stereo WAVs matched to the same measured LUFS (defaulting to the quieter source to avoid clipping), records both dependencies, and never claims which creative version is better; bind the listening conclusion with vocaloid_review_song.`,
-    inputSchema: z.discriminatedUnion("action", [
-      z.object({
-        action: z.literal("section_preview"),
-        manifest_path: PathSchema,
-        expected_revision: z.number().int().min(1),
-        source_artifact_id: ManifestIdSchema,
-        section_id: ManifestIdSchema,
-        output_path: PathSchema,
-        handle_before_seconds: z.number().min(0).max(15).default(1),
-        handle_after_seconds: z.number().min(0).max(15).default(2),
-        reference_lufs: z.number().min(-36).max(-5).default(-16),
-        reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1),
-        response_format: ResponseFormatSchema,
-      }).strict(),
-      z.object({
-        action: z.literal("compare_ab"),
-        manifest_path: PathSchema,
-        expected_revision: z.number().int().min(1),
-        artifact_a_id: ManifestIdSchema,
-        artifact_b_id: ManifestIdSchema,
-        section_id: ManifestIdSchema,
-        output_a_path: PathSchema,
-        output_b_path: PathSchema,
-        handle_before_seconds: z.number().min(0).max(15).default(1),
-        handle_after_seconds: z.number().min(0).max(15).default(2),
-        match_lufs: z.number().min(-36).max(-8).optional()
-          .describe("Omitted matches both to the quieter measured section"),
-        reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1),
-        response_format: ResponseFormatSchema,
-      }).strict(),
-    ]),
+    description: "Render section or 20–30s anchor previews and single-question loudness-matched A/B evidence; this tool never chooses a winner.",
+    inputSchema: AudioReviewInputSchema,
     outputSchema: workflowOutputSchema(AudioReviewDataOutputSchema),
     annotations: {
       readOnlyHint: false,
@@ -3325,9 +3392,9 @@ section_preview trims with explicit handles and correct song_start/project_start
         const result = await renderSongSectionPreview({
           manifestPath: params.manifest_path,
           expectedRevision: params.expected_revision,
-          sourceArtifactId: params.source_artifact_id,
-          sectionId: params.section_id,
-          outputPath: params.output_path,
+          sourceArtifactId: params.source_artifact_id!,
+          sectionId: params.section_id!,
+          outputPath: params.output_path!,
           handleBeforeSeconds: params.handle_before_seconds,
           handleAfterSeconds: params.handle_after_seconds,
           referenceLufs: params.reference_lufs,
@@ -3339,23 +3406,62 @@ section_preview trims with explicit handles and correct song_start/project_start
           `Rendered ${params.section_id} preview at ${result.quality.integratedLufs.toFixed(1)} LUFS`,
         );
       }
-      const result = await compareSongSectionArtifacts({
+      if (params.action === "compare_ab") {
+        const result = await compareSongSectionArtifacts({
+          manifestPath: params.manifest_path,
+          expectedRevision: params.expected_revision,
+          artifactAId: params.artifact_a_id!,
+          artifactBId: params.artifact_b_id!,
+          sectionId: params.section_id!,
+          outputAPath: params.output_a_path!,
+          outputBPath: params.output_b_path!,
+          handleBeforeSeconds: params.handle_before_seconds,
+          handleAfterSeconds: params.handle_after_seconds,
+          ...(params.match_lufs !== undefined ? { matchLufs: params.match_lufs } : {}),
+          referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+        });
+        return workflowResult(
+          { action: "compare_ab" as const, ...result },
+          params.response_format,
+          `Rendered loudness-matched A/B for ${params.section_id} at ${result.targetLufs.toFixed(1)} LUFS`,
+        );
+      }
+      if (params.action === "anchor_preview") {
+        const result = await renderSongAnchorPassagePreview({
+          manifestPath: params.manifest_path,
+          expectedRevision: params.expected_revision,
+          sourceArtifactId: params.source_artifact_id!,
+          phraseDirectionId: params.phrase_direction_id!,
+          auditionLayer: params.audition_layer!,
+          outputPath: params.output_path!,
+          targetDurationSeconds: params.target_duration_seconds,
+          referenceLufs: params.reference_lufs,
+          referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+        });
+        return workflowResult(
+          { action: "anchor_preview" as const, ...result },
+          params.response_format,
+          `Rendered ${params.audition_layer} for ${params.phrase_direction_id} (${result.quality.durationSeconds.toFixed(1)}s)`,
+        );
+      }
+      const result = await compareSongAnchorPassageArtifacts({
         manifestPath: params.manifest_path,
         expectedRevision: params.expected_revision,
-        artifactAId: params.artifact_a_id,
-        artifactBId: params.artifact_b_id,
-        sectionId: params.section_id,
-        outputAPath: params.output_a_path,
-        outputBPath: params.output_b_path,
-        handleBeforeSeconds: params.handle_before_seconds,
-        handleAfterSeconds: params.handle_after_seconds,
+        artifactAId: params.artifact_a_id!,
+        artifactBId: params.artifact_b_id!,
+        phraseDirectionId: params.phrase_direction_id!,
+        auditionLayer: params.audition_layer!,
+        hypothesisFamily: params.hypothesis_family!,
+        outputAPath: params.output_a_path!,
+        outputBPath: params.output_b_path!,
+        targetDurationSeconds: params.target_duration_seconds,
         ...(params.match_lufs !== undefined ? { matchLufs: params.match_lufs } : {}),
         referenceTruePeakDbfs: params.reference_true_peak_dbfs,
       });
       return workflowResult(
-        { action: "compare_ab" as const, ...result },
+        { action: "compare_anchor_ab" as const, ...result },
         params.response_format,
-        `Rendered loudness-matched A/B for ${params.section_id} at ${result.targetLufs.toFixed(1)} LUFS`,
+        `Rendered single-question ${params.hypothesis_family} A/B for ${params.phrase_direction_id} at ${result.targetLufs.toFixed(1)} LUFS`,
       );
     } catch (error) {
       return workflowError(error);
@@ -3367,42 +3473,8 @@ server.registerTool(
   "vocaloid_review_song",
   {
     title: "List, Add, or Resolve Listening Notes",
-    description: `Persist qualitative listening evidence without pretending numeric audio metrics can judge emotion, diction, or arrangement taste.
-
-Notes can bind a semantic section, musical position, stable score/mix object IDs, and artifact IDs. Adding or resolving a note increments content revision but deliberately leaves composition_hash and mix_hash unchanged.`,
-    inputSchema: z.discriminatedUnion("action", [
-      z.object({
-        action: z.literal("list"),
-        manifest_path: PathSchema,
-        status: z.enum(["open", "resolved", "all"]).default("open"),
-        section_id: ManifestIdSchema.optional(),
-        response_format: ResponseFormatSchema,
-      }).strict(),
-      z.object({
-        action: z.literal("add"),
-        manifest_path: PathSchema,
-        expected_revision: z.number().int().min(1),
-        note: z.object({
-          id: ManifestIdSchema,
-          author_type: z.enum(["human", "agent"]),
-          author_name: z.string().min(1).max(128),
-          observation: z.string().min(1).max(4000),
-          section_id: ManifestIdSchema.optional(),
-          object_ids: z.array(ManifestIdSchema).max(256).default([]),
-          artifact_ids: z.array(ManifestIdSchema).max(64).default([]),
-          position: MusicalPositionSchema.optional(),
-        }).strict(),
-        response_format: ResponseFormatSchema,
-      }).strict(),
-      z.object({
-        action: z.literal("resolve"),
-        manifest_path: PathSchema,
-        expected_revision: z.number().int().min(1),
-        note_id: ManifestIdSchema,
-        resolution: z.string().min(1).max(4000),
-        response_format: ResponseFormatSchema,
-      }).strict(),
-    ]),
+    description: "List or persist qualitative listening notes, including hash-bound keep/reject/revise evidence for phrase intent; metrics cannot self-approve.",
+    inputSchema: ReviewSongInputSchema,
     outputSchema: workflowOutputSchema(ReviewSongDataOutputSchema),
     annotations: {
       readOnlyHint: false,
@@ -3414,13 +3486,13 @@ Notes can bind a semantic section, musical position, stable score/mix object IDs
   async (params) => {
     try {
       if (params.action === "add") {
-        await addSongManifestReviewNote(params.manifest_path, params.expected_revision, params.note);
+        await addSongManifestReviewNote(params.manifest_path, params.expected_revision!, params.note!);
       } else if (params.action === "resolve") {
         await resolveSongManifestReviewNote(
           params.manifest_path,
-          params.expected_revision,
-          params.note_id,
-          params.resolution,
+          params.expected_revision!,
+          params.note_id!,
+          params.resolution!,
         );
       }
       const loaded = await loadSongManifest(params.manifest_path);
@@ -3450,9 +3522,7 @@ server.registerTool(
   "vocaloid_get_song_section",
   {
     title: "Get One Song Section",
-    description: `Fetch one semantic section plus only its intersecting vocal parts, harmony, arrangement patterns, placements, and direct events.
-
-Use this bounded read before revising a verse/chorus instead of resubmitting or rereading the whole song.`,
+    description: "Fetch one semantic section and only the vocal, harmony, and arrangement objects that intersect it.",
     inputSchema: z
       .object({
         path: PathSchema,
@@ -3942,9 +4012,7 @@ server.registerTool(
   "vocaloid_build_song_manifest",
   {
     title: "Build Song Manifest Artifacts",
-    description: `Build a verified stereo accompaniment WAV and validated native VSQX from one immutable manifest revision.
-
-Both output paths must be new and should include the song slug. On success the manifest is atomically advanced by one revision and records SHA-256, byte size, source revision, dependencies, and paths for both artifacts. On failure incomplete outputs are removed. This does not render VOCALOID vocals; pass the VSQX to vocaloid_render_wav afterward.`,
+    description: "Build a verified accompaniment WAV and native VSQX from one immutable manifest revision, then record both artifacts atomically.",
     inputSchema: z
       .object({
         manifest_path: PathSchema,
@@ -3985,9 +4053,7 @@ server.registerTool(
   "vocaloid_render_instrument_stems",
   {
     title: "Render Manifest Instrument Stems",
-    description: `Render every selected arrangement track as its own verified stereo WAV and record provenance in the manifest.
-
-The agent must explicitly decide whether each pitched stem preserves its composed pan and whether FluidSynth reverb/chorus are included. false/false produces centered dry material for a later reproducible mix; true/true produces stems closer to the current draft mix. Drum tracks are isolated independently. Existing filenames are refused so a failed batch cannot overwrite prior stems.`,
+    description: "Render selected arrangement tracks as isolated verified WAV stems with explicit pan/effect policy and manifest provenance.",
     inputSchema: z
       .object({
         manifest_path: PathSchema,
@@ -4034,9 +4100,7 @@ server.registerTool(
   "vocaloid_render_vocal_stems",
   {
     title: "Render Manifest Vocal Stems",
-    description: `Render selected VOCALOID tracks one-by-one through the original Editor as verified stereo vocal stems.
-
-The source must be a hash-verified VSQX artifact whose composition_hash matches the current manifest. For each render, all other vocal tracks are muted and every backing WAV part is physically removed from a temporary project. The agent explicitly chooses source pan versus center and send-enabled versus dry; optional volume overrides the source vocal fader. Outputs and their profile, source project, SHA-256, dependencies, and composition hash are recorded atomically after the complete batch succeeds.`,
+    description: "Render selected vocal tracks individually through the original Editor as verified stems with explicit pan/send policy and provenance.",
     inputSchema: z
       .object({
         manifest_path: PathSchema,
@@ -4093,9 +4157,7 @@ server.registerTool(
   "vocaloid_analyze_vocal_stem",
   {
     title: "Analyze Vocal Score Versus Render",
-    description: `Compare stable manifest vocal events against an isolated, hash-verified VOCALOID stem.
-
-Returns per-note F0 contours, median/p95 cents error, voiced ratio, energy and voiced onsets, consonant lead, release timing, observed vibrato depth/rate/regularity, phrase timing, and actionable issue codes. Rapid notes are explicitly marked as limited-resolution instead of receiving false precision. The project pre-measure and tempo map are applied automatically; timeline_offset_seconds is an explicit calibration, while the reported global energy offset remains observational. Analysis never auto-quantizes expression. A reproducible .vocal-analysis.json and provenance artifact are written on success.`,
+    description: "Compare stable vocal events with a verified isolated stem and record reproducible pitch, timing, energy, diction, and vibrato evidence.",
     inputSchema: z
       .object({
         manifest_path: PathSchema,
@@ -4166,9 +4228,7 @@ server.registerTool(
   "vocaloid_render_stem_mix",
   {
     title: "Render Reproducible Stem Mix",
-    description: `Render explicitly selected, hash-verified vocal/instrument stems through manifest effect chains and section dynamics.
-
-Instrument stems with song_start origin receive the exact project pre-measure delay; original-Editor vocal stems already use project_start. Each target's section gain automation is applied before its ordered effects, tracks are summed without hidden normalization, then mix-bus automation/effects run in manifest order. No hidden limiter or loudness normalization is added. The output can be 16- or 24-bit stereo PCM and is measured for LUFS, LRA, true/sample peak, clipping, and channel balance. The artifact records composition_hash, mix_hash, all input dependencies, and the exact FFmpeg filter graph is returned for audit.`,
+    description: "Render selected verified stems through manifest automation/effects without hidden normalization, then record the measured mix and filter graph.",
     inputSchema: z
       .object({
         manifest_path: PathSchema,

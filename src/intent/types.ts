@@ -70,6 +70,25 @@ export const PhraseLyricAnchorSchema = z
     message: "A lyric anchor requires text or lyric_unit_ids",
   });
 
+const IntentTrendSchema = z.enum(["increase", "decrease", "stable"]);
+
+export const PhraseSymbolicTargetsSchema = z
+  .object({
+    melody_contour: z.enum(["rising", "falling", "stable", "arch", "valley"]).optional(),
+    melody_range: z.enum(["expand", "contract", "stable"]).optional(),
+    rhythm_density: IntentTrendSchema.optional(),
+    note_duration: z.enum(["lengthen", "shorten", "stable"]).optional(),
+    harmonic_tension: z.enum(["increase", "decrease", "stable", "resolve", "withhold"]).optional(),
+    delivery_dynamics: IntentTrendSchema.optional(),
+    arrangement_density: IntentTrendSchema.optional(),
+    semantic_focus_duration_ratio_min: z.number().min(0.25).max(8).optional(),
+    semantic_focus_beat_strength_min: z.number().min(0).max(1).optional(),
+  })
+  .strict()
+  .refine((targets) => Object.values(targets).some((value) => value !== undefined), {
+    message: "symbolic_targets requires at least one measurable target",
+  });
+
 export const PhraseRealizationHypothesisSchema = z
   .object({
     summary: LongIntentTextSchema,
@@ -81,6 +100,7 @@ export const PhraseRealizationHypothesisSchema = z
     tuning: ShortIntentTextSchema.optional(),
     arrangement_space: ShortIntentTextSchema.optional(),
     expected_evidence: z.array(z.string().min(1).max(500)).max(16).optional(),
+    symbolic_targets: PhraseSymbolicTargetsSchema.optional(),
   })
   .strict();
 
@@ -168,6 +188,44 @@ export const IntentReviewPolicySchema = z
   })
   .strict();
 
+export const IntentAuditionLayerSchema = z.enum([
+  "lead_solo",
+  "lead_harmony",
+  "minimal_band",
+  "full_layers",
+  "timbre_mix",
+]);
+
+export const IntentHypothesisFamilySchema = z.enum([
+  "melody",
+  "rhythm",
+  "harmony",
+  "delivery",
+  "arrangement",
+  "timbre_mix",
+]);
+
+export const IntentReviewComparisonArtifactSchema = z
+  .object({
+    artifact_id: IntentStableIdSchema,
+    artifact_sha256: IntentFingerprintSchema,
+  })
+  .strict();
+
+export const IntentLayerAssessmentSchema = z
+  .object({
+    audition_layer: IntentAuditionLayerSchema,
+    contribution: z.enum([
+      "supports_question",
+      "no_audible_loss_when_muted",
+      "obscures_question",
+      "uncertain",
+    ]),
+    action: z.enum(["keep", "remove", "revise", "defer"]),
+    track_ids: UniqueIntentIdListSchema.optional(),
+  })
+  .strict();
+
 export const IntentFidelityReviewBasisSchema = z
   .object({
     review_kind: z.literal("intent_fidelity"),
@@ -178,11 +236,23 @@ export const IntentFidelityReviewBasisSchema = z
     artifact_id: IntentStableIdSchema,
     artifact_sha256: IntentFingerprintSchema,
     comparison_artifact_ids: z.array(IntentStableIdSchema).max(8).optional(),
+    comparison_artifacts: z.array(IntentReviewComparisonArtifactSchema).max(8).optional(),
+    hypothesis_family: IntentHypothesisFamilySchema.optional(),
+    layer_assessment: IntentLayerAssessmentSchema.optional(),
     outcome: z.enum(["keep", "reject", "revise"]),
   })
   .strict()
   .superRefine((basis, context) => {
-    const comparisons = basis.comparison_artifact_ids ?? [];
+    if (basis.comparison_artifact_ids && basis.comparison_artifacts) {
+      context.addIssue({
+        code: "custom",
+        path: ["comparison_artifacts"],
+        message: "Use digest-bound comparison_artifacts instead of supplying both comparison forms",
+      });
+    }
+    const comparisons = basis.comparison_artifacts?.map((artifact) => artifact.artifact_id)
+      ?? basis.comparison_artifact_ids
+      ?? [];
     if (new Set(comparisons).size !== comparisons.length) {
       context.addIssue({
         code: "custom",
@@ -203,6 +273,9 @@ export type SongCreativeIntent = z.infer<typeof SongCreativeIntentSchema>;
 export type SectionCreativeIntent = z.infer<typeof SectionCreativeIntentSchema>;
 export type PhraseDirection = z.infer<typeof PhraseDirectionSchema>;
 export type PhraseRealizationLinks = z.infer<typeof PhraseRealizationLinksSchema>;
+export type PhraseSymbolicTargets = z.infer<typeof PhraseSymbolicTargetsSchema>;
 export type CompositionIntent = z.infer<typeof CompositionIntentSchema>;
 export type IntentReviewPolicy = z.infer<typeof IntentReviewPolicySchema>;
+export type IntentAuditionLayer = z.infer<typeof IntentAuditionLayerSchema>;
+export type IntentHypothesisFamily = z.infer<typeof IntentHypothesisFamilySchema>;
 export type IntentFidelityReviewBasis = z.infer<typeof IntentFidelityReviewBasisSchema>;

@@ -4,7 +4,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { songIntentHash } from "../src/intent/hash.js";
-import { CompositionIntentSchema, type CompositionIntent } from "../src/intent/types.js";
+import {
+  CompositionIntentSchema,
+  IntentFidelityReviewBasisSchema,
+  type CompositionIntent,
+} from "../src/intent/types.js";
 import { diffManifestSnapshots } from "../src/manifest-history.js";
 import {
   addSongManifestReviewNote,
@@ -135,6 +139,34 @@ test("composition-intent schemas are strict, bounded, and hash the declared targ
       }],
     }),
     /requires at least one linked object/u,
+  );
+  assert.throws(
+    () => CompositionIntentSchema.parse({
+      ...intent,
+      phrase_directions: [{
+        ...intent.phrase_directions[0],
+        realization_hypothesis: {
+          summary: "An empty machine target must not imply evidence.",
+          symbolic_targets: {},
+        },
+      }],
+    }),
+    /symbolic_targets requires at least one measurable target/u,
+  );
+  assert.throws(
+    () => IntentFidelityReviewBasisSchema.parse({
+      review_kind: "intent_fidelity",
+      phrase_direction_id: "direction-chorus-hook",
+      listening_question_id: "question-chorus-hook",
+      intent_hash: "a".repeat(64),
+      composition_hash: "b".repeat(64),
+      artifact_id: "preview-b",
+      artifact_sha256: "c".repeat(64),
+      comparison_artifact_ids: ["preview-a"],
+      comparison_artifacts: [{ artifact_id: "preview-a", artifact_sha256: "d".repeat(64) }],
+      outcome: "keep",
+    }),
+    /digest-bound comparison_artifacts/u,
   );
 });
 
