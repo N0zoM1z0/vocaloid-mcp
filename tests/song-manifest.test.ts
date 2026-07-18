@@ -79,11 +79,25 @@ test("manifest revisions preserve stable IDs and reject corruption, stale writes
   const initial = await inspectSongManifest(manifestPath);
   assert.deepEqual(initial.sections.map((section) => section.id), ["intro", "verse-a"]);
 
-  const corruptPath = join(temporary, "corrupt.song.json");
-  const corrupt = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
-  corrupt.title = "Silently modified outside MCP";
-  await writeFile(corruptPath, `${JSON.stringify(corrupt, null, 2)}\n`, "utf8");
-  await assert.rejects(loadSongManifest(corruptPath), /content hash mismatch/u);
+  const corruptCompositionPath = join(temporary, "corrupt-composition.song.json");
+  const corruptComposition = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  corruptComposition.title = "Silently modified outside MCP";
+  await writeFile(
+    corruptCompositionPath,
+    `${JSON.stringify(corruptComposition, null, 2)}\n`,
+    "utf8",
+  );
+  await assert.rejects(loadSongManifest(corruptCompositionPath), /composition hash mismatch/u);
+
+  const corruptProvenancePath = join(temporary, "corrupt-provenance.song.json");
+  const corruptProvenance = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  corruptProvenance.updated_at = "2030-01-01T00:00:00.000Z";
+  await writeFile(
+    corruptProvenancePath,
+    `${JSON.stringify(corruptProvenance, null, 2)}\n`,
+    "utf8",
+  );
+  await assert.rejects(loadSongManifest(corruptProvenancePath), /content hash mismatch/u);
 
   await assert.rejects(
     upsertSongManifestVocalPart(

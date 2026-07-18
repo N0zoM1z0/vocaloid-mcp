@@ -435,8 +435,11 @@ function validateOptions(
   if (previousTempoTick < 0 || musicalPositionToTick(options.timeSignatures, options.tempos[0]!.position) !== 0) {
     throw new Error("tempos must begin at song position 0:0:0");
   }
-  if (options.tracks.length < 1 || options.tracks.length > MELODIC_CHANNELS.length) {
-    throw new Error(`tracks must contain 1..${MELODIC_CHANNELS.length} entries`);
+  if (options.tracks.length > MELODIC_CHANNELS.length) {
+    throw new Error(`tracks must contain at most ${MELODIC_CHANNELS.length} entries`);
+  }
+  if (options.tracks.length === 0 && arrangement.drums.length === 0) {
+    throw new Error("Arrangement needs at least one pitched note or drum hit");
   }
   for (const [trackIndex, track] of arrangement.tracks.entries()) {
     if (track.name.length < 1 || track.name.length > 255) {

@@ -83,3 +83,21 @@ export async function resolveWritablePath(input: string): Promise<string> {
   }
   return requested;
 }
+
+export async function resolveWritableDirectory(input: string): Promise<string> {
+  const requested = isAbsolute(input) ? resolve(input) : resolve(PROJECT_ROOT, input);
+  const actual = await realpath(requested);
+  const roots = await existingRoots([
+    PROJECT_ROOT,
+    ...splitRoots(process.env.VOCALOID_WRITE_ROOTS),
+  ]);
+  if (!roots.some((root) => isInside(actual, root))) {
+    throw new Error(
+      `Write directory is outside allowed roots: ${actual}. `
+        + "Add it to VOCALOID_WRITE_ROOTS if this is intentional.",
+    );
+  }
+  const info = await stat(actual);
+  if (!info.isDirectory()) throw new Error(`Expected a directory: ${actual}`);
+  return actual;
+}

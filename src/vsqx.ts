@@ -187,6 +187,15 @@ export interface VocalMixerUpdate {
   sendEnabled?: boolean;
 }
 
+export interface VocalStemIsolationOptions {
+  /** Center the isolated vocal instead of preserving the source mixer pan. */
+  centerPan: boolean;
+  /** Disable the isolated vocal's send path for analysis or later stem mixing. */
+  dry: boolean;
+  /** Optional explicit VOCALOID mixer volume; omitted preserves the source value. */
+  volume?: number;
+}
+
 export interface SongTrackInput {
   name: string;
   comment?: string;
@@ -1775,6 +1784,85 @@ export async function updateProjectMixer(
     before,
     after,
     updatedTrackNumbers: updates.map((update) => update.trackNumber),
+  };
+}
+
+export async function prepareVocalStemProject(
+  inputPath: string,
+  outputPath: string,
+  trackNumber: number,
+  options: VocalStemIsolationOptions,
+  overwrite: boolean,
+): Promise<WriteResult & {
+  sourcePath: string;
+  trackNumber: number;
+  trackName: string;
+  centerPan: boolean;
+  dry: boolean;
+  removedAudioParts: number;
+  before: VocalMixerUnitInfo[];
+  after: VocalMixerUnitInfo[];
+}> {
+  assertIntegerRange(trackNumber, 0, 127, "trackNumber");
+  if (options.volume !== undefined) {
+    assertIntegerRange(options.volume, -898, 600, "options.volume");
+  }
+  const project = await loadProject(inputPath);
+  const before = readVocalMixerUnits(project);
+  const target = before.find((unit) => unit.trackNumber === trackNumber);
+  if (!target) {
+    throw new Error(
+      `Project has no vocal track ${trackNumber}; available tracks: ${before.map((unit) => unit.trackNumber).join(", ")}`,
+    );
+  }
+  const mixer = requiredChild(project.root, "mixer");
+  const fields = mixerUnitFields(project.format);
+  for (const unit of directChildren(mixer, "vsUnit")) {
+    const unitTrackNumber = integer(unit, fields.trackNumber);
+    const selected = unitTrackNumber === trackNumber;
+    setText(unit, fields.mute, selected ? 0 : 1);
+    setText(unit, fields.solo, 0);
+    if (!selected) continue;
+    if (options.centerPan) setText(unit, fields.pan, 64);
+    if (options.volume !== undefined) setText(unit, fields.volume, options.volume);
+    if (options.dry) {
+      setText(unit, fields.sendLevel, -898);
+      setText(unit, fields.sendEnabled, 0);
+    }
+  }
+
+  const audioUnitNames = project.format === "vsq4"
+    ? ["monoUnit", "stUnit"]
+    : ["seUnit", "karaokeUnit"];
+  const audioMuteField = project.format === "vsq4" ? "m" : "mute";
+  for (const name of audioUnitNames) {
+    const unit = firstChild(mixer, name);
+    if (unit) setText(unit, audioMuteField, 1);
+  }
+  const audioTrackNames = project.format === "vsq4"
+    ? ["monoTrack", "stTrack"]
+    : ["seTrack", "karaokeTrack"];
+  let removedAudioParts = 0;
+  for (const name of audioTrackNames) {
+    const track = firstChild(project.root, name);
+    if (!track) continue;
+    for (const part of directChildren(track, "wavPart")) {
+      track.removeChild(part);
+      removedAudioParts++;
+    }
+  }
+  const after = readVocalMixerUnits(project);
+  const result = await persist(project, outputPath, overwrite);
+  return {
+    ...result,
+    sourcePath: project.path,
+    trackNumber,
+    trackName: target.trackName,
+    centerPan: options.centerPan,
+    dry: options.dry,
+    removedAudioParts,
+    before,
+    after,
   };
 }
 

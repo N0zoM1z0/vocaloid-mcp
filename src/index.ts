@@ -32,6 +32,10 @@ import {
   upsertSongManifestSection,
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
+import {
+  renderSongManifestInstrumentStems,
+  renderSongManifestVocalStems,
+} from "./stems.js";
 import { discoverVoices } from "./voices.js";
 import {
   addControlPointsToProject,
@@ -49,9 +53,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.6.0" },
+  { name: "vocaloid-mcp-server", version: "0.7.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a new long song, use vocaloid_create_song_manifest as the canonical source, then add one vocal part or arrangement track per upsert; inspect its revision/hash before every mutation and use vocaloid_get_song_section for bounded revision context. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX with vocaloid_build_song_manifest; use vocaloid_create_song directly only for small one-shot projects. Design named sections plus a shared tempo/meter map and distinct grooves; patterns/placements repeat and vary motifs without enumerating thousands of events. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplets, while explicit lyric_index supports melisma with native '-' continuations. Render the built VSQX with vocaloid_render_wav. VOCALOID vocal mixer pan is 0=hard left, 64=center, 127=hard right; inspect before render and revise intentional placement explicitly. Analyze backing and Master per channel; re-render clipped or unintended imbalanced sources, then master to requested LUFS/true peak. Use the song slug in every output name and new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
+    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a new long song, use vocaloid_create_song_manifest as the canonical source, then add one vocal part or arrangement track per upsert; inspect its revision/hash before every mutation and use vocaloid_get_song_section for bounded context. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX with vocaloid_build_song_manifest; use vocaloid_create_song directly only for small one-shot projects. For a revisionable mix or score-vs-render work, render selected instrument stems and original-Editor vocal stems. Explicitly choose preserve_pan/center and effects/dry; never assume the artistic routing. A VSQX artifact and every stem must match the current composition_hash. Design named sections plus a shared tempo/meter map and distinct grooves; patterns/placements repeat and vary motifs without enumerating thousands of events. Vocal phrase rhythm cells support rapid 1/16-1/64, tuplets, and melisma. VOCALOID mixer pan is 0=hard left, 64=center, 127=hard right. Analyze backing, stems, and Master per channel; re-render clipped or unintended imbalanced sources, then master to requested LUFS/true peak. Use the song slug in every output name and new revision paths. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
   },
 );
 
@@ -2024,6 +2028,111 @@ Both output paths must be new and should include the song slug. On success the m
         result,
         params.response_format,
         `Built manifest revision ${result.sourceRevision} into validated WAV and VSQX artifacts`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_render_instrument_stems",
+  {
+    title: "Render Manifest Instrument Stems",
+    description: `Render every selected arrangement track as its own verified stereo WAV and record provenance in the manifest.
+
+The agent must explicitly decide whether each pitched stem preserves its composed pan and whether FluidSynth reverb/chorus are included. false/false produces centered dry material for a later reproducible mix; true/true produces stems closer to the current draft mix. Drum tracks are isolated independently. Existing filenames are refused so a failed batch cannot overwrite prior stems.`,
+    inputSchema: z
+      .object({
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        output_directory: PathSchema.describe("Existing writable directory for slugged stem filenames"),
+        track_ids: z.array(ManifestIdSchema).min(1).max(32).optional()
+          .describe("Optional arrangement track IDs; omitted renders every instrument/drum track"),
+        preserve_pan: z.boolean().describe("true preserves composed MIDI pan; false centers pitched stems"),
+        include_renderer_effects: z.boolean()
+          .describe("true keeps manifest FluidSynth reverb/chorus; false renders dry stems"),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await renderSongManifestInstrumentStems({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        outputDirectory: params.output_directory,
+        preservePan: params.preserve_pan,
+        includeRendererEffects: params.include_renderer_effects,
+        ...(params.track_ids !== undefined ? { trackIds: params.track_ids } : {}),
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Rendered ${result.stems.length} isolated instrument stems from composition ${result.sourceCompositionHash.slice(0, 12)}`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_render_vocal_stems",
+  {
+    title: "Render Manifest Vocal Stems",
+    description: `Render selected VOCALOID tracks one-by-one through the original Editor as verified stereo vocal stems.
+
+The source must be a hash-verified VSQX artifact whose composition_hash matches the current manifest. For each render, all other vocal tracks are muted and every backing WAV part is physically removed from a temporary project. The agent explicitly chooses source pan versus center and send-enabled versus dry; optional volume overrides the source vocal fader. Outputs and their profile, source project, SHA-256, dependencies, and composition hash are recorded atomically after the complete batch succeeds.`,
+    inputSchema: z
+      .object({
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        project_artifact_id: ManifestIdSchema.describe("VSQX artifact ID returned by manifest inspect/build"),
+        output_directory: PathSchema.describe("Existing writable directory for slugged stem filenames"),
+        vocal_track_ids: z.array(ManifestIdSchema).min(1).max(16).optional()
+          .describe("Optional vocal track IDs; omitted renders every vocal track"),
+        center_pan: z.boolean().describe("true centers each stem; false preserves the source track pan"),
+        dry: z.boolean().describe("true disables vocal send routing; false preserves source send settings"),
+        volume: z.number().int().min(-898).max(600).optional()
+          .describe("Optional explicit VOCALOID mixer volume; omitted preserves each source value"),
+        timeout_seconds: z.number().int().min(10).max(600).default(300)
+          .describe("Per-track original Editor export deadline"),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await renderSongManifestVocalStems({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        projectArtifactId: params.project_artifact_id,
+        outputDirectory: params.output_directory,
+        centerPan: params.center_pan,
+        dry: params.dry,
+        ...(params.volume !== undefined ? { volume: params.volume } : {}),
+        timeoutSeconds: params.timeout_seconds,
+        ...(params.vocal_track_ids !== undefined ? { vocalTrackIds: params.vocal_track_ids } : {}),
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Rendered ${result.stems.length} isolated VOCALOID stems from ${result.sourceProjectArtifact}`,
       );
     } catch (error) {
       return errorResult(error);

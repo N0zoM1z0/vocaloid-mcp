@@ -19,6 +19,9 @@ Every manifest contains:
 - `schema`: fixed schema identifier;
 - `revision`: monotonically increasing integer;
 - `content_hash`: SHA-256 of canonical JSON excluding `content_hash`;
+- `composition_hash`: SHA-256 of only sound-affecting creative state, excluding
+  revision/timestamps/artifacts, so a derived file remains comparable after
+  provenance-only revisions;
 - `parent_hash`: hash of the immediately preceding revision, when any;
 - stable IDs for the song, sections, voices, tracks, parts, phrases, notes,
   controls, patterns, placements, and artifacts;

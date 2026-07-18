@@ -46,6 +46,8 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_master_wav",
       "vocaloid_remove_song_objects",
       "vocaloid_render_accompaniment",
+      "vocaloid_render_instrument_stems",
+      "vocaloid_render_vocal_stems",
       "vocaloid_render_wav",
       "vocaloid_transform_song_events",
       "vocaloid_update_mixer",
@@ -304,6 +306,36 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       artifacts: manifestBuildData.data?.artifacts?.length,
     },
     { source: 6, manifest: 7, channels: 2, silent: false, valid: true, artifacts: 2 },
+  );
+
+  const manifestInstrumentStems = await client.callTool({
+    name: "vocaloid_render_instrument_stems",
+    arguments: {
+      manifest_path: manifestPath,
+      expected_revision: 7,
+      output_directory: temporary,
+      track_ids: ["piano"],
+      preserve_pan: false,
+      include_renderer_effects: false,
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestInstrumentStems.isError, true);
+  const manifestInstrumentStemData = manifestInstrumentStems.structuredContent as {
+    data?: {
+      manifestRevision?: number;
+      stems?: Array<{ trackId?: string; channels?: number; silent?: boolean }>;
+      artifacts?: Array<{ source_composition_hash?: string }>;
+    };
+  };
+  assert.equal(manifestInstrumentStemData.data?.manifestRevision, 8);
+  assert.deepEqual(
+    manifestInstrumentStemData.data?.stems?.map((stem) => [stem.trackId, stem.channels, stem.silent]),
+    [["piano", 2, false]],
+  );
+  assert.match(
+    manifestInstrumentStemData.data?.artifacts?.[0]?.source_composition_hash ?? "",
+    /^[a-f0-9]{64}$/u,
   );
 
   const accompanimentPath = join(temporary, "mcp-backing.wav");

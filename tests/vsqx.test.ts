@@ -14,6 +14,7 @@ import {
   inspectProject,
   listControlPoints,
   listNotes,
+  prepareVocalStemProject,
   updateNoteExpressionsInProject,
   updateProjectMixer,
   validateProject,
@@ -350,6 +351,33 @@ for (const format of ["vsq3", "vsq4"] as const) {
     assert.equal(summary.audioParts[0]?.channels, 2);
     assert.equal(summary.audioParts[0]?.playTime, 96);
     assert.match(summary.audioParts[0]?.filePath ?? "", /backing\.wav$/u);
+
+    const isolated = join(temporary, `structured-${format}-harmony-stem.vsqx`);
+    const isolation = await prepareVocalStemProject(
+      output,
+      isolated,
+      1,
+      { centerPan: true, dry: true, volume: -100 },
+      false,
+    );
+    assert.equal(isolation.removedAudioParts, 1);
+    assert.deepEqual(
+      isolation.after.map((unit) => [
+        unit.trackNumber,
+        unit.mute,
+        unit.pan,
+        unit.volume,
+        unit.sendEnabled,
+        unit.sendLevel,
+      ]),
+      [
+        [0, true, 64, 0, false, -898],
+        [1, false, 64, -100, false, -898],
+      ],
+    );
+    const isolatedSummary = await inspectProject(isolated);
+    assert.equal(isolatedSummary.audioParts.length, 0);
+    assert.equal((await validateProject(isolated)).valid, true);
   });
 }
 

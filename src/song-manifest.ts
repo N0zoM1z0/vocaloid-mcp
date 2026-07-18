@@ -388,7 +388,7 @@ const ManifestSectionDynamicsSchema = z
   })
   .strict();
 
-const ManifestArtifactSchema = z
+export const ManifestArtifactSchema = z
   .object({
     id: IdSchema,
     role: z.enum(["backing", "vsqx", "vocal_stem", "instrument_stem", "mix", "master", "analysis", "delivery"]),
@@ -396,7 +396,11 @@ const ManifestArtifactSchema = z
     sha256: z.string().regex(/^[a-f0-9]{64}$/u),
     bytes: z.number().int().min(0),
     source_revision: z.number().int().min(1),
+    source_composition_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     dependencies: z.array(IdSchema).max(256).default([]),
+    metadata: z
+      .record(z.string().min(1).max(64), z.union([z.string(), z.number(), z.boolean()]))
+      .default({}),
     created_at: z.string().datetime(),
   })
   .strict();
@@ -405,6 +409,7 @@ export const SongManifestSchema = z
   .object({
     schema: z.literal(MANIFEST_SCHEMA),
     revision: z.number().int().min(1),
+    composition_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     content_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     parent_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
     song_id: IdSchema,
@@ -451,6 +456,7 @@ export type ManifestVoice = z.infer<typeof ManifestVoiceSchema>;
 export type ManifestVocalTrackMetadata = z.infer<typeof ManifestVocalTrackMetadataSchema>;
 export type ManifestVocalPart = z.infer<typeof ManifestVocalPartSchema>;
 export type ManifestArrangementTrack = z.infer<typeof ManifestArrangementTrackSchema>;
+export type ManifestArtifact = z.infer<typeof ManifestArtifactSchema>;
 
 export interface CreateSongManifestOptions {
   outputPath: string;
@@ -476,6 +482,7 @@ interface ManifestWriteResult {
   path: string;
   backupPath?: string;
   revision: number;
+  compositionHash: string;
   contentHash: string;
   parentHash?: string;
   bytes: number;
@@ -496,6 +503,28 @@ function canonicalize(value: unknown): unknown {
 
 export function songManifestHash(manifest: Omit<SongManifest, "content_hash"> | SongManifest): string {
   return createHash("sha256").update(JSON.stringify(canonicalize(manifest))).digest("hex");
+}
+
+type HashlessSongManifest = Omit<SongManifest, "content_hash" | "composition_hash">;
+
+export function songCompositionHash(manifest: HashlessSongManifest | SongManifest): string {
+  const creativeState = {
+    schema: manifest.schema,
+    song_id: manifest.song_id,
+    slug: manifest.slug,
+    title: manifest.title,
+    format: manifest.format,
+    pre_measure: manifest.pre_measure,
+    time_signatures: manifest.time_signatures,
+    tempos: manifest.tempos,
+    sections: manifest.sections,
+    harmony: manifest.harmony,
+    voices: manifest.voices,
+    vocal_tracks: manifest.vocal_tracks,
+    accompaniment: manifest.accompaniment,
+    mix: manifest.mix,
+  };
+  return createHash("sha256").update(JSON.stringify(canonicalize(creativeState))).digest("hex");
 }
 
 function positionTick(manifest: Pick<SongManifest, "time_signatures">, position: MusicalPosition): number {
@@ -601,6 +630,9 @@ function validateManifestSemantics(manifest: SongManifest): void {
     if (!voiceIds.has(track.voice_id)) {
       throw new Error(`Vocal track ${track.id} references unknown voice ${track.voice_id}`);
     }
+    if (track.parts.length === 0) {
+      throw new Error(`Vocal track ${track.id} needs at least one part`);
+    }
     assertUniqueIds(track.parts, `vocal track ${track.id} parts`);
     for (const part of track.parts) {
       if (part.section_id && !sectionIds.has(part.section_id)) {
@@ -666,9 +698,10 @@ function validateManifestSemantics(manifest: SongManifest): void {
   assertGloballyUniqueStableIds(manifest);
 }
 
-function withHash(candidate: Omit<SongManifest, "content_hash">): SongManifest {
-  const content_hash = songManifestHash(candidate);
-  const manifest = SongManifestSchema.parse({ ...candidate, content_hash });
+function withHash(candidate: HashlessSongManifest): SongManifest {
+  const composition_hash = songCompositionHash(candidate);
+  const content_hash = songManifestHash({ ...candidate, composition_hash });
+  const manifest = SongManifestSchema.parse({ ...candidate, composition_hash, content_hash });
   validateManifestSemantics(manifest);
   return manifest;
 }
@@ -714,6 +747,7 @@ async function persistManifest(
     path,
     ...(backupPath ? { backupPath } : {}),
     revision: manifest.revision,
+    compositionHash: manifest.composition_hash,
     contentHash: manifest.content_hash,
     ...(manifest.parent_hash ? { parentHash: manifest.parent_hash } : {}),
     bytes: Buffer.byteLength(serialized),
@@ -731,6 +765,13 @@ export async function loadSongManifest(inputPath: string): Promise<{ path: strin
     throw new Error(`Invalid song manifest JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
   const manifest = SongManifestSchema.parse(raw);
+  const actualComposition = songCompositionHash(manifest);
+  if (actualComposition !== manifest.composition_hash) {
+    throw new Error(
+      `Song manifest composition hash mismatch: stored ${manifest.composition_hash}, actual ${actualComposition}. `
+      + "Creative state or provenance may have been edited outside the MCP.",
+    );
+  }
   const actual = songManifestHash(manifest);
   if (actual !== manifest.content_hash) {
     throw new Error(
@@ -773,7 +814,7 @@ export async function createSongManifest(options: CreateSongManifestOptions): Pr
     },
     mix: { effect_chains: [], section_dynamics: [] },
     artifacts: [],
-  } satisfies Omit<SongManifest, "content_hash">;
+  } satisfies HashlessSongManifest;
   return persistManifest(withHash(candidate), options.outputPath, options.overwrite);
 }
 
@@ -782,6 +823,7 @@ function manifestSummary(path: string, manifest: SongManifest) {
     path,
     schema: manifest.schema,
     revision: manifest.revision,
+    compositionHash: manifest.composition_hash,
     contentHash: manifest.content_hash,
     parentHash: manifest.parent_hash ?? null,
     songId: manifest.song_id,
@@ -909,13 +951,18 @@ async function mutateManifest(
   const draft = structuredClone(loaded.manifest);
   updater(draft);
   const parentHash = loaded.manifest.content_hash;
-  const { content_hash: _oldHash, parent_hash: _oldParent, ...withoutHashes } = draft;
+  const {
+    content_hash: _oldHash,
+    composition_hash: _oldCompositionHash,
+    parent_hash: _oldParent,
+    ...withoutHashes
+  } = draft;
   const candidate = {
     ...withoutHashes,
     revision: loaded.manifest.revision + 1,
     parent_hash: parentHash,
     updated_at: new Date().toISOString(),
-  } satisfies Omit<SongManifest, "content_hash">;
+  } satisfies HashlessSongManifest;
   const manifest = withHash(candidate);
   const write = await persistManifest(manifest, outputPath, overwrite);
   return { write, summary: manifestSummary(write.path, manifest) };
@@ -1266,6 +1313,40 @@ export async function removeSongManifestObjects(
   return { ...result, removed };
 }
 
+export async function recordSongManifestArtifacts(
+  manifestPath: string,
+  expectedRevision: number,
+  expectedCompositionHash: string,
+  artifactsInput: z.input<typeof ManifestArtifactSchema>[],
+) {
+  const artifacts = z.array(ManifestArtifactSchema).min(1).max(512).parse(artifactsInput);
+  for (const artifact of artifacts) {
+    if (artifact.source_composition_hash !== expectedCompositionHash) {
+      throw new Error(
+        `Artifact ${artifact.id} source_composition_hash does not match requested composition ${expectedCompositionHash}`,
+      );
+    }
+  }
+  return mutateManifest(
+    manifestPath,
+    manifestPath,
+    expectedRevision,
+    true,
+    (draft) => {
+      if (draft.composition_hash !== expectedCompositionHash) {
+        throw new Error(
+          `Composition changed before artifact commit: expected ${expectedCompositionHash}, current ${draft.composition_hash}`,
+        );
+      }
+      for (const artifact of artifacts) {
+        const index = draft.artifacts.findIndex((candidate) => candidate.id === artifact.id);
+        if (index >= 0) draft.artifacts[index] = artifact;
+        else draft.artifacts.push(artifact);
+      }
+    },
+  );
+}
+
 function compileManifestPhrase(
   manifest: Pick<SongManifest, "time_signatures">,
   phrase: z.infer<typeof ManifestVocalPhraseSchema>,
@@ -1451,7 +1532,7 @@ function buildArrangement(manifest: SongManifest): {
   return { tracks, drums, drumPatterns, drumPlacements };
 }
 
-async function fileSha256(path: string): Promise<{ sha256: string; bytes: number }> {
+export async function fileSha256(path: string): Promise<{ sha256: string; bytes: number }> {
   const hash = createHash("sha256");
   await new Promise<void>((resolve, reject) => {
     const stream = createReadStream(path);
@@ -1547,7 +1628,14 @@ export async function buildSongManifest(options: BuildSongManifestOptions) {
         path: backingPath,
         ...backingDigest,
         source_revision: manifest.revision,
+        source_composition_hash: manifest.composition_hash,
         dependencies: [],
+        metadata: {
+          renderer: "fluidsynth",
+          sample_rate: manifest.accompaniment.sample_rate,
+          reverb: manifest.accompaniment.reverb,
+          chorus: manifest.accompaniment.chorus,
+        },
         created_at: now,
       },
       {
@@ -1556,7 +1644,9 @@ export async function buildSongManifest(options: BuildSongManifestOptions) {
         path: projectPath,
         ...projectDigest,
         source_revision: manifest.revision,
+        source_composition_hash: manifest.composition_hash,
         dependencies: [`backing-r${manifest.revision}`],
+        metadata: { format: manifest.format },
         created_at: now,
       },
     ];
