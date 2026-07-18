@@ -105,6 +105,7 @@ export async function renderProjectToWav(
   requestedOutputPath: string,
   timeoutSeconds: number,
   overwrite: boolean,
+  allowPreSendAdjustment = false,
 ): Promise<RenderResult> {
   if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 10 || timeoutSeconds > 600) {
     throw new Error(`timeoutSeconds must be an integer in 10..600, got ${timeoutSeconds}`);
@@ -170,6 +171,8 @@ export async function renderProjectToWav(
           windowsTemporary,
           "-TimeoutMilliseconds",
           String(timeoutSeconds * 1000),
+          "-AllowPreSendAdjustment",
+          allowPreSendAdjustment ? "1" : "0",
         ],
         {
           timeout: timeoutSeconds * 1000 + 30_000,

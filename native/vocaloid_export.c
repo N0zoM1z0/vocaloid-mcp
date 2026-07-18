@@ -242,7 +242,8 @@ static int wait_for_first_export_dialog(
     HDESK desktop,
     WindowSearch *search,
     HANDLE process,
-    DWORD deadline
+    DWORD deadline,
+    int allow_pre_send_adjustment
 ) {
     while (GetTickCount() < deadline) {
         search->export_options_dialog = NULL;
@@ -255,7 +256,17 @@ static int wait_for_first_export_dialog(
         enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
         if (search->export_options_dialog || search->save_dialog) return 1;
         if (is_known_singer_warning(search)) return -1;
-        if (search->event_verification_dialog) return -2;
+        if (search->event_verification_dialog) {
+            if (!allow_pre_send_adjustment) return -2;
+            {
+                HWND yes_button = GetDlgItem(search->event_verification_dialog, IDYES);
+                if (!yes_button) return -3;
+                SendMessageW(search->event_verification_dialog, WM_COMMAND,
+                             MAKEWPARAM(IDYES, BN_CLICKED), (LPARAM)yes_button);
+            }
+            Sleep(POLL_MS);
+            continue;
+        }
         if (process_exited(process)) return 0;
         Sleep(5);
     }
@@ -426,19 +437,21 @@ int wmain(int argc, wchar_t **argv) {
     WindowSearch search;
     ChildSearch children;
     int export_dialog_result;
+    int allow_pre_send_adjustment;
     uint64_t output_size = 0;
     int forced = 0;
 
-    if (argc != 5) {
+    if (argc != 6) {
         fwprintf(stderr,
                  L"usage: vocaloid_export.exe <VOCALOID3.exe> <input.vsqx> "
-                 L"<output.wav> <timeout-ms>\n");
+                 L"<output.wav> <timeout-ms> <adjust-pre-send:0|1>\n");
         return 64;
     }
     executable = argv[1];
     project = argv[2];
     output = argv[3];
     timeout_ms = wcstoul(argv[4], NULL, 10);
+    allow_pre_send_adjustment = wcscmp(argv[5], L"1") == 0;
     if (timeout_ms < 10000 || timeout_ms > 600000) {
         return fail(65, "validate_timeout", ERROR_INVALID_PARAMETER,
                     NULL, NULL, NULL);
@@ -519,8 +532,13 @@ int wmain(int argc, wchar_t **argv) {
                     &process_info, &search, desktop);
     }
     export_dialog_result = wait_for_first_export_dialog(
-        desktop, &search, process_info.hProcess, deadline);
+        desktop, &search, process_info.hProcess, deadline,
+        allow_pre_send_adjustment);
     if (export_dialog_result < 0) {
+        if (export_dialog_result == -3) {
+            return fail(71, "find_event_verification_yes", ERROR_NOT_FOUND,
+                        &process_info, &search, desktop);
+        }
         if (export_dialog_result == -2) {
             fwprintf(stderr,
                      L"project requires manual Event Verification; refusing "

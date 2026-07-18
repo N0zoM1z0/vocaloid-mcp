@@ -1655,6 +1655,8 @@ This is a bounded workflow operation: it launches a helper-owned minimized edito
           .default(300)
           .describe("Total editor launch, synthesis, export, and cleanup deadline"),
         overwrite: z.boolean().default(false),
+        allow_pre_send_adjustment: z.boolean().default(false)
+          .describe("Explicitly allow Editor's exact Event Verification prompt to reduce Pre-Send time to fit the project's pre-measures"),
         response_format: ResponseFormatSchema,
       })
       .strict(),
@@ -1673,6 +1675,7 @@ This is a bounded workflow operation: it launches a helper-owned minimized edito
         params.output_path,
         params.timeout_seconds,
         params.overwrite,
+        params.allow_pre_send_adjustment,
       );
       const warnings = result.forcedTermination
         ? ["The helper had to terminate its own editor process after producing valid audio"]

@@ -112,8 +112,17 @@ but not across curves, producing native event ticks such as `3840, 5760, ...,
 event appeared in its Message Delay Zone. The writer now globally orders all
 control points by tick, the validator rejects non-monotonic native control
 events, and the clean IA_ROCKS rebuild emits `0, 0, 3840, ... 7679`. The local
-manual explains that accepting the dialog would reduce Editor's global
-Pre-Send time to fit the pre-measures; automation deliberately fixes the score
-instead of silently changing that preference. A final Editor audio render was
-not repeated in the same run, so IA_ROCKS synthesis availability remains gated
-on the next single bounded render rather than inferred from VVD metadata.
+manual explains that accepting the dialog reduces Editor's Pre-Send time to fit
+the pre-measures. `vocaloid_render_wav` therefore exposes an explicit
+`allow_pre_send_adjustment` switch that defaults to false; the helper only
+accepts the exact known verification dialog when the caller opts in.
+
+With that option explicitly enabled, the original VOCALOID3 Editor completed
+the IA_ROCKS master export in 19.234 seconds without forced termination. The
+raw 44.1 kHz/16-bit stereo PCM is 13.328 seconds, measures -22.0 LUFS and -13.3
+dBTP, contains zero clipped samples, and differs by only 0.009 dB between left
+and right RMS. A separate two-pass mastered delivery measures -16.0 LUFS, 7.9
+LU LRA, and -7.2 dBTP with zero clipped samples. Both WAV digests and quality
+metadata are recorded in manifest revision 10 as `master` and `delivery`
+artifacts. No Editor/export helper process or temporary render remained after
+completion.

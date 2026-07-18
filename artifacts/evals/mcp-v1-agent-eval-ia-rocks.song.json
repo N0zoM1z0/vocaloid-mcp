@@ -1,17 +1,17 @@
 {
   "schema": "vocaloid-song-manifest/v1",
-  "revision": 9,
+  "revision": 10,
   "composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
   "mix_hash": "7459c70d79d523d29a27702217f90bb39b415f2bb36a8821000aec5bedc7bb1b",
-  "content_hash": "598ccc61e194edaf54bedcdd4cea59861e20e1c399bebb8173311cce95f958b1",
-  "parent_hash": "10d78f9fb817e20728d1dd8b8e9a981fb3200098c354604a948c33fecdf0f966",
+  "content_hash": "ba010ab5f1587198c3604b3070f73fd293a4d90cd692ae014dafccb2ffd602dd",
+  "parent_hash": "598ccc61e194edaf54bedcdd4cea59861e20e1c399bebb8173311cce95f958b1",
   "song_id": "song-mcp-v1-agent-eval",
   "slug": "mcp-v1-agent-eval",
   "title": "星駆ける声",
   "format": "vsq3",
   "pre_measure": 1,
   "created_at": "2026-07-18T10:37:57.705Z",
-  "updated_at": "2026-07-18T11:22:32.588Z",
+  "updated_at": "2026-07-18T11:32:55.478Z",
   "time_signatures": [
     {
       "measure": 0,
@@ -880,6 +880,52 @@
         "format": "vsq3"
       },
       "created_at": "2026-07-18T11:22:32.580Z"
+    },
+    {
+      "id": "master-editor-ia-rocks-r9",
+      "role": "master",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hoshikakeru-koe-ia-rocks-master-v1.wav",
+      "sha256": "95266ddd3a2eb92a35040df0cffe6eafccac7b2123ee556f25f0e993211007ad",
+      "bytes": 2351148,
+      "source_revision": 9,
+      "source_composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
+      "dependencies": [
+        "vsqx-r8",
+        "backing-r8"
+      ],
+      "metadata": {
+        "renderer": "VOCALOID3 Editor",
+        "singer": "IA_ROCKS",
+        "component_id": "BDREB7P2KTWKYDC5",
+        "allow_pre_send_adjustment": true,
+        "integrated_lufs": -22,
+        "true_peak_dbfs": -13.3,
+        "clipped_samples": 0
+      },
+      "created_at": "2026-07-18T11:32:55.463Z"
+    },
+    {
+      "id": "delivery-hoshikakeru-koe-ia-rocks-r9",
+      "role": "delivery",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hoshikakeru-koe-ia-rocks-final-v1.wav",
+      "sha256": "179b1e8bd790a537944f5f146d025f7b15ea8aaa6f4cd762ae4cf965f979a67a",
+      "bytes": 2351182,
+      "source_revision": 9,
+      "source_composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
+      "dependencies": [
+        "master-editor-ia-rocks-r9"
+      ],
+      "metadata": {
+        "mastering": "ffmpeg loudnorm two-pass",
+        "target_lufs": -16,
+        "target_true_peak_dbfs": -1,
+        "integrated_lufs": -16,
+        "loudness_range_lu": 7.9,
+        "true_peak_dbfs": -7.2,
+        "clipped_samples": 0,
+        "stereo_balance_db": 0.008737465715579873
+      },
+      "created_at": "2026-07-18T11:32:55.463Z"
     }
   ]
 }
