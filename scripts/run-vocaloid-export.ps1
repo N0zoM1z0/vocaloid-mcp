@@ -16,9 +16,12 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet(0, 1)]
-    [int]$AllowPreSendAdjustment = 0
+    [int]$AllowPreSendAdjustment = 0,
+
+    [Parameter(Mandatory = $true)]
+    [string]$CancelPath
 )
 
 $ErrorActionPreference = "Stop"
-& $HelperPath $EditorPath $ProjectPath $OutputPath ([string]$TimeoutMilliseconds) ([string]$AllowPreSendAdjustment)
+& $HelperPath $EditorPath $ProjectPath $OutputPath ([string]$TimeoutMilliseconds) ([string]$AllowPreSendAdjustment) $CancelPath
 exit $LASTEXITCODE

@@ -269,6 +269,18 @@ const DynamicsArcGestureSchema = z
   })
   .strict();
 
+const OpeningArcGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("opening_arc"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    start_value: z.number().int().min(0).max(127),
+    peak_value: z.number().int().min(0).max(127),
+    end_value: z.number().int().min(0).max(127),
+    peak_position: z.number().min(0).max(1).default(0.5),
+  })
+  .strict();
+
 const TimbreArcGestureSchema = z
   .object({
     id: GestureIdSchema,
@@ -287,6 +299,7 @@ export const ManifestTuningGestureSchema = z.discriminatedUnion("type", [
   VibratoGestureSchema,
   PitchScoopGestureSchema,
   DynamicsArcGestureSchema,
+  OpeningArcGestureSchema,
   TimbreArcGestureSchema,
 ]);
 
@@ -605,7 +618,7 @@ export const ManifestSectionDynamicsSchema = z
 export const ManifestArtifactSchema = z
   .object({
     id: IdSchema,
-    role: z.enum(["backing", "vsqx", "vocal_stem", "instrument_stem", "mix", "master", "analysis", "delivery"]),
+    role: z.enum(["backing", "vsqx", "vocal_stem", "instrument_stem", "mix", "master", "analysis", "preview", "delivery"]),
     path: z.string().min(1).max(4096),
     sha256: z.string().regex(/^[a-f0-9]{64}$/u),
     bytes: z.number().int().min(0),
@@ -616,6 +629,39 @@ export const ManifestArtifactSchema = z
       .record(z.string().min(1).max(64), z.union([z.string(), z.number(), z.boolean()]))
       .default({}),
     created_at: z.string().datetime(),
+  })
+  .strict();
+
+export const ManifestReviewNoteSchema = z
+  .object({
+    id: IdSchema,
+    author_type: z.enum(["human", "agent"]),
+    author_name: z.string().min(1).max(128),
+    observation: z.string().min(1).max(4000),
+    section_id: IdSchema.optional(),
+    object_ids: z.array(IdSchema).max(256).default([]),
+    artifact_ids: z.array(IdSchema).max(64).default([]),
+    position: ManifestPositionSchema.optional(),
+    status: z.enum(["open", "resolved"]).default("open"),
+    created_at: z.string().datetime(),
+    resolved_at: z.string().datetime().optional(),
+    resolution: z.string().min(1).max(4000).optional(),
+  })
+  .strict()
+  .refine((note) => note.status === "resolved" ? note.resolved_at !== undefined : true, {
+    message: "Resolved review notes require resolved_at",
+  });
+
+export const ManifestReviewNoteInputSchema = z
+  .object({
+    id: IdSchema,
+    author_type: z.enum(["human", "agent"]),
+    author_name: z.string().min(1).max(128),
+    observation: z.string().min(1).max(4000),
+    section_id: IdSchema.optional(),
+    object_ids: z.array(IdSchema).max(256).default([]),
+    artifact_ids: z.array(IdSchema).max(64).default([]),
+    position: ManifestPositionSchema.optional(),
   })
   .strict();
 
@@ -662,6 +708,7 @@ export const SongManifestSchema = z
       })
       .strict(),
     artifacts: z.array(ManifestArtifactSchema).max(10_000),
+    review_notes: z.array(ManifestReviewNoteSchema).max(10_000).optional(),
   })
   .strict();
 
@@ -672,6 +719,7 @@ export type ManifestVocalTrackMetadata = z.infer<typeof ManifestVocalTrackMetada
 export type ManifestVocalPart = z.infer<typeof ManifestVocalPartSchema>;
 export type ManifestArrangementTrack = z.infer<typeof ManifestArrangementTrackSchema>;
 export type ManifestArtifact = z.infer<typeof ManifestArtifactSchema>;
+export type ManifestReviewNote = z.infer<typeof ManifestReviewNoteSchema>;
 export type ManifestEffectChain = z.infer<typeof ManifestEffectChainSchema>;
 export type ManifestSectionDynamic = z.infer<typeof ManifestSectionDynamicsSchema>;
 
@@ -818,6 +866,7 @@ function assertGloballyUniqueStableIds(manifest: SongManifest): void {
   }
   for (const dynamic of manifest.mix.section_dynamics) add(dynamic.id, `section dynamic for ${dynamic.target_id}`);
   for (const artifact of manifest.artifacts) add(artifact.id, `artifact ${artifact.role}`);
+  for (const note of manifest.review_notes ?? []) add(note.id, `review note by ${note.author_name}`);
 }
 
 function validateManifestSemantics(manifest: SongManifest): void {
@@ -995,6 +1044,57 @@ function validateManifestSemantics(manifest: SongManifest): void {
     dynamicTargets.add(key);
   }
   assertUniqueIds(manifest.artifacts, "artifacts");
+  assertUniqueIds(manifest.review_notes ?? [], "review notes");
+  const reviewTargets = new Set<string>([
+    ...manifest.sections.map((entry) => entry.id),
+    ...manifest.harmony.key_changes.map((entry) => entry.id),
+    ...manifest.harmony.chord_changes.map((entry) => entry.id),
+    ...manifest.voices.map((entry) => entry.id),
+    ...manifest.vocal_tracks.flatMap((track) => [
+      track.id,
+      ...track.parts.flatMap((part) => [
+        part.id,
+        ...part.notes.map((entry) => entry.id),
+        ...part.phrases.flatMap((phrase) => [
+          phrase.id,
+          ...phrase.lyrics.map((entry) => entry.id),
+          ...phrase.cells.map((entry) => entry.id),
+        ]),
+        ...part.control_curves.flatMap((curve) => [curve.id, ...curve.points.map((entry) => entry.id)]),
+        ...(part.tuning_gestures ?? []).map((entry) => entry.id),
+      ]),
+    ]),
+    ...manifest.accompaniment.tracks.flatMap((track) => [
+      track.id,
+      ...(track.kind === "pitched"
+        ? [
+            ...track.notes.map((entry) => entry.id),
+            ...track.patterns.flatMap((pattern) => [pattern.id, ...pattern.notes.map((entry) => entry.id)]),
+          ]
+        : [
+            ...track.hits.map((entry) => entry.id),
+            ...track.patterns.flatMap((pattern) => [pattern.id, ...pattern.hits.map((entry) => entry.id)]),
+          ]),
+      ...track.placements.map((entry) => entry.id),
+    ]),
+    ...manifest.mix.effect_chains.flatMap((chain) => [chain.id, ...chain.effects.map((entry) => entry.id)]),
+    ...manifest.mix.section_dynamics.map((entry) => entry.id),
+    ...manifest.artifacts.map((entry) => entry.id),
+    "mix-bus",
+  ]);
+  for (const note of manifest.review_notes ?? []) {
+    if (note.section_id && !sectionIds.has(note.section_id)) {
+      throw new Error(`Review note ${note.id} references unknown section ${note.section_id}`);
+    }
+    for (const id of note.object_ids) {
+      if (!reviewTargets.has(id)) throw new Error(`Review note ${note.id} references unknown object ${id}`);
+    }
+    for (const id of note.artifact_ids) {
+      if (!manifest.artifacts.some((artifact) => artifact.id === id)) {
+        throw new Error(`Review note ${note.id} references unknown artifact ${id}`);
+      }
+    }
+  }
   assertGloballyUniqueStableIds(manifest);
 }
 
@@ -1123,6 +1223,7 @@ export async function createSongManifest(options: CreateSongManifestOptions): Pr
     },
     mix: { effect_chains: [], section_dynamics: [] },
     artifacts: [],
+    review_notes: [],
   } satisfies HashlessSongManifest;
   return persistManifest(withHash(candidate), options.outputPath, options.overwrite);
 }
@@ -1188,12 +1289,76 @@ function manifestSummary(path: string, manifest: SongManifest) {
       sourceRevision: artifact.source_revision,
       sha256: artifact.sha256,
     })),
+    reviewNotes: (manifest.review_notes ?? []).map((note) => ({
+      id: note.id,
+      authorType: note.author_type,
+      authorName: note.author_name,
+      observation: note.observation,
+      sectionId: note.section_id ?? null,
+      objectIds: note.object_ids,
+      artifactIds: note.artifact_ids,
+      position: note.position ?? null,
+      status: note.status,
+      createdAt: note.created_at,
+      resolvedAt: note.resolved_at ?? null,
+      resolution: note.resolution ?? null,
+    })),
   };
 }
 
 export async function inspectSongManifest(inputPath: string) {
   const { path, manifest } = await loadSongManifest(inputPath);
   return manifestSummary(path, manifest);
+}
+
+export async function restoreSongManifestSnapshot(
+  manifestPath: string,
+  snapshotPath: string,
+  expectedRevision: number,
+) {
+  const [current, snapshot] = await Promise.all([
+    loadSongManifest(manifestPath),
+    loadSongManifest(snapshotPath),
+  ]);
+  if (current.manifest.revision !== expectedRevision) {
+    throw new Error(
+      `Stale manifest revision ${expectedRevision}; current revision is ${current.manifest.revision} `
+      + `(${current.manifest.content_hash}). Inspect history again before restoring.`,
+    );
+  }
+  if (snapshot.manifest.song_id !== current.manifest.song_id) {
+    throw new Error(
+      `Snapshot song ${snapshot.manifest.song_id} does not match current song ${current.manifest.song_id}`,
+    );
+  }
+  if (snapshot.path === current.path) throw new Error("snapshotPath must identify a historical snapshot, not the current manifest");
+  const {
+    content_hash: _snapshotContentHash,
+    composition_hash: _snapshotCompositionHash,
+    mix_hash: _snapshotMixHash,
+    parent_hash: _snapshotParentHash,
+    revision: snapshotRevision,
+    ...snapshotState
+  } = structuredClone(snapshot.manifest);
+  const candidate = {
+    ...snapshotState,
+    revision: current.manifest.revision + 1,
+    parent_hash: current.manifest.content_hash,
+    updated_at: new Date().toISOString(),
+  } satisfies HashlessSongManifest;
+  const restored = withHash(candidate);
+  const write = await persistManifest(restored, current.path, true);
+  return {
+    write,
+    restoredFrom: {
+      path: snapshot.path,
+      revision: snapshotRevision,
+      contentHash: snapshot.manifest.content_hash,
+      compositionHash: snapshot.manifest.composition_hash,
+      mixHash: snapshot.manifest.mix_hash,
+    },
+    summary: manifestSummary(write.path, restored),
+  };
 }
 
 export async function getSongManifestSection(inputPath: string, sectionId: string) {
@@ -1263,6 +1428,12 @@ export async function getSongManifestSection(inputPath: string, sectionId: strin
       section_dynamics: manifest.mix.section_dynamics.filter((dynamic) =>
         dynamic.section_id === sectionId && activeTargets.has(dynamic.target_id)),
     },
+    reviewNotes: (manifest.review_notes ?? []).filter((note) =>
+      note.section_id === sectionId
+      || note.object_ids.some((id) => activeTargets.has(id))
+      || (note.position !== undefined
+        && positionTick(manifest, note.position) >= start
+        && positionTick(manifest, note.position) < end)),
   };
 }
 
@@ -1547,6 +1718,23 @@ export async function applySongManifestTuningGestures(
         };
         for (const event of selected) event.setVibrato(vibrato);
         vibratoWrites += selected.length;
+      } else if (gesture.type === "opening_arc") {
+        const firstTick = selected[0]!.tick;
+        const finalTick = Math.max(...selected.map((event) => event.tick + event.duration - 1));
+        const peakTick = firstTick + (finalTick - firstTick) * gesture.peak_position;
+        const interpolate = (eventTick: number): number => {
+          if (finalTick <= firstTick) return gesture.peak_value;
+          if (eventTick <= peakTick) {
+            const denominator = Math.max(1, peakTick - firstTick);
+            const ratio = Math.max(0, Math.min(1, (eventTick - firstTick) / denominator));
+            return Math.round(gesture.start_value + (gesture.peak_value - gesture.start_value) * ratio);
+          }
+          const denominator = Math.max(1, finalTick - peakTick);
+          const ratio = Math.max(0, Math.min(1, (eventTick - peakTick) / denominator));
+          return Math.round(gesture.peak_value + (gesture.end_value - gesture.peak_value) * ratio);
+        };
+        for (const event of selected) event.setStyle({ opening: interpolate(event.tick) });
+        styleWrites += selected.length;
       } else if (gesture.type === "pitch_scoop") {
         const normalized = Math.round((gesture.depth_cents / 100 / gesture.pitch_bend_sensitivity) * 8192);
         const depth = Math.min(8191, normalized);
@@ -1700,6 +1888,235 @@ export const ManifestTransformSchema = z
   );
 
 export type ManifestTransform = z.infer<typeof ManifestTransformSchema>;
+
+export const ManifestGrooveSchema = z
+  .object({
+    seed: z.string().min(1).max(256),
+    arrangement_track_ids: z.array(IdSchema).max(32).default([]),
+    section_id: IdSchema.optional(),
+    event_ids: z.array(IdSchema).max(50_000).default([]),
+    targets: z.array(z.enum(["direct_events", "pattern_events"])).min(1),
+    grid_ticks: z.number().int().min(30).max(1920).default(120),
+    swing_percent: z.number().min(50).max(75).default(50),
+    timing_jitter_ticks: z.number().int().min(0).max(120).default(0),
+    velocity_jitter: z.number().int().min(0).max(32).default(0),
+    gate_jitter_percent: z.number().int().min(0).max(30).default(0),
+    preserve_downbeats: z.boolean().default(true),
+  })
+  .strict()
+  .refine(
+    (value) => value.swing_percent !== 50 || value.timing_jitter_ticks !== 0
+      || value.velocity_jitter !== 0 || value.gate_jitter_percent !== 0,
+    { message: "Groove must change swing, timing, velocity, or gate" },
+  )
+  .refine(
+    (value) => !value.section_id || !value.targets.includes("pattern_events"),
+    { message: "section_id cannot scope reusable pattern_events; select explicit event_ids or direct_events" },
+  );
+
+export type ManifestGroove = z.infer<typeof ManifestGrooveSchema>;
+
+export const ManifestTimelineUpdateSchema = z
+  .object({
+    time_signatures: z.array(ManifestTimeSignatureSchema).min(1).max(256).optional(),
+    tempos: z.array(ManifestTempoSchema).min(1).max(5000).optional(),
+    sections: z.array(ManifestSectionSchema).min(1).max(1024).optional(),
+    key_changes: z.array(ManifestKeyChangeSchema).max(1024).optional(),
+    chord_changes: z.array(ManifestChordChangeSchema).max(20_000).optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "Timeline update must replace at least one domain",
+  });
+
+export async function updateSongManifestTimeline(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  updateInput: z.input<typeof ManifestTimelineUpdateSchema>,
+  overwrite: boolean,
+) {
+  const update = ManifestTimelineUpdateSchema.parse(updateInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    if (update.time_signatures) draft.time_signatures = update.time_signatures;
+    if (update.tempos) draft.tempos = update.tempos;
+    if (update.sections) draft.sections = update.sections;
+    if (update.key_changes) draft.harmony.key_changes = update.key_changes;
+    if (update.chord_changes) draft.harmony.chord_changes = update.chord_changes;
+  });
+}
+
+function deterministicUnit(seed: string, id: string, lane: string): number {
+  const digest = createHash("sha256").update(`${seed}\0${id}\0${lane}`).digest();
+  return digest.readUInt32BE(0) / 0xffff_ffff;
+}
+
+function deterministicSigned(seed: string, id: string, lane: string, extent: number): number {
+  if (extent === 0) return 0;
+  return Math.round((deterministicUnit(seed, id, lane) * 2 - 1) * extent);
+}
+
+function grooveTickDelta(
+  groove: ManifestGroove,
+  id: string,
+  absoluteTick: number,
+): { swing: number; jitter: number; total: number } {
+  const gridIndex = Math.round(absoluteTick / groove.grid_ticks);
+  const onGrid = Math.abs(absoluteTick - gridIndex * groove.grid_ticks) <= Math.max(1, groove.grid_ticks / 8);
+  const swing = onGrid && Math.abs(gridIndex % 2) === 1
+    ? Math.round((2 * groove.grid_ticks * groove.swing_percent) / 100 - groove.grid_ticks)
+    : 0;
+  const downbeat = absoluteTick % (groove.grid_ticks * 4) === 0;
+  const jitter = groove.preserve_downbeats && downbeat
+    ? 0
+    : deterministicSigned(groove.seed, id, "timing", groove.timing_jitter_ticks);
+  return { swing, jitter, total: swing + jitter };
+}
+
+export async function applySongManifestGroove(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  grooveInput: z.input<typeof ManifestGrooveSchema>,
+  overwrite: boolean,
+) {
+  const groove = ManifestGrooveSchema.parse(grooveInput);
+  const selectedTracks = new Set(groove.arrangement_track_ids);
+  const selectedEvents = new Set(groove.event_ids);
+  const targets = new Set(groove.targets);
+  const deltas: Array<{
+    event_id: string;
+    track_id: string;
+    source: "direct" | "pattern";
+    timing_ticks: number;
+    swing_ticks: number;
+    random_timing_ticks: number;
+    velocity_delta: number;
+    gate_delta_ticks: number;
+  }> = [];
+  const result = await mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const section = groove.section_id
+      ? draft.sections.find((candidate) => candidate.id === groove.section_id)
+      : undefined;
+    if (groove.section_id && !section) throw new Error(`Unknown section ${groove.section_id}`);
+    const sectionStart = section ? positionTick(draft, section.start) : null;
+    const sectionEnd = section ? positionTick(draft, section.end) : null;
+    const songEnd = Math.max(...draft.sections.map((entry) => positionTick(draft, entry.end)));
+    const useTrack = (id: string): boolean => selectedTracks.size === 0 || selectedTracks.has(id);
+    const useEvent = (id: string, tick: number): boolean =>
+      (selectedEvents.size === 0 || selectedEvents.has(id))
+      && (sectionStart === null || (tick >= sectionStart && tick < (sectionEnd ?? 0)));
+    const apply = (
+      trackId: string,
+      source: "direct" | "pattern",
+      event: { id: string; duration: number; velocity: number },
+      eventTick: number,
+      setTick: (value: number) => void,
+      boundaryTick: number,
+      allowGate: boolean,
+    ): void => {
+      if (!useEvent(event.id, eventTick)) return;
+      const timing = grooveTickDelta(groove, event.id, eventTick);
+      const shifted = eventTick + timing.total;
+      const velocityDelta = deterministicSigned(
+        groove.seed,
+        event.id,
+        "velocity",
+        groove.velocity_jitter,
+      );
+      const gatePercent = deterministicSigned(
+        groove.seed,
+        event.id,
+        "gate",
+        groove.gate_jitter_percent,
+      );
+      const nextDuration = allowGate
+        ? Math.max(1, Math.round(event.duration * (1 + gatePercent / 100)))
+        : event.duration;
+      const gateDelta = nextDuration - event.duration;
+      if (shifted < 0 || shifted + nextDuration > boundaryTick) {
+        throw new Error(
+          `Groove would move ${event.id} outside its ${source === "pattern" ? "pattern" : "song"} boundary; reduce swing/jitter/gate`,
+        );
+      }
+      setTick(shifted);
+      event.velocity = Math.max(1, Math.min(127, event.velocity + velocityDelta));
+      if (allowGate) event.duration = nextDuration;
+      deltas.push({
+        event_id: event.id,
+        track_id: trackId,
+        source,
+        timing_ticks: timing.total,
+        swing_ticks: timing.swing,
+        random_timing_ticks: timing.jitter,
+        velocity_delta: velocityDelta,
+        gate_delta_ticks: gateDelta,
+      });
+    };
+
+    for (const track of draft.accompaniment.tracks) {
+      if (!useTrack(track.id)) continue;
+      if (targets.has("direct_events")) {
+        const events = track.kind === "pitched" ? track.notes : track.hits;
+        for (const event of events) {
+          const eventTick = positionTick(draft, event.position);
+          apply(
+            track.id,
+            "direct",
+            event,
+            eventTick,
+            (value) => {
+              const position = musicalTickToPosition(draft.time_signatures, value);
+              event.position = { measure: position.measure, beat: position.beat, tick: position.tick ?? 0 };
+            },
+            songEnd,
+            track.kind === "pitched",
+          );
+        }
+      }
+      if (targets.has("pattern_events")) {
+        if (track.kind === "pitched") {
+          for (const pattern of track.patterns) {
+            const boundary = positionTick(draft, { measure: pattern.measures, beat: 0, tick: 0 });
+            for (const event of pattern.notes) {
+              const eventTick = positionTick(draft, event.offset);
+              apply(track.id, "pattern", event, eventTick, (value) => {
+                const position = musicalTickToPosition(draft.time_signatures, value);
+                event.offset = { measure: position.measure, beat: position.beat, tick: position.tick ?? 0 };
+              }, boundary, true);
+            }
+          }
+        } else {
+          for (const pattern of track.patterns) {
+            const boundary = positionTick(draft, { measure: pattern.measures, beat: 0, tick: 0 });
+            for (const event of pattern.hits) {
+              const eventTick = positionTick(draft, event.offset);
+              apply(track.id, "pattern", event, eventTick, (value) => {
+                const position = musicalTickToPosition(draft.time_signatures, value);
+                event.offset = { measure: position.measure, beat: position.beat, tick: position.tick ?? 0 };
+              }, boundary, false);
+            }
+          }
+        }
+      }
+    }
+    if (selectedTracks.size > 0) {
+      for (const id of selectedTracks) {
+        if (!draft.accompaniment.tracks.some((track) => track.id === id)) {
+          throw new Error(`Unknown arrangement track ${id}`);
+        }
+      }
+    }
+    if (deltas.length === 0) throw new Error("Groove selection matched zero arrangement events");
+  });
+  return {
+    ...result,
+    seed: groove.seed,
+    parameters: groove,
+    changed: deltas.length,
+    deltas,
+  };
+}
 
 function shiftedPosition(
   manifest: SongManifest,
@@ -1997,6 +2414,59 @@ export async function recordSongManifestArtifacts(
   );
 }
 
+export async function addSongManifestReviewNote(
+  manifestPath: string,
+  expectedRevision: number,
+  noteInput: z.input<typeof ManifestReviewNoteInputSchema>,
+) {
+  const input = ManifestReviewNoteInputSchema.parse(noteInput);
+  const note: ManifestReviewNote = ManifestReviewNoteSchema.parse({
+    ...input,
+    status: "open",
+    created_at: new Date().toISOString(),
+  });
+  const result = await mutateManifest(
+    manifestPath,
+    manifestPath,
+    expectedRevision,
+    true,
+    (draft) => {
+      if ((draft.review_notes ?? []).some((candidate) => candidate.id === note.id)) {
+        throw new Error(`Review note ${note.id} already exists; use a new stable ID`);
+      }
+      draft.review_notes = [...(draft.review_notes ?? []), note];
+    },
+  );
+  return { ...result, note };
+}
+
+export async function resolveSongManifestReviewNote(
+  manifestPath: string,
+  expectedRevision: number,
+  noteId: string,
+  resolution: string,
+) {
+  const id = IdSchema.parse(noteId);
+  const text = z.string().min(1).max(4000).parse(resolution);
+  let resolved: ManifestReviewNote | undefined;
+  const result = await mutateManifest(
+    manifestPath,
+    manifestPath,
+    expectedRevision,
+    true,
+    (draft) => {
+      const note = (draft.review_notes ?? []).find((candidate) => candidate.id === id);
+      if (!note) throw new Error(`No review note with stable ID ${id}`);
+      if (note.status === "resolved") throw new Error(`Review note ${id} is already resolved`);
+      note.status = "resolved";
+      note.resolved_at = new Date().toISOString();
+      note.resolution = text;
+      resolved = structuredClone(note);
+    },
+  );
+  return { ...result, note: resolved! };
+}
+
 function compileManifestPhrase(
   manifest: Pick<SongManifest, "time_signatures">,
   phrase: z.infer<typeof ManifestVocalPhraseSchema>,
@@ -2283,6 +2753,41 @@ export interface BuildSongManifestOptions {
   projectOutputPath: string;
 }
 
+function assertBuildVocalTimelines(manifest: SongManifest): void {
+  const failures: string[] = [];
+  for (const track of manifest.vocal_tracks) {
+    const parts = [...track.parts]
+      .sort((left, right) => positionTick(manifest, left.start) - positionTick(manifest, right.start));
+    for (let index = 1; index < parts.length; index += 1) {
+      const previous = parts[index - 1]!;
+      const current = parts[index]!;
+      if (positionTick(manifest, previous.end) > positionTick(manifest, current.start)) {
+        failures.push(`PART_OVERLAP: ${previous.id} overlaps ${current.id} on ${track.id}`);
+      }
+    }
+    const byPart = new Map<string, ManifestExpectedVocalEvent[]>();
+    for (const event of manifestExpectedVocalEvents(manifest, track.id)) {
+      const selected = byPart.get(event.partId) ?? [];
+      selected.push(event);
+      byPart.set(event.partId, selected);
+    }
+    for (const [partId, events] of byPart) {
+      events.sort((left, right) => positionTick(manifest, left.position) - positionTick(manifest, right.position));
+      for (let index = 1; index < events.length; index += 1) {
+        const previous = events[index - 1]!;
+        const current = events[index]!;
+        if (positionTick(manifest, previous.position) + previous.duration
+          > positionTick(manifest, current.position)) {
+          failures.push(`VOCAL_EVENT_OVERLAP: ${previous.id} overlaps ${current.id} in ${partId}`);
+        }
+      }
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Song preflight rejected build: ${failures.join("; ")}`);
+  }
+}
+
 export async function buildSongManifest(options: BuildSongManifestOptions) {
   const loaded = await loadSongManifest(options.manifestPath);
   const manifest = loaded.manifest;
@@ -2293,6 +2798,14 @@ export async function buildSongManifest(options: BuildSongManifestOptions) {
   if (manifest.accompaniment.tracks.filter((track) => track.kind === "pitched").length === 0) {
     throw new Error("Manifest needs at least one pitched accompaniment track for the current renderer");
   }
+  // Dynamic import avoids a static song-manifest <-> preflight module cycle while
+  // ensuring callers cannot bypass the same aggregate build gate used by MCP.
+  const { assertSongBuildPreflight, preflightSongManifest } = await import("./song-preflight.js");
+  assertSongBuildPreflight(await preflightSongManifest(loaded.path, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  }));
+  assertBuildVocalTimelines(manifest);
   const backingPath = await resolveWritablePath(options.backingOutputPath);
   const projectPath = await resolveWritablePath(options.projectOutputPath);
   if (extname(backingPath).toLowerCase() !== ".wav") throw new Error("backingOutputPath must end in .wav");

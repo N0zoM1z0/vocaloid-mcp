@@ -8,8 +8,10 @@ import {
   type DrumPatternInput,
   type DrumPatternPlacementInput,
 } from "./accompaniment.js";
+import { acquireEditorLease } from "./editor-lease.js";
 import { resolveReadablePath, resolveWritableDirectory } from "./paths.js";
-import { renderProjectToWav } from "./render.js";
+import { renderProjectToWav, type RenderRuntimeOptions } from "./render.js";
+import { preflightSongManifest } from "./song-preflight.js";
 import {
   fileSha256,
   loadSongManifest,
@@ -126,6 +128,19 @@ export async function renderSongManifestInstrumentStems(options: RenderInstrumen
   if (manifest.revision !== options.expectedRevision) {
     throw new Error(`Stale manifest revision ${options.expectedRevision}; current revision is ${manifest.revision}`);
   }
+  const preflight = await preflightSongManifest(loaded.path, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  });
+  const instrumentBlockerCodes = new Set([
+    "ARRANGEMENT_EVENT_PAST_SONG_END",
+    "PATTERN_EVENT_OUT_OF_BOUNDS",
+    "PLACEMENT_PAST_SONG_END",
+  ]);
+  const instrumentBlockers = preflight.readiness.build.blockers.filter((code) => instrumentBlockerCodes.has(code));
+  if (instrumentBlockers.length > 0) {
+    throw new Error(`Instrument stem render blocked by preflight: ${instrumentBlockers.join(", ")}`);
+  }
   if (manifest.accompaniment.tracks.length === 0) throw new Error("Manifest has no arrangement tracks");
   const requested = options.trackIds ? new Set(options.trackIds) : null;
   if (requested && requested.size !== options.trackIds?.length) throw new Error("trackIds contains duplicates");
@@ -228,6 +243,8 @@ export interface RenderVocalStemsOptions {
   volume?: number;
   timeoutSeconds: number;
   vocalTrackIds?: string[];
+  allowPreSendAdjustment: boolean;
+  runtime?: Omit<RenderRuntimeOptions, "lease">;
 }
 
 export async function renderSongManifestVocalStems(options: RenderVocalStemsOptions) {
@@ -235,6 +252,20 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
   const manifest = loaded.manifest;
   if (manifest.revision !== options.expectedRevision) {
     throw new Error(`Stale manifest revision ${options.expectedRevision}; current revision is ${manifest.revision}`);
+  }
+  const preflight = await preflightSongManifest(loaded.path, {
+    artifactCheck: "current",
+    includePerformanceWarnings: false,
+  });
+  const vocalIgnoredCodes = new Set([
+    "NO_PITCHED_ARRANGEMENT_TRACK",
+    "ARRANGEMENT_EVENT_PAST_SONG_END",
+    "PATTERN_EVENT_OUT_OF_BOUNDS",
+    "PLACEMENT_PAST_SONG_END",
+  ]);
+  const vocalBlockers = preflight.readiness.render.blockers.filter((code) => !vocalIgnoredCodes.has(code));
+  if (vocalBlockers.length > 0) {
+    throw new Error(`Vocal stem render blocked by preflight: ${vocalBlockers.join(", ")}`);
   }
   if (manifest.vocal_tracks.length === 0) throw new Error("Manifest has no vocal tracks");
   const projectArtifact = manifest.artifacts.find((artifact) => artifact.id === options.projectArtifactId);
@@ -289,9 +320,13 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
     if (await exists(path)) throw new Error(`Stem output already exists; use a new revision directory/path: ${path}`);
   }
 
-  const temporary = await mkdtemp(join(directory, `.${manifest.slug}-vocal-stems-`));
   const created: string[] = [];
+  const lease = await acquireEditorLease(
+    options.runtime?.requestId ?? `vocal-stems-${process.pid}-${manifest.revision}`,
+  );
+  let temporary: string | null = null;
   try {
+    temporary = await mkdtemp(join(directory, `.${manifest.slug}-vocal-stems-`));
     const stems = [];
     const artifacts: ManifestArtifact[] = [];
     for (const [selectionIndex, { track, trackNumber }] of selectedTracks.entries()) {
@@ -313,6 +348,12 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
         outputPath,
         options.timeoutSeconds,
         false,
+        options.allowPreSendAdjustment,
+        {
+          ...options.runtime,
+          requestId: lease.requestId,
+          lease,
+        },
       );
       created.push(outputPath);
       const digest = await fileSha256(outputPath);
@@ -331,6 +372,9 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
           source_project_artifact: projectArtifact.id,
           center_pan: options.centerPan,
           dry: options.dry,
+          allow_pre_send_adjustment: options.allowPreSendAdjustment,
+          event_verification_seen: result.eventVerificationSeen,
+          pre_send_adjusted: result.preSendAdjusted,
           timeline_origin: "project_start",
           ...(options.volume !== undefined ? { volume: options.volume } : {}),
         },
@@ -355,6 +399,7 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
         centerPan: options.centerPan,
         dry: options.dry,
         volume: options.volume ?? null,
+        allowPreSendAdjustment: options.allowPreSendAdjustment,
       },
       stems,
       artifacts,
@@ -363,6 +408,7 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
     await Promise.all(created.map((path) => unlink(path).catch(() => undefined)));
     throw error;
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    if (temporary) await rm(temporary, { recursive: true, force: true });
+    await lease.release();
   }
 }

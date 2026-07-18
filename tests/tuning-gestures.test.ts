@@ -151,6 +151,15 @@ test("upserts an aligned phrase and compiles stable-ID tuning gestures into nati
         peak_position: 0.62,
       },
       {
+        id: "opening-arc",
+        type: "opening_arc",
+        event_ids: ["lead-note", "jp-cell-1", "jp-cell-2"],
+        start_value: 48,
+        peak_value: 112,
+        end_value: 68,
+        peak_position: 0.6,
+      },
+      {
         id: "brightness-arc",
         type: "timbre_arc",
         event_ids: ["jp-cell-1", "jp-cell-2"],
@@ -170,6 +179,7 @@ test("upserts an aligned phrase and compiles stable-ID tuning gestures into nati
       ["vibrato", []],
       ["pitch_scoop", ["PBS", "PIT"]],
       ["dynamics_arc", ["DYN"]],
+      ["opening_arc", []],
       ["timbre_arc", ["BRI"]],
     ],
   );
@@ -214,12 +224,13 @@ test("upserts an aligned phrase and compiles stable-ID tuning gestures into nati
   assert.ok(part);
   assert.deepEqual(
     part.tuning_gestures?.map((gesture) => gesture.id),
-    ["crisp-entry", "tail-vibrato", "lead-scoop", "phrase-arc", "brightness-arc", "second-scoop"],
+    ["crisp-entry", "tail-vibrato", "lead-scoop", "phrase-arc", "opening-arc", "brightness-arc", "second-scoop"],
   );
   assert.equal(part.notes[0]?.style.accent, 74);
   assert.equal(part.notes[0]?.style.risePort, 1);
   assert.equal(part.notes[0]?.velocity, 82);
   assert.equal(part.phrases[0]?.cells[0]?.style.accent, 74);
+  assert.ok((part.phrases[0]?.cells[0]?.style.opening ?? 0) > 48);
   assert.equal(part.phrases[0]?.cells[1]?.vibrato?.type, 13);
   assert.deepEqual(part.control_curves.map((curve) => curve.curve).sort(), ["BRI", "DYN", "PBS", "PIT"]);
   assert.equal(new Set(part.control_curves.map((curve) => curve.curve)).size, 4);

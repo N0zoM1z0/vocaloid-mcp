@@ -236,6 +236,7 @@ test("exports isolated lead and harmony stems through the original VOCALOID Edit
     outputDirectory: temporary,
     centerPan: true,
     dry: true,
+    allowPreSendAdjustment: false,
     timeoutSeconds: 180,
   });
   assert.equal(result.manifestRevision, 6);

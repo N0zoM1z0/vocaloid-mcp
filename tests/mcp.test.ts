@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,60 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
+const PRODUCTION_TOOLS = [
+  "vocaloid_align_japanese_phrase",
+  "vocaloid_analyze_vocal_stem",
+  "vocaloid_analyze_wav",
+  "vocaloid_build_song_manifest",
+  "vocaloid_create_song_manifest",
+  "vocaloid_edit_song",
+  "vocaloid_get_song_section",
+  "vocaloid_host_readiness",
+  "vocaloid_import_vsqx_manifest",
+  "vocaloid_inspect_song_manifest",
+  "vocaloid_manifest_history",
+  "vocaloid_master_manifest_delivery",
+  "vocaloid_preflight_song",
+  "vocaloid_probe_voice",
+  "vocaloid_render_instrument_stems",
+  "vocaloid_render_manifest_master",
+  "vocaloid_render_stem_mix",
+  "vocaloid_render_vocal_stems",
+  "vocaloid_review_audio",
+  "vocaloid_review_song",
+];
+
+test("production MCP is compact, fully typed, and exposes workflow resources", async (context) => {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [join(ROOT, "dist/src/index.js")],
+    env: { VOCALOID_MCP_PROFILE: "production" },
+    stderr: "pipe",
+  });
+  const client = new Client({ name: "vocaloid-mcp-production-contract", version: "0.1.0" });
+  context.after(async () => client.close());
+  await client.connect(transport);
+
+  const tools = await client.listTools();
+  assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), PRODUCTION_TOOLS);
+  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 80_000, "production tools/list exceeded 80 KB");
+  for (const tool of tools.tools) {
+    assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
+    assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
+  }
+
+  const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
+  const capabilityEntry = capabilities.contents[0];
+  const capabilityText = capabilityEntry && "text" in capabilityEntry ? capabilityEntry.text : undefined;
+  assert.equal(typeof capabilityText, "string");
+  assert.equal(JSON.parse(capabilityText as string).profile, "production");
+
+  const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
+  const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
+  const lyricEntry = lyricResource.contents[0];
+  assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+});
+
 test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   const temporary = await mkdtemp(join(ROOT, ".test-mcp-"));
   context.after(async () => rm(temporary, { recursive: true, force: true }));
@@ -17,6 +71,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [join(ROOT, "dist/src/index.js")],
+    env: { VOCALOID_MCP_PROFILE: "full" },
     stderr: "pipe",
   });
   const client = new Client({ name: "vocaloid-mcp-smoke", version: "0.1.0" });
@@ -32,13 +87,17 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_align_japanese_phrase",
       "vocaloid_analyze_vocal_stem",
       "vocaloid_analyze_wav",
+      "vocaloid_apply_groove",
       "vocaloid_apply_tuning_gestures",
       "vocaloid_build_song_manifest",
       "vocaloid_compile_vocal_phrase",
       "vocaloid_create_project",
       "vocaloid_create_song",
       "vocaloid_create_song_manifest",
+      "vocaloid_edit_song",
       "vocaloid_get_song_section",
+      "vocaloid_host_readiness",
+      "vocaloid_import_vsqx_manifest",
       "vocaloid_inspect_mixer",
       "vocaloid_inspect_project",
       "vocaloid_inspect_song_manifest",
@@ -47,13 +106,21 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_list_instruments",
       "vocaloid_list_notes",
       "vocaloid_list_voices",
+      "vocaloid_manifest_history",
+      "vocaloid_master_manifest_delivery",
       "vocaloid_master_wav",
+      "vocaloid_preflight_song",
+      "vocaloid_probe_voice",
       "vocaloid_remove_song_objects",
       "vocaloid_render_accompaniment",
       "vocaloid_render_instrument_stems",
+      "vocaloid_render_manifest_master",
       "vocaloid_render_stem_mix",
       "vocaloid_render_vocal_stems",
       "vocaloid_render_wav",
+      "vocaloid_review_audio",
+      "vocaloid_review_song",
+      "vocaloid_song_timeline",
       "vocaloid_transform_song_events",
       "vocaloid_update_mixer",
       "vocaloid_update_note_expressions",

@@ -38,6 +38,17 @@ typedef struct DialogTextSearch {
 } DialogTextSearch;
 
 static HWINEVENTHOOK g_event_hook = NULL;
+static const wchar_t *g_cancel_path = NULL;
+static int g_event_verification_seen = 0;
+static int g_pre_send_adjusted = 0;
+
+static int cancel_requested(void) {
+    DWORD attributes;
+    if (!g_cancel_path || g_cancel_path[0] == L'\0') return 0;
+    attributes = GetFileAttributesW(g_cancel_path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
 
 static void pump_window_events(void) {
     MSG message;
@@ -205,6 +216,7 @@ static int wait_for_main_window(
     DWORD deadline
 ) {
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         search->main_window = NULL;
         search->mixer_window = NULL;
         pump_window_events();
@@ -227,6 +239,7 @@ static int wait_for_musical_editor_window(
     DWORD deadline
 ) {
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         search->main_window = NULL;
         search->mixer_window = NULL;
         pump_window_events();
@@ -246,6 +259,7 @@ static int wait_for_first_export_dialog(
     int allow_pre_send_adjustment
 ) {
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         search->export_options_dialog = NULL;
         search->save_dialog = NULL;
         search->singer_warning_dialog = NULL;
@@ -257,12 +271,14 @@ static int wait_for_first_export_dialog(
         if (search->export_options_dialog || search->save_dialog) return 1;
         if (is_known_singer_warning(search)) return -1;
         if (search->event_verification_dialog) {
+            g_event_verification_seen = 1;
             if (!allow_pre_send_adjustment) return -2;
             {
                 HWND yes_button = GetDlgItem(search->event_verification_dialog, IDYES);
                 if (!yes_button) return -3;
                 SendMessageW(search->event_verification_dialog, WM_COMMAND,
                              MAKEWPARAM(IDYES, BN_CLICKED), (LPARAM)yes_button);
+                g_pre_send_adjusted = 1;
             }
             Sleep(POLL_MS);
             continue;
@@ -280,6 +296,7 @@ static int wait_for_save_dialog(
     DWORD deadline
 ) {
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         search->save_dialog = NULL;
         pump_window_events();
         enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
@@ -297,6 +314,7 @@ static int wait_for_save_controls(
     ChildSearch *children
 ) {
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         ZeroMemory(children, sizeof(*children));
         EnumChildWindows(dialog, find_dialog_child, (LPARAM)children);
         if (children->filename_edit && children->save_button) return 1;
@@ -328,6 +346,7 @@ static int wait_for_stable_file(
     uint64_t current = 0;
     int stable_count = 0;
     while (GetTickCount() < deadline) {
+        if (cancel_requested()) return 0;
         if (file_size(path, &current) && current > 44) {
             if (current == previous) stable_count++;
             else stable_count = 0;
@@ -401,6 +420,8 @@ static int fail(
     HDESK desktop
 ) {
     int forced = 0;
+    int cancelled = cancel_requested();
+    if (cancelled) stage = "cancelled";
     if (process_info && process_info->hProcess) {
         stop_process(process_info->hProcess, search, &forced);
         CloseHandle(process_info->hProcess);
@@ -414,8 +435,12 @@ static int fail(
     fprintf(stderr, "vocaloid export failed at %s (win32=%lu)\n",
             stage, (unsigned long)win32_error);
     printf("{\"ok\":false,\"stage\":\"%s\",\"win32_error\":%lu,"
-           "\"forced_termination\":%s}\n",
-           stage, (unsigned long)win32_error, forced ? "true" : "false");
+           "\"forced_termination\":%s,\"cancelled\":%s,"
+           "\"event_verification_seen\":%s,\"pre_send_adjusted\":%s}\n",
+           stage, (unsigned long)win32_error, forced ? "true" : "false",
+           cancelled ? "true" : "false",
+           g_event_verification_seen ? "true" : "false",
+           g_pre_send_adjusted ? "true" : "false");
     return code;
 }
 
@@ -441,10 +466,11 @@ int wmain(int argc, wchar_t **argv) {
     uint64_t output_size = 0;
     int forced = 0;
 
-    if (argc != 6) {
+    if (argc != 7) {
         fwprintf(stderr,
                  L"usage: vocaloid_export.exe <VOCALOID3.exe> <input.vsqx> "
-                 L"<output.wav> <timeout-ms> <adjust-pre-send:0|1>\n");
+                 L"<output.wav> <timeout-ms> <adjust-pre-send:0|1> "
+                 L"<cancel-file>\n");
         return 64;
     }
     executable = argv[1];
@@ -452,6 +478,11 @@ int wmain(int argc, wchar_t **argv) {
     output = argv[3];
     timeout_ms = wcstoul(argv[4], NULL, 10);
     allow_pre_send_adjustment = wcscmp(argv[5], L"1") == 0;
+    g_cancel_path = argv[6];
+    if (cancel_requested()) {
+        return fail(66, "cancelled_before_launch", ERROR_CANCELLED,
+                    NULL, NULL, NULL);
+    }
     if (timeout_ms < 10000 || timeout_ms > 600000) {
         return fail(65, "validate_timeout", ERROR_INVALID_PARAMETER,
                     NULL, NULL, NULL);
@@ -609,10 +640,13 @@ int wmain(int argc, wchar_t **argv) {
         g_event_hook = NULL;
     }
     printf("{\"ok\":true,\"process_id\":%lu,\"bytes\":%llu,"
-           "\"elapsed_ms\":%lu,\"forced_termination\":%s}\n",
+           "\"elapsed_ms\":%lu,\"forced_termination\":%s,"
+           "\"event_verification_seen\":%s,\"pre_send_adjusted\":%s}\n",
            (unsigned long)process_info.dwProcessId,
            (unsigned long long)output_size,
            (unsigned long)(GetTickCount() - start_tick),
-           forced ? "true" : "false");
+           forced ? "true" : "false",
+           g_event_verification_seen ? "true" : "false",
+           g_pre_send_adjusted ? "true" : "false");
     return 0;
 }

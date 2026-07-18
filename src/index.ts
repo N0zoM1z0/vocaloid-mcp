@@ -1,13 +1,25 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
 import type { ResponseFormat } from "./types.js";
 import { renderAccompaniment } from "./accompaniment.js";
+import { compareSongSectionArtifacts, renderSongSectionPreview } from "./audio-review.js";
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
+import {
+  masterSongManifestDelivery,
+  renderSongManifestMaster,
+} from "./delivery.js";
+import { EditorBusyError, inspectEditorLease } from "./editor-lease.js";
 import { listGeneralMidi } from "./gm.js";
+import { importVsqxToSongManifest } from "./importer.js";
+import { diffManifestSnapshots, listManifestHistory } from "./manifest-history.js";
+import { resolveReadablePath } from "./paths.js";
+import { previewSongManifestMutation } from "./mutation-preview.js";
 import { compileVocalPhrase, type VocalPhraseInput } from "./vocal-phrase.js";
 import {
   alignJapanesePhrase,
@@ -16,20 +28,26 @@ import {
   japaneseG2P,
 } from "./japanese.js";
 import { renderProjectToWav } from "./render.js";
+import { preflightSongManifest } from "./song-preflight.js";
 import {
   applySongManifestTuningGestures,
+  applySongManifestGroove,
+  addSongManifestReviewNote,
   buildSongManifest,
   createSongManifest,
   getSongManifestSection,
   inspectSongManifest,
+  loadSongManifest,
   ManifestArrangementTrackSchema,
   ManifestChordChangeSchema,
   ManifestEffectChainSchema,
+  ManifestGrooveSchema,
   ManifestKeyChangeSchema,
   ManifestRemovalSchema,
   ManifestSectionSchema,
   ManifestSectionDynamicsSchema,
   ManifestTempoSchema,
+  ManifestTimelineUpdateSchema,
   ManifestTimeSignatureSchema,
   ManifestTransformSchema,
   ManifestTuningGestureSchema,
@@ -38,7 +56,10 @@ import {
   ManifestVocalTrackMetadataSchema,
   ManifestVoiceSchema,
   removeSongManifestObjects,
+  resolveSongManifestReviewNote,
+  restoreSongManifestSnapshot,
   transformSongManifestEvents,
+  updateSongManifestTimeline,
   upsertSongManifestArrangementTrack,
   upsertSongManifestEffectChain,
   upsertSongManifestSectionDynamic,
@@ -47,11 +68,18 @@ import {
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
 import { renderSongManifestStemMix } from "./stem-mix.js";
+import { getStylePalette, STYLE_PALETTES, stylePaletteSummaries } from "./style-palettes.js";
+import { expandTempoCurve } from "./tempo.js";
 import {
   renderSongManifestInstrumentStems,
   renderSongManifestVocalStems,
 } from "./stems.js";
 import { discoverVoices } from "./voices.js";
+import {
+  probeVoice,
+  readVoiceReadiness,
+  verifiedVoiceComponentIds,
+} from "./voice-readiness.js";
 import { analyzeSongManifestVocalStem } from "./vocal-analysis.js";
 import {
   addControlPointsToProject,
@@ -67,12 +95,163 @@ import {
   validateProject,
 } from "./vsqx.js";
 
+type McpProfile = "production" | "full" | "legacy-vsqx";
+
+const PRODUCTION_TOOL_NAMES = new Set([
+  "vocaloid_host_readiness",
+  "vocaloid_probe_voice",
+  "vocaloid_align_japanese_phrase",
+  "vocaloid_create_song_manifest",
+  "vocaloid_import_vsqx_manifest",
+  "vocaloid_edit_song",
+  "vocaloid_inspect_song_manifest",
+  "vocaloid_preflight_song",
+  "vocaloid_get_song_section",
+  "vocaloid_build_song_manifest",
+  "vocaloid_render_instrument_stems",
+  "vocaloid_render_vocal_stems",
+  "vocaloid_analyze_vocal_stem",
+  "vocaloid_render_stem_mix",
+  "vocaloid_render_manifest_master",
+  "vocaloid_master_manifest_delivery",
+  "vocaloid_review_audio",
+  "vocaloid_review_song",
+  "vocaloid_manifest_history",
+  "vocaloid_analyze_wav",
+] as const);
+
+const LEGACY_VSQX_TOOL_NAMES = new Set([
+  "vocaloid_list_voices",
+  "vocaloid_inspect_project",
+  "vocaloid_inspect_mixer",
+  "vocaloid_update_mixer",
+  "vocaloid_validate_project",
+  "vocaloid_list_notes",
+  "vocaloid_list_control_points",
+  "vocaloid_japanese_g2p",
+  "vocaloid_align_japanese_phrase",
+  "vocaloid_compile_vocal_phrase",
+  "vocaloid_create_song",
+  "vocaloid_create_project",
+  "vocaloid_update_note_expressions",
+  "vocaloid_render_wav",
+  "vocaloid_add_notes",
+  "vocaloid_add_control_points",
+] as const);
+
+function resolveMcpProfile(value = process.env.VOCALOID_MCP_PROFILE): McpProfile {
+  const profile = value?.trim() || "production";
+  if (profile === "production" || profile === "full" || profile === "legacy-vsqx") {
+    return profile;
+  }
+  throw new Error(
+    `Unsupported VOCALOID_MCP_PROFILE=${JSON.stringify(profile)}; use production, full, or legacy-vsqx`,
+  );
+}
+
+const MCP_PROFILE = resolveMcpProfile();
+
 
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix, and master native VOCALOID projects. For a new long song, use a revisioned manifest as canonical source, mutate one bounded domain at a time, inspect revision/hash before writes, and preserve globally unique stable IDs. For Japanese, convert explicit kana readings to the bundled V3 phoneme inventory, align morae to stable rhythm cells, and use repeated mora indices for melisma; never guess kanji readings, and choose small-っ timing explicitly. Apply high-level articulation, vibrato, pitch, dynamics, and timbre gestures to stable voiced event IDs. Build VSQX/backing, then render selected instrument and original-Editor vocal stems. Explicitly choose pan/center and effects/dry; artifacts must match composition_hash. Analyze isolated vocals for energy/voiced onset, consonant lead, sustained pitch, contour, release, and vibrato; limited-resolution and offset estimates are evidence, never auto-quantization. Define ordered typed effect chains and section gain automation per stable track or mix-bus. Raw stems depend on composition_hash; downstream mix decisions change mix_hash without forcing resynthesis. Stem mixing applies exact pre-measure alignment, no hidden normalization/limiting, and returns the auditable filter graph plus LUFS/LRA/true peak/clipping/stereo evidence. Named sections, tempo/meter, patterns, rapid lyrics, tuplets, melisma, tuning, routing, and whether to revise remain agent decisions. VOCALOID pan is 0=left, 64=center, 127=right. Use slugged revision filenames. The bundled GM SoundFont is draft quality.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest; use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master through manifest-aware tools. Read vocaloid://capabilities and a vocaloid://styles/* resource before a new song. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component BLRGDDR4M3WM2LC6 unless the user requests another verified voice. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
+);
+
+server.registerResource(
+  "vocaloid-style-palette-index",
+  "vocaloid://styles",
+  {
+    title: "VOCALOID Production Style Palettes",
+    description: "Compact index of agent-facing composition, IA_ROCKS performance, arrangement, groove, mix, and renderer-boundary guidance.",
+    mimeType: "application/json",
+  },
+  async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(stylePaletteSummaries(), null, 2) }],
+  }),
+);
+
+for (const palette of STYLE_PALETTES) {
+  server.registerResource(
+    `vocaloid-style-${palette.id}`,
+    palette.uri,
+    {
+      title: palette.title,
+      description: palette.description,
+      mimeType: "application/json",
+    },
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify(getStylePalette(palette.id), null, 2),
+      }],
+    }),
+  );
+}
+
+server.registerResource(
+  "hanairo-biyori-lyrics",
+  "vocaloid://lyrics/hanairo-biyori",
+  {
+    title: "花色日和 — authoritative supplied lyrics",
+    description: "User-supplied lyric authority for the wa-rock-hanairo evaluation; preserve verbatim and add readings/phonemes as separate provenance.",
+    mimeType: "text/plain; charset=utf-8",
+  },
+  async (uri) => {
+    const path = await resolveReadablePath("artifacts/evals/[Lyrics] Hanairo Biyori.txt");
+    return {
+      contents: [{ uri: uri.href, mimeType: "text/plain; charset=utf-8", text: await readFile(path, "utf8") }],
+    };
+  },
+);
+
+server.registerResource(
+  "vocaloid-capabilities",
+  "vocaloid://capabilities",
+  {
+    title: "VOCALOID MCP capability map",
+    description: "The active tool profile, production workflow, renderer boundaries, and low-friction agent usage contract.",
+    mimeType: "application/json",
+  },
+  async (uri) => ({
+    contents: [{
+      uri: uri.href,
+      mimeType: "application/json",
+      text: JSON.stringify({
+        profile: MCP_PROFILE,
+        profiles: {
+          production: "Default high-level manifest composition, validation, rendering, review, and delivery surface",
+          full: "All production, granular manifest, audio utility, and raw VSQX tools for development and regression testing",
+          "legacy-vsqx": "Low-level direct VSQX inspection and mutation for recovery or reverse-engineering",
+        },
+        canonical_workflow: [
+          "Read a style palette and authoritative lyric resource",
+          "Check host readiness and cached IA_ROCKS availability",
+          "Create or import a canonical manifest",
+          "Align explicit Japanese readings; preserve original lyric provenance",
+          "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
+          "Run vocaloid_preflight_song until the requested readiness gate passes",
+          "Build VSQX/backing and render either stems or a manifest master",
+          "Review sections or loudness-matched A/B and attach stable review notes",
+          "Master a manifest delivery and verify loudness, true peak, clipping, channels, hashes, and dependencies",
+        ],
+        agent_contract: {
+          canonical_source: "*.song.json manifest",
+          concurrency: "optimistic expected_revision plus a host-wide VOCALOID Editor render lease",
+          mutation: "one bounded domain per call; dry-run returns predicted diff and preflight",
+          provenance: "composition_hash, mix_hash, file SHA-256, dependency hashes, Editor/helper fingerprints",
+          lyrics: "original surface text, explicit kana reading, alignment, and V3 phonemes remain distinct evidence",
+        },
+        renderer_boundaries: {
+          vocal: "Original VOCALOID3 Editor with a verified IA_ROCKS voice probe",
+          accompaniment: "FluidSynth plus GeneralUser/FluidR3-style GM SoundFont is a composition draft renderer",
+          authentic_instruments: "Use external sampled/VST or recorded renderers for idiomatic shamisen, koto, shakuhachi, guitar, and orchestral articulation",
+        },
+      }, null, 2),
+    }],
+  }),
 );
 
 const ResponseFormatSchema = z
@@ -90,6 +269,411 @@ const ToolOutputSchema = z.object({
   data: z.unknown(),
   warnings: z.array(z.string()),
 });
+
+function typedToolOutputSchema<T extends z.ZodType>(data: T) {
+  return z.object({
+    ok: z.boolean(),
+    data: data.nullable(),
+    warnings: z.array(z.string()),
+  }).strict();
+}
+
+const WorkflowErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  retryable: z.boolean(),
+  suggested_action: z.string(),
+}).strict();
+
+function workflowOutputSchema<T extends z.ZodType>(data: T) {
+  // MCP output schemas must have an object root. The SDK intentionally ignores a
+  // root discriminated union, which would make typed workflow results disappear
+  // from tools/list even though runtime validation still succeeded locally.
+  return z.object({
+    ok: z.boolean(),
+    data: data.optional(),
+    error: WorkflowErrorSchema.optional(),
+    warnings: z.array(z.string()),
+  }).strict();
+}
+
+const ReadinessGateOutputSchema = z.object({
+  ready: z.boolean(),
+  blockers: z.array(z.string()),
+}).strict();
+
+const WorkflowReadinessOutputSchema = z.object({
+  score: ReadinessGateOutputSchema,
+  build: ReadinessGateOutputSchema,
+  render: ReadinessGateOutputSchema,
+  mix: ReadinessGateOutputSchema,
+  delivery: ReadinessGateOutputSchema,
+}).strict();
+
+const PreflightIssueOutputSchema = z.object({
+  code: z.string(),
+  severity: z.enum(["error", "warning", "info"]),
+  domain: z.string(),
+  message: z.string(),
+  objectIds: z.array(z.string()),
+  suggestedAction: z.string(),
+}).passthrough();
+
+const PreflightDataOutputSchema = z.object({
+  path: z.string(),
+  revision: z.number().int(),
+  compositionHash: z.string(),
+  mixHash: z.string(),
+  songEndTick: z.number().int(),
+  counts: z.object({
+    sections: z.number().int(),
+    vocalTracks: z.number().int(),
+    vocalParts: z.number().int(),
+    vocalEvents: z.number().int(),
+    arrangementTracks: z.number().int(),
+    artifacts: z.number().int(),
+    errors: z.number().int(),
+    warnings: z.number().int(),
+    infos: z.number().int(),
+  }).strict(),
+  readiness: WorkflowReadinessOutputSchema,
+  checkedArtifactIds: z.array(z.string()),
+  issues: z.array(PreflightIssueOutputSchema),
+}).strict();
+
+const ArtifactOutputSchema = z.object({
+  id: z.string(),
+  role: z.string(),
+  path: z.string(),
+  sha256: z.string(),
+  source_revision: z.number().int(),
+  source_composition_hash: z.string(),
+  dependencies: z.array(z.string()),
+}).passthrough();
+
+const ManifestWriteOutputSchema = z.object({
+  path: z.string(),
+  backupPath: z.string().optional(),
+  revision: z.number().int(),
+  compositionHash: z.string(),
+  mixHash: z.string(),
+  contentHash: z.string(),
+  parentHash: z.string().optional(),
+  bytes: z.number().int(),
+}).strict();
+
+const JapaneseAlignmentDataOutputSchema = z.object({
+  phrase: z.object({
+    id: z.string(),
+    allocation: z.enum(["sequential", "explicit"]),
+    lyrics: z.array(z.object({ id: z.string(), lyric: z.string(), phonemes: z.string() }).passthrough()),
+    cells: z.array(z.object({ id: z.string(), rest: z.boolean() }).passthrough()),
+    linguistic_source: z.object({
+      text: z.string(),
+      reading: z.string(),
+      normalized_reading: z.string(),
+    }).passthrough(),
+  }).passthrough(),
+  g2p: z.object({
+    fallback_count: z.number().int(),
+    warnings: z.array(z.string()),
+  }).passthrough(),
+  alignment: z.object({
+    lyric_units: z.number().int(),
+    voiced_slots: z.number().int(),
+    rest_slots: z.number().int(),
+    continuations: z.number().int(),
+  }).passthrough(),
+  warnings: z.array(z.string()),
+}).strict();
+
+const AudioQualityDataOutputSchema = z.object({
+  path: z.string(),
+  bytes: z.number().int(),
+  audioFormat: z.enum(["pcm", "ieee_float"]),
+  channels: z.number().int(),
+  sampleRate: z.number().int(),
+  bitsPerSample: z.number().int(),
+  durationSeconds: z.number(),
+  peakDbfs: z.number().nullable(),
+  rmsDbfs: z.number().nullable(),
+  clippedSampleValues: z.number().int(),
+  stereoBalanceDb: z.number().nullable(),
+  silent: z.boolean(),
+  integratedLufs: z.number(),
+  loudnessRangeLu: z.number(),
+  truePeakDbfs: z.number(),
+  targetLufs: z.number(),
+  targetTruePeakDbfs: z.number(),
+  loudnessDeltaLu: z.number(),
+  sampleClipping: z.boolean(),
+  truePeakExceeded: z.boolean(),
+  channelImbalance: z.boolean(),
+  recommendations: z.array(z.string()),
+}).passthrough();
+
+const ManifestSummaryDataOutputSchema = z.object({
+  path: z.string(),
+  revision: z.number().int(),
+  compositionHash: z.string(),
+  mixHash: z.string(),
+  contentHash: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  sections: z.array(z.object({ id: z.string(), kind: z.string() }).passthrough()),
+  vocalTracks: z.array(z.object({ id: z.string(), name: z.string(), voiceId: z.string() }).passthrough()),
+  arrangementTracks: z.array(z.object({ id: z.string(), kind: z.string() }).passthrough()),
+  artifacts: z.array(z.object({ id: z.string(), role: z.string(), path: z.string() }).passthrough()),
+}).passthrough();
+
+const ManifestSectionDataOutputSchema = z.object({
+  revision: z.number().int(),
+  contentHash: z.string(),
+  section: z.object({ id: z.string(), name: z.string(), kind: z.string() }).passthrough(),
+  vocalTracks: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
+  arrangementTracks: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }).passthrough()),
+}).passthrough();
+
+const ManifestBuildDataOutputSchema = z.object({
+  sourceRevision: z.number().int(),
+  manifestRevision: z.number().int(),
+  backing: z.object({ path: z.string(), channels: z.number().int(), silent: z.boolean(), sha256: z.string() }).passthrough(),
+  project: z.object({ outputPath: z.string(), sha256: z.string() }).passthrough(),
+  validation: z.object({ valid: z.boolean() }).passthrough(),
+  artifacts: z.array(ArtifactOutputSchema),
+}).passthrough();
+
+const StemRenderDataOutputSchema = z.object({
+  sourceCompositionHash: z.string(),
+  manifestRevision: z.number().int(),
+  stems: z.array(z.object({
+    trackId: z.string(),
+    path: z.string(),
+    channels: z.number().int(),
+    sha256: z.string(),
+  }).passthrough()),
+  artifacts: z.array(ArtifactOutputSchema),
+}).passthrough();
+
+const VocalAnalysisDataOutputSchema = z.object({
+  schema: z.literal("vocaloid-score-render-analysis/v1"),
+  sourceStemArtifact: z.string(),
+  vocalTrackId: z.string(),
+  summary: z.object({
+    events: z.number().int(),
+    eventsWithPitch: z.number().int(),
+  }).passthrough(),
+  outputPath: z.string(),
+  artifact: ArtifactOutputSchema,
+  manifestRevision: z.number().int(),
+}).passthrough();
+
+const StemMixDataOutputSchema = z.object({
+  sourceMixHash: z.string(),
+  manifestRevision: z.number().int(),
+  outputPath: z.string(),
+  outputSha256: z.string(),
+  inputs: z.array(z.object({ artifactId: z.string(), trackId: z.string(), sha256: z.string() }).passthrough()),
+  quality: z.object({ integratedLufs: z.number(), truePeakDbfs: z.number(), clippedSampleValues: z.number().int(), channels: z.number().int() }).passthrough(),
+  artifact: ArtifactOutputSchema,
+}).passthrough();
+
+const ManifestMasterDataOutputSchema = z.object({
+  sourceCompositionHash: z.string(),
+  manifestRevision: z.number().int(),
+  projectArtifactId: z.string(),
+  preflight: WorkflowReadinessOutputSchema,
+  render: z.object({
+    outputPath: z.string(),
+    durationSeconds: z.number(),
+    channels: z.number().int(),
+    clippedSampleValues: z.number().int(),
+    stereoBalanceDb: z.number().nullable(),
+    editorSha256: z.string(),
+    knownEditorFingerprint: z.boolean(),
+    eventVerificationSeen: z.boolean(),
+    preSendAdjusted: z.boolean(),
+  }).passthrough(),
+  artifact: ArtifactOutputSchema,
+}).strict();
+
+const ManifestDeliveryDataOutputSchema = z.object({
+  sourceCompositionHash: z.string(),
+  manifestRevision: z.number().int(),
+  sourceArtifactId: z.string(),
+  mastering: z.object({
+    outputPath: z.string(),
+    sourceClipped: z.boolean(),
+    output: z.object({
+      integratedLufs: z.number(),
+      truePeakDbfs: z.number(),
+      sampleClipping: z.boolean(),
+      channelImbalance: z.boolean(),
+      stereoBalanceDb: z.number().nullable(),
+    }).passthrough(),
+  }).passthrough(),
+  artifact: ArtifactOutputSchema,
+}).strict();
+
+const VoiceProbeRecordOutputSchema = z.object({
+  componentId: z.string(),
+  voiceName: z.string(),
+  status: z.enum(["verified", "unavailable", "error"]),
+  expiresAt: z.string(),
+  hostCacheKey: z.string(),
+  reason: z.string(),
+}).passthrough();
+
+const RenderHostOutputSchema = z.object({
+  editorSha256: z.string(),
+  editorVersion: z.string(),
+  knownEditorFingerprint: z.boolean(),
+  helperSha256: z.string(),
+  cacheKey: z.string(),
+}).passthrough();
+
+const VoiceProbeDataOutputSchema = z.object({
+  cached: z.boolean(),
+  cachePath: z.string(),
+  record: VoiceProbeRecordOutputSchema,
+  host: RenderHostOutputSchema,
+}).strict();
+
+const HostReadinessDataOutputSchema = z.object({
+  editorLease: z.object({ requestId: z.string(), ownerAlive: z.boolean() }).passthrough().nullable(),
+  verifiedComponentIds: z.array(z.string()),
+  voiceRecords: z.array(VoiceProbeRecordOutputSchema),
+  host: RenderHostOutputSchema,
+}).passthrough();
+
+const ManifestHistoryDataOutputSchema = z.object({
+  action: z.enum(["list", "diff", "restore"]),
+  currentRevision: z.number().int().optional(),
+  entries: z.array(z.object({ path: z.string(), revision: z.number().int(), contentHash: z.string() }).passthrough()).optional(),
+  totalChanges: z.number().int().optional(),
+  write: ManifestWriteOutputSchema.optional(),
+}).passthrough();
+
+const ReviewNoteOutputSchema = z.object({
+  id: z.string(),
+  author_type: z.enum(["human", "agent"]),
+  observation: z.string(),
+  section_id: z.string().optional(),
+  object_ids: z.array(z.string()),
+  artifact_ids: z.array(z.string()),
+  status: z.enum(["open", "resolved"]),
+}).passthrough();
+
+const ReviewSongDataOutputSchema = z.object({
+  action: z.enum(["list", "add", "resolve"]),
+  path: z.string(),
+  revision: z.number().int(),
+  contentHash: z.string(),
+  notes: z.array(ReviewNoteOutputSchema),
+}).strict();
+
+const MutationPreviewDataOutputSchema = z.object({
+  dryRun: z.literal(true),
+  source: z.object({ path: z.string(), revision: z.number().int(), contentHash: z.string() }).passthrough(),
+  predicted: z.object({ revision: z.number().int(), contentHash: z.string() }).passthrough(),
+  totalChanges: z.number().int(),
+  readiness: WorkflowReadinessOutputSchema,
+}).passthrough();
+
+const GrooveDeltaOutputSchema = z.object({
+  event_id: z.string(),
+  track_id: z.string(),
+  source: z.enum(["direct", "pattern"]),
+  timing_ticks: z.number().int(),
+  swing_ticks: z.number().int(),
+  random_timing_ticks: z.number().int(),
+  velocity_delta: z.number().int(),
+  gate_delta_ticks: z.number().int(),
+}).strict();
+
+const GrooveDataOutputSchema = z.union([
+  MutationPreviewDataOutputSchema,
+  z.object({
+    dryRun: z.literal(false),
+    write: z.object({ path: z.string(), revision: z.number().int(), compositionHash: z.string(), mixHash: z.string(), contentHash: z.string() }).passthrough(),
+    seed: z.string(),
+    changed: z.number().int(),
+    deltas: z.array(GrooveDeltaOutputSchema),
+  }).passthrough(),
+]);
+
+const SongTimelineDataOutputSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("expand_tempo_curve"),
+    curve: z.enum(["linear", "ease_in_out", "exponential"]),
+    startTick: z.number().int(),
+    endTick: z.number().int(),
+    durationTicks: z.number().int(),
+    steps: z.number().int(),
+    events: z.array(z.object({
+      position: z.object({ measure: z.number().int(), beat: z.number().int(), tick: z.number().int() }).strict(),
+      bpm: z.number(),
+      tick: z.number().int(),
+    }).strict()),
+  }).strict(),
+  z.object({ action: z.literal("replace"), dryRun: z.literal(true), preview: MutationPreviewDataOutputSchema }).strict(),
+  z.object({
+    action: z.literal("replace"),
+    dryRun: z.literal(false),
+    write: z.object({ path: z.string(), revision: z.number().int(), compositionHash: z.string(), mixHash: z.string(), contentHash: z.string() }).passthrough(),
+    summary: z.object({ revision: z.number().int(), contentHash: z.string() }).passthrough(),
+  }).strict(),
+]);
+
+const AudioReviewDataOutputSchema = z.object({
+  action: z.enum(["section_preview", "compare_ab"]),
+  manifestRevision: z.number().int(),
+  sectionId: z.string(),
+  outputPath: z.string().optional(),
+  artifact: ArtifactOutputSchema.optional(),
+  A: z.object({ sourceArtifactId: z.string(), outputPath: z.string(), gainDb: z.number() }).passthrough().optional(),
+  B: z.object({ sourceArtifactId: z.string(), outputPath: z.string(), gainDb: z.number() }).passthrough().optional(),
+}).passthrough();
+
+const ImportVsqxDataOutputSchema = z.object({
+  manifestPath: z.string(),
+  manifestRevision: z.number().int(),
+  compositionHash: z.string(),
+  imported: z.object({ tracks: z.number().int(), parts: z.number().int(), notes: z.number().int() }).passthrough(),
+  warnings: z.array(z.string()),
+  sourceArtifact: ArtifactOutputSchema,
+}).passthrough();
+
+const EditMutationActionSchema = z.enum([
+  "replace_timeline",
+  "upsert_section",
+  "upsert_vocal_part",
+  "upsert_vocal_phrase",
+  "apply_tuning",
+  "upsert_arrangement",
+  "apply_groove",
+  "upsert_effect_chain",
+  "upsert_section_dynamic",
+  "transform_events",
+  "remove_objects",
+]);
+
+const ChangeDomainsOutputSchema = z.record(z.string(), z.object({
+  added: z.array(z.string()),
+  removed: z.array(z.string()),
+  modified: z.array(z.string()),
+  changes: z.number().int(),
+}).strict());
+
+const EditSongDataOutputSchema = z.object({
+  kind: z.enum(["tempo_curve", "mutation_preview", "mutation_applied"]),
+  action: z.enum(["expand_tempo_curve", ...EditMutationActionSchema.options]),
+  preview: MutationPreviewDataOutputSchema.optional(),
+  write: ManifestWriteOutputSchema.optional(),
+  totalChanges: z.number().int().optional(),
+  readiness: WorkflowReadinessOutputSchema.optional(),
+  evidence: z.object({ changedCount: z.number().int(), objectIds: z.array(z.string()) }).passthrough().optional(),
+}).passthrough();
 
 const NormalizedVibratoPointSchema = z
   .object({
@@ -427,6 +1011,8 @@ const ManifestMutationPathSchema = z
     ),
     expected_revision: z.number().int().min(1).describe("Revision returned by the latest inspect/mutation"),
     overwrite: z.boolean().default(false),
+    dry_run: z.boolean().default(false)
+      .describe("Validate and return predicted music-aware diff/hashes/readiness without mutating the canonical manifest"),
     response_format: ResponseFormatSchema,
   })
   .strict();
@@ -459,6 +1045,114 @@ function errorResult(error: unknown) {
     isError: true,
     content: [{ type: "text" as const, text: `Error: ${message}` }],
     structuredContent: output,
+  };
+}
+
+function workflowResult<T>(
+  data: T,
+  responseFormat: ResponseFormat,
+  summary: string,
+  warnings: string[] = [],
+) {
+  const output = { ok: true as const, data, warnings };
+  const text = responseFormat === "json"
+    ? JSON.stringify(output, null, 2)
+    : [
+        `## ${summary}`,
+        "",
+        "```json",
+        JSON.stringify(data, null, 2),
+        "```",
+        ...(warnings.length > 0 ? ["", `Warnings: ${warnings.join("; ")}`] : []),
+      ].join("\n");
+  return {
+    content: [{ type: "text" as const, text }],
+    structuredContent: output,
+  };
+}
+
+function workflowError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  let code = "WORKFLOW_FAILED";
+  let retryable = false;
+  let suggestedAction = "Inspect the diagnostic, correct the named input or host boundary, then retry once.";
+  if (error instanceof EditorBusyError) {
+    code = error.code;
+    retryable = true;
+    suggestedAction = `Wait for request ${error.owner.requestId} to finish or cancel that request; do not launch another Editor.`;
+  } else if (error instanceof Error && error.name === "AbortError") {
+    code = "CANCELLED";
+    suggestedAction = "No retry is required; issue a new bounded request only if the render is still wanted.";
+  } else if (/stale manifest revision/iu.test(message)) {
+    code = "STALE_REVISION";
+    retryable = true;
+    suggestedAction = "Inspect the manifest again and retry using its current revision after reconciling intervening changes.";
+  } else if (/already exists/iu.test(message)) {
+    code = "OUTPUT_EXISTS";
+    suggestedAction = "Choose a new song/revision-bearing immutable output filename.";
+  } else if (/fingerprint|version\/hash mismatch/iu.test(message)) {
+    code = "UNVERIFIED_EDITOR_BUILD";
+    suggestedAction = "Verify this exact Editor build/localization before explicitly opting into unknown-build automation.";
+  } else if (/preflight/iu.test(message)) {
+    code = "PREFLIGHT_BLOCKED";
+    retryable = true;
+    suggestedAction = "Call vocaloid_preflight_song, repair every error-level issue in the named scope, then retry.";
+  } else if (/sha-256|digest|content hash|composition hash/iu.test(message)) {
+    code = "PROVENANCE_MISMATCH";
+    suggestedAction = "Do not use the changed artifact; restore it or build a new immutable artifact from the current manifest.";
+  }
+  const output = {
+    ok: false as const,
+    error: { code, message, retryable, suggested_action: suggestedAction },
+    warnings: [] as string[],
+  };
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: `Error [${code}]: ${message}\nNext: ${suggestedAction}` }],
+    structuredContent: output,
+  };
+}
+
+interface AppliedMutationShape {
+  write: {
+    path: string;
+    backupPath?: string;
+    revision: number;
+    compositionHash: string;
+    mixHash: string;
+    contentHash: string;
+    parentHash?: string;
+    bytes: number;
+  };
+}
+
+async function normalizedAppliedEdit(
+  action: z.infer<typeof EditMutationActionSchema>,
+  inputPath: string,
+  result: AppliedMutationShape,
+  evidence: {
+    changedCount: number;
+    objectIds: string[];
+    grooveDeltas?: z.infer<typeof GrooveDeltaOutputSchema>[];
+    compiledGestures?: Array<{ gesture_id: string; type: string; event_ids: string[]; curves: string[] }>;
+  },
+) {
+  const priorPath = result.write.backupPath ?? inputPath;
+  const [diff, preflight] = await Promise.all([
+    diffManifestSnapshots(priorPath, result.write.path),
+    preflightSongManifest(result.write.path, {
+      artifactCheck: "none",
+      includePerformanceWarnings: true,
+    }),
+  ]);
+  return {
+    kind: "mutation_applied" as const,
+    action,
+    write: result.write,
+    changes: diff.domains,
+    totalChanges: diff.totalChanges,
+    readiness: preflight.readiness,
+    evidence,
   };
 }
 
@@ -669,6 +1363,114 @@ Returns voice name, 16-character component ID, voice format version, source path
       );
     } catch (error) {
       return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_host_readiness",
+  {
+    title: "Inspect VOCALOID Host Readiness",
+    description: `Read the exact Editor/helper fingerprint, current host-wide render lease, and non-expired voice-probe cache without launching VOCALOID.
+
+Use this at the beginning of an agent session. A VVD file only proves metadata presence; verifiedComponentIds contains the voices that this exact Editor/helper pair has rendered successfully within the cache lifetime.`,
+    inputSchema: z.object({
+      include_expired_voice_records: z.boolean().default(false)
+        .describe("Include expired historical records for diagnosis; they never count as verified"),
+      allow_unknown_editor: z.boolean().default(false)
+        .describe("Allow fingerprint inspection of an unknown build; this does not authorize a render"),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(HostReadinessDataOutputSchema),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const [readiness, editorLease] = await Promise.all([
+        readVoiceReadiness(params.allow_unknown_editor, params.include_expired_voice_records),
+        inspectEditorLease(),
+      ]);
+      return workflowResult(
+        {
+          editorLease,
+          voiceCachePath: readiness.path,
+          verifiedComponentIds: readiness.verifiedComponentIds,
+          voiceRecords: readiness.records,
+          host: readiness.host,
+        },
+        params.response_format,
+        `${readiness.verifiedComponentIds.length} voice(s) verified for Editor ${readiness.host.editorVersion}`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_probe_voice",
+  {
+    title: "Probe Voice in Original Editor",
+    description: `Explicitly verify one local voice through a generated, bounded, locked-phoneme \"ら\" render in the original VOCALOID3 Editor.
+
+The generated VSQX/WAV are temporary and no song manifest is mutated. Results are cached by component ID plus Editor/helper hash with expiry. Cached reads do not launch the Editor; force=true repeats the bounded probe. A completed unavailable/error probe is returned as typed evidence rather than silently substituting a singer.`,
+    inputSchema: z.object({
+      component_id: z.string().length(16).describe("Exact 16-character VVD component ID"),
+      force: z.boolean().default(false).describe("Ignore a non-expired matching cache entry"),
+      timeout_seconds: z.number().int().min(30).max(180).default(120),
+      allow_unknown_editor: z.boolean().default(false)
+        .describe("Explicit opt-in for a manually verified but not yet allow-listed Editor fingerprint"),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(VoiceProbeDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params, extra) => {
+    try {
+      const progressToken = extra._meta?.progressToken;
+      const result = await probeVoice({
+        componentId: params.component_id,
+        force: params.force,
+        timeoutSeconds: params.timeout_seconds,
+        allowUnknownEditor: params.allow_unknown_editor,
+        runtime: {
+          requestId: String(extra.requestId),
+          signal: extra.signal,
+          allowUnknownEditor: params.allow_unknown_editor,
+          ...(progressToken !== undefined
+            ? {
+                progress: async (update) => extra.sendNotification({
+                  method: "notifications/progress",
+                  params: {
+                    progressToken,
+                    progress: update.progress,
+                    total: update.total,
+                    message: `${update.stage}: ${update.message}`,
+                  },
+                }),
+              }
+            : {}),
+        },
+      });
+      const warnings = result.record.status === "verified" ? [] : [result.record.reason];
+      return workflowResult(
+        result,
+        params.response_format,
+        `${result.record.voiceName} availability is ${result.record.status}${result.cached ? " (cached)" : ""}`,
+        warnings,
+      );
+    } catch (error) {
+      return workflowError(error);
     }
   },
 );
@@ -1173,7 +1975,7 @@ server.registerTool(
 
 Sequential mode requires one voiced slot per mora and supports dense 1/16–1/64 lyrics. Explicit mode assigns mora_index per voiced slot; consecutive repeated indices compile to native '-' melisma continuations, so lyric and note counts need not be one-to-one. Rests never consume lyrics. Kanji requires explicit kana reading. If small っ occurs, the agent must explicitly choose a timed rest or the documented experimental repeated-next-consonant strategy. The phrase retains original text, normalized reading, and pronunciation decisions as linguistic_source while native note lyrics use kana. This is a read-only compiler: include the first phrase when creating a vocal part, then use vocaloid_upsert_manifest_vocal_phrase for later lines.`,
     inputSchema: JapanesePhraseAlignmentInputSchema.extend({ response_format: ResponseFormatSchema }).strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(JapaneseAlignmentDataOutputSchema),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -1554,7 +2356,7 @@ Combines sample-domain RIFF analysis with FFmpeg EBU R128 measurement: integrate
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(AudioQualityDataOutputSchema),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -1787,6 +2589,300 @@ DYN shapes loudness; BRE breathiness; BRI brightness; CLE clarity; GEN formant/g
 );
 
 server.registerTool(
+  "vocaloid_import_vsqx_manifest",
+  {
+    title: "Import VSQX into Canonical Manifest",
+    description: `Convert an existing V3/V4 VSQX vocal score into a new stable-ID canonical manifest without treating its backing as a finished arrangement.
+
+Tempo/meter, voices, parts, notes, locked phonemes, note expression, vibrato, and supported control curves are reconstructed at canonical 480 PPQ. Per-part singer changes become separate canonical tracks; native WAV parts and unsupported curves are returned as explicit warnings. The original file is hash-recorded as an analysis/source artifact, never mislabeled as a current derived VSQX.`,
+    inputSchema: z.object({
+      source_path: PathSchema,
+      output_manifest_path: PathSchema.describe("New .song.json path"),
+      song_id: ManifestIdSchema,
+      slug: ManifestIdSchema,
+      title: z.string().min(1).max(256).optional(),
+      sample_rate: z.union([z.literal(44_100), z.literal(48_000), z.literal(96_000)]).default(44_100),
+      accompaniment_gain: z.number().gt(0).max(10).default(0.2),
+      overwrite: z.boolean().default(false),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(ImportVsqxDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await importVsqxToSongManifest({
+        sourcePath: params.source_path,
+        outputManifestPath: params.output_manifest_path,
+        songId: params.song_id,
+        slug: params.slug,
+        ...(params.title !== undefined ? { title: params.title } : {}),
+        overwrite: params.overwrite,
+        sampleRate: params.sample_rate,
+        accompanimentGain: params.accompaniment_gain,
+      });
+      return workflowResult(
+        result,
+        params.response_format,
+        `Imported ${result.imported.notes} notes across ${result.imported.parts} part(s)`,
+        result.warnings,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_edit_song",
+  {
+    title: "Edit Canonical Song",
+    description: `Single high-level mutation router for timeline, section, vocal, tuning, arrangement, seeded groove, mix intent, transform, and removal edits.
+
+Every write uses optimistic revision control and stable IDs. Set dry_run=true on any mutation to receive the predicted content/composition/mix hashes, music-aware object diff, full preflight, and zero canonical mutation. expand_tempo_curve is a pure deterministic helper. This compact production tool replaces nine granular routing decisions; the full profile retains the individual tools for diagnostics.`,
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("expand_tempo_curve"),
+        time_signatures: z.array(ManifestTimeSignatureSchema).min(1).max(256),
+        start: MusicalPositionSchema,
+        end: MusicalPositionSchema,
+        start_bpm: z.number().min(20).max(400),
+        end_bpm: z.number().min(20).max(400),
+        steps: z.number().int().min(2).max(256).default(8),
+        curve: z.enum(["linear", "ease_in_out", "exponential"]).default("ease_in_out"),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("replace_timeline"), update: ManifestTimelineUpdateSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("upsert_section"), section: ManifestSectionSchema }).strict(),
+      ManifestMutationPathSchema.extend({
+        action: z.literal("upsert_vocal_part"),
+        voice: ManifestVoiceSchema,
+        track: ManifestVocalTrackMetadataSchema,
+        part: ManifestVocalPartSchema,
+      }).strict(),
+      ManifestMutationPathSchema.extend({
+        action: z.literal("upsert_vocal_phrase"),
+        vocal_track_id: ManifestIdSchema,
+        vocal_part_id: ManifestIdSchema,
+        phrase: ManifestVocalPhraseSchema,
+      }).strict(),
+      ManifestMutationPathSchema.extend({
+        action: z.literal("apply_tuning"),
+        vocal_track_id: ManifestIdSchema,
+        vocal_part_id: ManifestIdSchema,
+        gestures: z.array(ManifestTuningGestureSchema).min(1).max(256),
+      }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("upsert_arrangement"), track: ManifestArrangementTrackSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("apply_groove"), groove: ManifestGrooveSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("upsert_effect_chain"), effect_chain: ManifestEffectChainSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("upsert_section_dynamic"), section_dynamic: ManifestSectionDynamicsSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("transform_events"), transform: ManifestTransformSchema }).strict(),
+      ManifestMutationPathSchema.extend({ action: z.literal("remove_objects"), removal: ManifestRemovalSchema }).strict(),
+    ]),
+    outputSchema: workflowOutputSchema(EditSongDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.action === "expand_tempo_curve") {
+        const result = expandTempoCurve({
+          timeSignatures: params.time_signatures,
+          start: params.start,
+          end: params.end,
+          startBpm: params.start_bpm,
+          endBpm: params.end_bpm,
+          steps: params.steps,
+          curve: params.curve,
+        });
+        return workflowResult(
+          { kind: "tempo_curve" as const, action: "expand_tempo_curve" as const, ...result },
+          params.response_format,
+          `Expanded ${params.curve} tempo curve into ${result.events.length} event(s)`,
+        );
+      }
+      const preview = async (mutator: (path: string) => Promise<unknown>) => {
+        const result = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          mutator,
+        );
+        return workflowResult(
+          { kind: "mutation_preview" as const, action: params.action, preview: result },
+          params.response_format,
+          `Dry-run ${params.action} preview: ${result.totalChanges} stable-object change(s)`,
+        );
+      };
+      if (params.action === "replace_timeline") {
+        if (params.dry_run) return preview((path) => updateSongManifestTimeline(path, path, params.expected_revision, params.update, true));
+        const result = await updateSongManifestTimeline(params.input_path, params.output_path, params.expected_revision, params.update, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: Object.keys(params.update).length, objectIds: Object.keys(params.update) });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_section") {
+        if (params.dry_run) return preview((path) => upsertSongManifestSection(path, path, params.expected_revision, params.section, true));
+        const result = await upsertSongManifestSection(params.input_path, params.output_path, params.expected_revision, params.section, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: 1, objectIds: [params.section.id] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_vocal_part") {
+        if (params.dry_run) return preview((path) => upsertSongManifestVocalPart(path, path, params.expected_revision, params.voice, params.track, params.part, true));
+        const result = await upsertSongManifestVocalPart(params.input_path, params.output_path, params.expected_revision, params.voice, params.track, params.part, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: 1, objectIds: [params.voice.id, params.track.id, params.part.id] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_vocal_phrase") {
+        if (params.dry_run) return preview((path) => upsertSongManifestVocalPhrase(path, path, params.expected_revision, params.vocal_track_id, params.vocal_part_id, params.phrase, true));
+        const result = await upsertSongManifestVocalPhrase(params.input_path, params.output_path, params.expected_revision, params.vocal_track_id, params.vocal_part_id, params.phrase, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: 1, objectIds: [params.phrase.id] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "apply_tuning") {
+        if (params.dry_run) return preview((path) => applySongManifestTuningGestures(path, path, params.expected_revision, params.vocal_track_id, params.vocal_part_id, params.gestures, true));
+        const result = await applySongManifestTuningGestures(params.input_path, params.output_path, params.expected_revision, params.vocal_track_id, params.vocal_part_id, params.gestures, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, {
+          changedCount: result.applied.affected_event_references,
+          objectIds: params.gestures.flatMap((gesture) => [gesture.id, ...gesture.event_ids]),
+          compiledGestures: result.applied.compiled,
+        });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_arrangement") {
+        if (params.dry_run) return preview((path) => upsertSongManifestArrangementTrack(path, path, params.expected_revision, params.track, true));
+        const result = await upsertSongManifestArrangementTrack(params.input_path, params.output_path, params.expected_revision, params.track, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: 1, objectIds: [params.track.id] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "apply_groove") {
+        if (params.dry_run) return preview((path) => applySongManifestGroove(path, path, params.expected_revision, params.groove, true));
+        const result = await applySongManifestGroove(params.input_path, params.output_path, params.expected_revision, params.groove, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, {
+          changedCount: result.changed,
+          objectIds: result.deltas.map((entry) => entry.event_id),
+          grooveDeltas: result.deltas,
+        });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_effect_chain") {
+        if (params.dry_run) return preview((path) => upsertSongManifestEffectChain(path, path, params.expected_revision, params.effect_chain, true));
+        const result = await upsertSongManifestEffectChain(params.input_path, params.output_path, params.expected_revision, params.effect_chain, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: params.effect_chain.effects.length, objectIds: [params.effect_chain.id, ...params.effect_chain.effects.map((effect) => effect.id)] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_section_dynamic") {
+        if (params.dry_run) return preview((path) => upsertSongManifestSectionDynamic(path, path, params.expected_revision, params.section_dynamic, true));
+        const result = await upsertSongManifestSectionDynamic(params.input_path, params.output_path, params.expected_revision, params.section_dynamic, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: 1, objectIds: [params.section_dynamic.id] });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "transform_events") {
+        if (params.dry_run) return preview((path) => transformSongManifestEvents(path, path, params.expected_revision, params.transform, true));
+        const result = await transformSongManifestEvents(params.input_path, params.output_path, params.expected_revision, params.transform, params.overwrite);
+        const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: result.changed, objectIds: params.transform.event_ids });
+        return workflowResult(data, params.response_format, `Applied ${params.action} to ${result.changed} event(s)`);
+      }
+      if (params.dry_run) return preview((path) => removeSongManifestObjects(path, path, params.expected_revision, params.removal, true));
+      const result = await removeSongManifestObjects(params.input_path, params.output_path, params.expected_revision, params.removal, params.overwrite);
+      const data = await normalizedAppliedEdit(params.action, params.input_path, result, { changedCount: result.removed, objectIds: params.removal.object_ids });
+      return workflowResult(data, params.response_format, `Applied ${params.action} to ${result.removed} object(s)`);
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_song_timeline",
+  {
+    title: "Plan or Replace Song Timeline",
+    description: `Expand an explicit accelerando/ritardando curve into ordered tempo events, or atomically replace selected timeline/structure/harmony domains in a canonical manifest.
+
+Tempo curves are deterministic calculations, not random rubato. Replacement revalidates every existing part, pattern, section reference, and position against the proposed meter/timeline; dry_run returns predicted hashes, music-aware diff, and preflight without changing the song.`,
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("expand_tempo_curve"),
+        time_signatures: z.array(ManifestTimeSignatureSchema).min(1).max(256),
+        start: MusicalPositionSchema,
+        end: MusicalPositionSchema,
+        start_bpm: z.number().min(20).max(400),
+        end_bpm: z.number().min(20).max(400),
+        steps: z.number().int().min(2).max(256).default(8),
+        curve: z.enum(["linear", "ease_in_out", "exponential"]).default("ease_in_out"),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      ManifestMutationPathSchema.extend({
+        action: z.literal("replace"),
+        update: ManifestTimelineUpdateSchema,
+      }).strict(),
+    ]),
+    outputSchema: workflowOutputSchema(SongTimelineDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.action === "expand_tempo_curve") {
+        const result = expandTempoCurve({
+          timeSignatures: params.time_signatures,
+          start: params.start,
+          end: params.end,
+          startBpm: params.start_bpm,
+          endBpm: params.end_bpm,
+          steps: params.steps,
+          curve: params.curve,
+        });
+        return workflowResult(
+          { action: "expand_tempo_curve" as const, ...result },
+          params.response_format,
+          `Expanded ${params.curve} tempo curve into ${result.events.length} event(s)`,
+        );
+      }
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => updateSongManifestTimeline(
+            path, path, params.expected_revision, params.update, true,
+          ),
+        );
+        return workflowResult(
+          { action: "replace" as const, dryRun: true as const, preview },
+          params.response_format,
+          "Dry-run timeline replacement preview",
+        );
+      }
+      const result = await updateSongManifestTimeline(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.update,
+        params.overwrite,
+      );
+      return workflowResult(
+        { action: "replace" as const, dryRun: false as const, ...result },
+        params.response_format,
+        `Replaced song timeline domain(s) at revision ${result.write.revision}`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_create_song_manifest",
   {
     title: "Create Canonical Song Manifest",
@@ -1818,7 +2914,7 @@ The manifest retains semantic sections, timeline, harmony, stable IDs, vocal sou
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(ManifestWriteOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -1862,7 +2958,7 @@ server.registerTool(
 
 Returns the current revision/hash, stable section IDs, vocal/arrangement inventory, and artifact provenance. Always inspect immediately before a mutation and pass its revision as expected_revision.`,
     inputSchema: z.object({ path: PathSchema, response_format: ResponseFormatSchema }).strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(ManifestSummaryDataOutputSchema),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -1881,6 +2977,437 @@ Returns the current revision/hash, stable section IDs, vocal/arrangement invento
 );
 
 server.registerTool(
+  "vocaloid_preflight_song",
+  {
+    title: "Preflight Complete Song Workflow",
+    description: `Read one canonical manifest and aggregate structural, vocal, phoneme, performance, harmony, arrangement, mix, artifact, and optional cached-host issues in one call.
+
+No Editor process is launched and nothing is mutated. Every issue has a stable code, severity, affected stable IDs, musical position when applicable, and a bounded suggested repair. Separate readiness gates tell the agent whether score, build, Editor render, stem mix, and final delivery are presently closed.`,
+    inputSchema: z.object({
+      manifest_path: PathSchema.describe("Canonical .song.json to lint"),
+      artifact_check: z.enum(["none", "current", "all"]).default("current")
+        .describe("none skips files; current hashes only current-composition artifacts; all also audits history"),
+      include_performance_warnings: z.boolean().default(true)
+        .describe("Include non-mutating range, rapid-event, and breath-run guidance"),
+      check_voice_cache: z.boolean().default(true)
+        .describe("Require non-expired voice verification for this exact Editor/helper fingerprint without launching Editor"),
+      allow_unknown_editor: z.boolean().default(false)
+        .describe("Allow reading a cache tied to an unknown but manually verified Editor build"),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(PreflightDataOutputSchema),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const verified = params.check_voice_cache
+        ? await verifiedVoiceComponentIds(params.allow_unknown_editor)
+        : undefined;
+      const result = await preflightSongManifest(params.manifest_path, {
+        artifactCheck: params.artifact_check,
+        includePerformanceWarnings: params.include_performance_warnings,
+        ...(verified ? { verifiedVoiceComponentIds: verified } : {}),
+      });
+      return workflowResult(
+        result,
+        params.response_format,
+        `Preflight found ${result.counts.errors} error(s) and ${result.counts.warnings} warning(s)`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_render_manifest_master",
+  {
+    title: "Render and Record Manifest Master",
+    description: `Render one current, hash-verified VSQX artifact through the original Editor, independently analyze the WAV, and atomically record a role=master artifact in the canonical manifest.
+
+The operation enforces optimistic revision control, core preflight, the host-wide Editor lease, client cancellation, executable fingerprinting, explicit Pre-Send policy, non-silence, immutable output naming, and provenance. Permission to adjust Pre-Send and whether the dialog was actually seen/accepted are recorded separately.`,
+    inputSchema: z.object({
+      manifest_path: PathSchema,
+      expected_revision: z.number().int().min(1).describe("Latest inspected manifest revision"),
+      project_artifact_id: ManifestIdSchema.describe("Current VSQX artifact returned by manifest build"),
+      output_path: PathSchema.describe("New song-title/revision-bearing .wav path"),
+      timeout_seconds: z.number().int().min(30).max(600).default(300),
+      allow_pre_send_adjustment: z.boolean().default(false),
+      allow_unknown_editor: z.boolean().default(false)
+        .describe("Explicit opt-in only after bounded manual verification of this exact Editor build"),
+      reference_lufs: z.number().min(-36).max(-5).default(-16)
+        .describe("Analysis reference only; Editor render is not normalized"),
+      reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1)
+        .describe("Analysis reference only; Editor render is not limited"),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(ManifestMasterDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params, extra) => {
+    try {
+      const progressToken = extra._meta?.progressToken;
+      const result = await renderSongManifestMaster({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        projectArtifactId: params.project_artifact_id,
+        outputPath: params.output_path,
+        timeoutSeconds: params.timeout_seconds,
+        allowPreSendAdjustment: params.allow_pre_send_adjustment,
+        referenceLufs: params.reference_lufs,
+        referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+        runtime: {
+          requestId: String(extra.requestId),
+          signal: extra.signal,
+          allowUnknownEditor: params.allow_unknown_editor,
+          ...(progressToken !== undefined
+            ? {
+                progress: async (update) => extra.sendNotification({
+                  method: "notifications/progress",
+                  params: {
+                    progressToken,
+                    progress: update.progress,
+                    total: update.total,
+                    message: `${update.stage}: ${update.message}`,
+                  },
+                }),
+              }
+            : {}),
+        },
+      });
+      const warnings = [
+        ...(result.render.clippedSampleValues > 0
+          ? [`Editor master contains ${result.render.clippedSampleValues} clipped sample values; revise before delivery`]
+          : []),
+        ...(result.render.stereoBalanceDb !== null && Math.abs(result.render.stereoBalanceDb) > 3
+          ? [`Editor master stereo balance is ${result.render.stereoBalanceDb.toFixed(2)} dB; confirm intentional panning`]
+          : []),
+      ];
+      return workflowResult(
+        result,
+        params.response_format,
+        `Recorded Editor master ${result.artifact.id} at manifest revision ${result.manifestRevision}`,
+        warnings,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_master_manifest_delivery",
+  {
+    title: "Master and Record Manifest Delivery",
+    description: `Two-pass loudness-master one current, hash-verified master/mix artifact and atomically record the checked role=delivery dependency.
+
+The server computes every hash and quality field. By default a clipped source is rejected after analysis and the uncommitted output is removed; any explicit acceptance is persisted in provenance.`,
+    inputSchema: z.object({
+      manifest_path: PathSchema,
+      expected_revision: z.number().int().min(1),
+      source_artifact_id: ManifestIdSchema.describe("Current role=master or role=mix artifact"),
+      output_path: PathSchema.describe("New song-title/revision-bearing final .wav path"),
+      target_lufs: z.number().min(-24).max(-5).default(-16),
+      target_true_peak_dbfs: z.number().min(-6).max(-0.1).default(-1),
+      target_loudness_range_lu: z.number().min(1).max(20).default(7),
+      allow_clipped_source: z.boolean().default(false)
+        .describe("Explicitly document acceptance of unrecoverable source clipping"),
+      response_format: ResponseFormatSchema,
+    }).strict(),
+    outputSchema: workflowOutputSchema(ManifestDeliveryDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await masterSongManifestDelivery({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        sourceArtifactId: params.source_artifact_id,
+        outputPath: params.output_path,
+        targetLufs: params.target_lufs,
+        targetTruePeakDbfs: params.target_true_peak_dbfs,
+        targetLoudnessRangeLu: params.target_loudness_range_lu,
+        allowClippedSource: params.allow_clipped_source,
+      });
+      const warnings = [
+        ...(result.mastering.output.channelImbalance
+          ? [`Final stereo balance is ${result.mastering.output.stereoBalanceDb?.toFixed(2)} dB; confirm it is intentional`]
+          : []),
+        ...(!result.mastering.loudnessRangeTargetMet
+          ? [`Loudness range ${result.mastering.output.loudnessRangeLu.toFixed(1)} LU differs from the requested ${params.target_loudness_range_lu.toFixed(1)} LU; loudnorm does not invent dynamics`]
+          : []),
+      ];
+      return workflowResult(
+        result,
+        params.response_format,
+        `Recorded final ${result.mastering.output.integratedLufs.toFixed(1)} LUFS delivery ${result.artifact.id}`,
+        warnings,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_manifest_history",
+  {
+    title: "List, Diff, or Restore Manifest History",
+    description: `Operate on automatic immutable .song.json backups through one bounded history workflow.
+
+list verifies every snapshot hash; diff reports music-aware added/removed/modified stable IDs by timeline, sections, harmony, vocals, arrangement, mix, artifacts, and review notes; restore creates a new monotonic revision whose parent is the current hash instead of moving revision numbers backward.`,
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("list"),
+        manifest_path: PathSchema,
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      z.object({
+        action: z.literal("diff"),
+        from_path: PathSchema.describe("Verified history path returned by action=list"),
+        to_path: PathSchema.describe("Another verified history/current path for the same song"),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      z.object({
+        action: z.literal("restore"),
+        manifest_path: PathSchema.describe("Current canonical manifest"),
+        snapshot_path: PathSchema.describe("Historical snapshot path returned by action=list"),
+        expected_revision: z.number().int().min(1),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+    ]),
+    outputSchema: workflowOutputSchema(ManifestHistoryDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.action === "list") {
+        const result = await listManifestHistory(params.manifest_path);
+        return workflowResult(
+          { action: "list" as const, ...result },
+          params.response_format,
+          `Found ${result.entries.length} verified manifest snapshot(s)`,
+          result.invalid.map((entry) => `Invalid history entry ${entry.path}: ${entry.error}`),
+        );
+      }
+      if (params.action === "diff") {
+        const result = await diffManifestSnapshots(params.from_path, params.to_path);
+        return workflowResult(
+          { action: "diff" as const, ...result },
+          params.response_format,
+          `Manifest revisions differ by ${result.totalChanges} stable-object change(s)`,
+        );
+      }
+      const result = await restoreSongManifestSnapshot(
+        params.manifest_path,
+        params.snapshot_path,
+        params.expected_revision,
+      );
+      return workflowResult(
+        { action: "restore" as const, ...result },
+        params.response_format,
+        `Restored revision ${result.restoredFrom.revision} as new revision ${result.write.revision}`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_review_audio",
+  {
+    title: "Render Section Preview or Loudness-Matched A/B",
+    description: `Create provenance-bound listening material for one semantic section from current, hash-verified audio artifacts.
+
+section_preview trims with explicit handles and correct song_start/project_start offset. compare_ab produces two stereo WAVs matched to the same measured LUFS (defaulting to the quieter source to avoid clipping), records both dependencies, and never claims which creative version is better; bind the listening conclusion with vocaloid_review_song.`,
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("section_preview"),
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        source_artifact_id: ManifestIdSchema,
+        section_id: ManifestIdSchema,
+        output_path: PathSchema,
+        handle_before_seconds: z.number().min(0).max(15).default(1),
+        handle_after_seconds: z.number().min(0).max(15).default(2),
+        reference_lufs: z.number().min(-36).max(-5).default(-16),
+        reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      z.object({
+        action: z.literal("compare_ab"),
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        artifact_a_id: ManifestIdSchema,
+        artifact_b_id: ManifestIdSchema,
+        section_id: ManifestIdSchema,
+        output_a_path: PathSchema,
+        output_b_path: PathSchema,
+        handle_before_seconds: z.number().min(0).max(15).default(1),
+        handle_after_seconds: z.number().min(0).max(15).default(2),
+        match_lufs: z.number().min(-36).max(-8).optional()
+          .describe("Omitted matches both to the quieter measured section"),
+        reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+    ]),
+    outputSchema: workflowOutputSchema(AudioReviewDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.action === "section_preview") {
+        const result = await renderSongSectionPreview({
+          manifestPath: params.manifest_path,
+          expectedRevision: params.expected_revision,
+          sourceArtifactId: params.source_artifact_id,
+          sectionId: params.section_id,
+          outputPath: params.output_path,
+          handleBeforeSeconds: params.handle_before_seconds,
+          handleAfterSeconds: params.handle_after_seconds,
+          referenceLufs: params.reference_lufs,
+          referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+        });
+        return workflowResult(
+          { action: "section_preview" as const, ...result },
+          params.response_format,
+          `Rendered ${params.section_id} preview at ${result.quality.integratedLufs.toFixed(1)} LUFS`,
+        );
+      }
+      const result = await compareSongSectionArtifacts({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        artifactAId: params.artifact_a_id,
+        artifactBId: params.artifact_b_id,
+        sectionId: params.section_id,
+        outputAPath: params.output_a_path,
+        outputBPath: params.output_b_path,
+        handleBeforeSeconds: params.handle_before_seconds,
+        handleAfterSeconds: params.handle_after_seconds,
+        ...(params.match_lufs !== undefined ? { matchLufs: params.match_lufs } : {}),
+        referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+      });
+      return workflowResult(
+        { action: "compare_ab" as const, ...result },
+        params.response_format,
+        `Rendered loudness-matched A/B for ${params.section_id} at ${result.targetLufs.toFixed(1)} LUFS`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_review_song",
+  {
+    title: "List, Add, or Resolve Listening Notes",
+    description: `Persist qualitative listening evidence without pretending numeric audio metrics can judge emotion, diction, or arrangement taste.
+
+Notes can bind a semantic section, musical position, stable score/mix object IDs, and artifact IDs. Adding or resolving a note increments content revision but deliberately leaves composition_hash and mix_hash unchanged.`,
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("list"),
+        manifest_path: PathSchema,
+        status: z.enum(["open", "resolved", "all"]).default("open"),
+        section_id: ManifestIdSchema.optional(),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      z.object({
+        action: z.literal("add"),
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        note: z.object({
+          id: ManifestIdSchema,
+          author_type: z.enum(["human", "agent"]),
+          author_name: z.string().min(1).max(128),
+          observation: z.string().min(1).max(4000),
+          section_id: ManifestIdSchema.optional(),
+          object_ids: z.array(ManifestIdSchema).max(256).default([]),
+          artifact_ids: z.array(ManifestIdSchema).max(64).default([]),
+          position: MusicalPositionSchema.optional(),
+        }).strict(),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+      z.object({
+        action: z.literal("resolve"),
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        note_id: ManifestIdSchema,
+        resolution: z.string().min(1).max(4000),
+        response_format: ResponseFormatSchema,
+      }).strict(),
+    ]),
+    outputSchema: workflowOutputSchema(ReviewSongDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.action === "add") {
+        await addSongManifestReviewNote(params.manifest_path, params.expected_revision, params.note);
+      } else if (params.action === "resolve") {
+        await resolveSongManifestReviewNote(
+          params.manifest_path,
+          params.expected_revision,
+          params.note_id,
+          params.resolution,
+        );
+      }
+      const loaded = await loadSongManifest(params.manifest_path);
+      let notes = loaded.manifest.review_notes ?? [];
+      if (params.action === "list") {
+        if (params.status !== "all") notes = notes.filter((note) => note.status === params.status);
+        if (params.section_id) notes = notes.filter((note) => note.section_id === params.section_id);
+      }
+      return workflowResult(
+        {
+          action: params.action,
+          path: loaded.path,
+          revision: loaded.manifest.revision,
+          contentHash: loaded.manifest.content_hash,
+          notes,
+        },
+        params.response_format,
+        `${params.action === "list" ? "Listed" : params.action === "add" ? "Added" : "Resolved"} ${notes.length} review note(s)`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_get_song_section",
   {
     title: "Get One Song Section",
@@ -1894,7 +3421,7 @@ Use this bounded read before revising a verse/chorus instead of resubmitting or 
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(ManifestSectionDataOutputSchema),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -1930,6 +3457,14 @@ Unrelated IDs and creative content remain unchanged. Overlapping sections and da
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestSection(path, path, params.expected_revision, params.section, true),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for section ${params.section.id}`);
+      }
       const result = await upsertSongManifestSection(
         params.input_path,
         params.output_path,
@@ -1966,6 +3501,16 @@ Direct notes and phrase sources can express rapid syllables, rests, tuplets, mel
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestVocalPart(
+            path, path, params.expected_revision, params.voice, params.track, params.part, true,
+          ),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for vocal part ${params.part.id}`);
+      }
       const result = await upsertSongManifestVocalPart(
         params.input_path,
         params.output_path,
@@ -2004,6 +3549,17 @@ This is the bounded write companion to vocaloid_align_japanese_phrase: it preser
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestVocalPhrase(
+            path, path, params.expected_revision, params.vocal_track_id,
+            params.vocal_part_id, params.phrase, true,
+          ),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for vocal phrase ${params.phrase.id}`);
+      }
       const result = await upsertSongManifestVocalPhrase(
         params.input_path,
         params.output_path,
@@ -2042,6 +3598,17 @@ Articulation writes native accent/decay/opening/consonant velocity/bend/portamen
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => applySongManifestTuningGestures(
+            path, path, params.expected_revision, params.vocal_track_id,
+            params.vocal_part_id, params.gestures, true,
+          ),
+        );
+        return textResult(preview, params.response_format, "Dry-run tuning gesture preview");
+      }
       const result = await applySongManifestTuningGestures(
         params.input_path,
         params.output_path,
@@ -2082,6 +3649,16 @@ Use compact reusable patterns and section-tagged placements for long songs. Othe
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestArrangementTrack(
+            path, path, params.expected_revision, params.track, true,
+          ),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for arrangement track ${params.track.id}`);
+      }
       const result = await upsertSongManifestArrangementTrack(
         params.input_path,
         params.output_path,
@@ -2116,6 +3693,16 @@ target_id is a vocal/arrangement stable track ID or the reserved mix-bus. Suppor
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestEffectChain(
+            path, path, params.expected_revision, params.effect_chain, true,
+          ),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for effect chain ${params.effect_chain.id}`);
+      }
       const result = await upsertSongManifestEffectChain(
         params.input_path,
         params.output_path,
@@ -2154,6 +3741,16 @@ gain_db applies only inside the named semantic section, with an explicit ramp_ms
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => upsertSongManifestSectionDynamic(
+            path, path, params.expected_revision, params.section_dynamic, true,
+          ),
+        );
+        return textResult(preview, params.response_format, `Dry-run preview for automation ${params.section_dynamic.id}`);
+      }
       const result = await upsertSongManifestSectionDynamic(
         params.input_path,
         params.output_path,
@@ -2190,6 +3787,16 @@ Use event_ids for surgical edits. An empty event_ids list intentionally selects 
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => transformSongManifestEvents(
+            path, path, params.expected_revision, params.transform, true,
+          ),
+        );
+        return textResult(preview, params.response_format, "Dry-run event transform preview");
+      }
       const result = await transformSongManifestEvents(
         params.input_path,
         params.output_path,
@@ -2200,6 +3807,52 @@ Use event_ids for surgical edits. An empty event_ids list intentionally selects 
       return textResult(result, params.response_format, `Transformed ${result.changed} stable events`);
     } catch (error) {
       return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_apply_groove",
+  {
+    title: "Apply Seeded Arrangement Groove",
+    description: `Apply explicit swing plus deterministic timing/velocity/gate humanization to selected direct or reusable-pattern arrangement events.
+
+Every stable event gets an inspectable delta; the same seed and source revision reproduce the same composition hash. Section scope is allowed only for direct events because a reusable pattern can appear in several sections. dry_run validates the complete predicted manifest/preflight and returns a music-aware diff without touching the canonical file.`,
+    inputSchema: ManifestMutationPathSchema.extend({ groove: ManifestGrooveSchema }).strict(),
+    outputSchema: workflowOutputSchema(GrooveDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => applySongManifestGroove(
+            path, path, params.expected_revision, params.groove, true,
+          ),
+        );
+        return workflowResult(preview, params.response_format, "Dry-run groove preview");
+      }
+      const result = await applySongManifestGroove(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.groove,
+        params.overwrite,
+      );
+      return workflowResult(
+        { dryRun: false as const, ...result },
+        params.response_format,
+        `Applied seeded groove to ${result.changed} arrangement event(s)`,
+      );
+    } catch (error) {
+      return workflowError(error);
     }
   },
 );
@@ -2222,6 +3875,16 @@ The mutation is atomic. It rejects zero matches, every-section removal, dangling
   },
   async (params) => {
     try {
+      if (params.dry_run) {
+        const preview = await previewSongManifestMutation(
+          params.input_path,
+          params.expected_revision,
+          (path) => removeSongManifestObjects(
+            path, path, params.expected_revision, params.removal, true,
+          ),
+        );
+        return textResult(preview, params.response_format, "Dry-run object removal preview");
+      }
       const result = await removeSongManifestObjects(
         params.input_path,
         params.output_path,
@@ -2252,7 +3915,7 @@ Both output paths must be new and should include the song slug. On success the m
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(ManifestBuildDataOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2299,7 +3962,7 @@ The agent must explicitly decide whether each pitched stem preserves its compose
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(StemRenderDataOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2345,6 +4008,8 @@ The source must be a hash-verified VSQX artifact whose composition_hash matches 
           .describe("Optional vocal track IDs; omitted renders every vocal track"),
         center_pan: z.boolean().describe("true centers each stem; false preserves the source track pan"),
         dry: z.boolean().describe("true disables vocal send routing; false preserves source send settings"),
+        allow_pre_send_adjustment: z.boolean().default(false)
+          .describe("Explicitly allow the Editor's exact Event Verification prompt to reduce Pre-Send for every selected stem"),
         volume: z.number().int().min(-898).max(600).optional()
           .describe("Optional explicit VOCALOID mixer volume; omitted preserves each source value"),
         timeout_seconds: z.number().int().min(10).max(600).default(300)
@@ -2352,7 +4017,7 @@ The source must be a hash-verified VSQX artifact whose composition_hash matches 
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(StemRenderDataOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2369,6 +4034,7 @@ The source must be a hash-verified VSQX artifact whose composition_hash matches 
         outputDirectory: params.output_directory,
         centerPan: params.center_pan,
         dry: params.dry,
+        allowPreSendAdjustment: params.allow_pre_send_adjustment,
         ...(params.volume !== undefined ? { volume: params.volume } : {}),
         timeoutSeconds: params.timeout_seconds,
         ...(params.vocal_track_ids !== undefined ? { vocalTrackIds: params.vocal_track_ids } : {}),
@@ -2413,7 +4079,7 @@ Returns per-note F0 contours, median/p95 cents error, voiced ratio, energy and v
       .refine((value) => value.maximum_pitch_hz > value.minimum_pitch_hz, {
         message: "maximum_pitch_hz must exceed minimum_pitch_hz",
       }),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(VocalAnalysisDataOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2480,7 +4146,7 @@ Instrument stems with song_start origin receive the exact project pre-measure de
         response_format: ResponseFormatSchema,
       })
       .strict(),
-    outputSchema: ToolOutputSchema,
+    outputSchema: typedToolOutputSchema(StemMixDataOutputSchema),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2524,10 +4190,27 @@ Instrument stems with song_start origin receive the exact project pre-measure de
   },
 );
 
+function applyMcpProfile(profile: McpProfile): void {
+  if (profile === "full") return;
+  const enabledNames = profile === "production" ? PRODUCTION_TOOL_NAMES : LEGACY_VSQX_TOOL_NAMES;
+  const registry = (server as unknown as {
+    _registeredTools: Record<string, { enabled: boolean }>;
+  })._registeredTools;
+  for (const [name, tool] of Object.entries(registry)) {
+    tool.enabled = enabledNames.has(name as never);
+  }
+  const missing = [...enabledNames].filter((name) => !(name in registry));
+  if (missing.length > 0) {
+    throw new Error(`MCP profile ${profile} references unregistered tools: ${missing.join(", ")}`);
+  }
+}
+
+applyMcpProfile(MCP_PROFILE);
+
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("vocaloid-mcp-server running via stdio");
+  console.error(`vocaloid-mcp-server running via stdio (${MCP_PROFILE} profile)`);
 }
 
 main().catch((error: unknown) => {
