@@ -99,6 +99,8 @@ New A/B reviews should use digest-bound `comparison_artifacts`; legacy ID-only c
 
 `vocaloid_preflight_song` returns the shared `core/v1` theory report beside the creative-readiness report. Its score/build gates consume only registered error-level structural theory findings; missing intent, missing audition layers, and listening status remain visible but advisory at this milestone. Every edit dry-run compares before/after reports and returns introduced/resolved issue codes, changed theory metrics, changed phrase evidence, creative status, and whether a current listening decision would become stale. This comparison cannot create a new listening outcome.
 
+When bounded theory proposals are requested, any candidate whose stable targets intersect a phrase direction inherits that direction's exact purpose and listening-question ID. All A/B/C variants in the issue group must answer that same question. A pitch, voicing, duration, or breath repair may improve symbolic coherence, but it cannot redefine what IA is meant to sing out, manufacture a new emotional label, or silently sign `keep`; selection still requires a dry-run followed by listening.
+
 ## Audition discipline
 
 The first creative closure should be a 20–30 second anchor passage:

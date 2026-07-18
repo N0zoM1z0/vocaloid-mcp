@@ -28,3 +28,23 @@ test("symbolic theory analysis cannot depend on corpus or style evidence", async
     );
   }
 });
+
+test("theory proposal code cannot invoke manifest mutation or dry-run implementations", async () => {
+  const path = join(THEORY_ROOT, "proposals.ts");
+  const source = await readFile(path, "utf8");
+  for (const mutationCapability of [
+    "mutateManifest",
+    "previewSongManifestMutation",
+    "transformSongManifestEvents",
+    "upsertSongManifestVocalPart",
+    "upsertSongManifestVocalPhrase",
+    "upsertSongManifestArrangementTrack",
+    "updateSongManifestTimeline",
+  ]) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`\\b${mutationCapability}\\b`, "u"),
+      `proposal layer must describe ${mutationCapability} only through a read-only action patch`,
+    );
+  }
+});

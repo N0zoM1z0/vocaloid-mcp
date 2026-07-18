@@ -12,6 +12,11 @@ import {
   type SongManifest,
 } from "./song-manifest.js";
 import { analyzeManifestTheory } from "./theory/analyze.js";
+import {
+  proposeTheoryRepairs,
+  type TheoryProposalOptionsInput,
+  type TheoryProposalReport,
+} from "./theory/proposals.js";
 import { theoryFindingBlocks } from "./theory/rules.js";
 import type { CandidateRepair, TheoryEvidence, TheoryIssue, TheoryReport } from "./theory/types.js";
 import { musicalPositionToTick, type MusicalPosition } from "./vsqx.js";
@@ -86,6 +91,7 @@ export interface SongPreflightResult {
     delivery: ReadinessGate;
   };
   theory: TheoryReport;
+  theoryProposals?: TheoryProposalReport;
   creativeReadiness: CreativeReadinessReport;
   checkedArtifactIds: string[];
   issues: SongPreflightIssue[];
@@ -95,6 +101,7 @@ export interface SongPreflightOptions {
   artifactCheck: "none" | "current" | "all";
   includePerformanceWarnings: boolean;
   verifiedVoiceComponentIds?: ReadonlySet<string>;
+  theoryProposalOptions?: TheoryProposalOptionsInput;
 }
 
 const JAPANESE_PHONEMES = new Set<string>([
@@ -676,6 +683,9 @@ export async function preflightSongManifest(
   const issues: SongPreflightIssue[] = [];
   const songEndTick = Math.max(...manifest.sections.map((section) => tick(manifest, section.end)));
   const theory = analyzeManifestTheory(manifest);
+  const theoryProposals = options.theoryProposalOptions
+    ? proposeTheoryRepairs(manifest, options.theoryProposalOptions, theory)
+    : undefined;
   const creativeReadiness = analyzeCompositionIntent(manifest);
 
   const vocalEvents = addVocalIssues(manifest, issues, options.includePerformanceWarnings);
@@ -877,6 +887,7 @@ export async function preflightSongManifest(
       delivery: { ready: deliveryBlockers.length === 0, blockers: [...new Set(deliveryBlockers)] },
     },
     theory,
+    ...(theoryProposals ? { theoryProposals } : {}),
     creativeReadiness,
     checkedArtifactIds: checkedArtifacts.map((artifact) => artifact.id),
     issues: sorted,

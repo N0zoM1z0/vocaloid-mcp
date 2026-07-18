@@ -127,6 +127,8 @@ export const FROM_ZERO_AGENT_EXAMPLE = {
         artifact_check: "none",
         include_performance_warnings: true,
         check_voice_cache: true,
+        include_theory_proposals: true,
+        max_theory_proposals: 6,
         response_format: "json",
       },
     },

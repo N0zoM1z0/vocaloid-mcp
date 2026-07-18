@@ -61,6 +61,9 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   assert.match(JSON.stringify(audioReviewTool?.inputSchema), /compare_anchor_ab/u);
   const songReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_song");
   assert.match(JSON.stringify(songReviewTool?.inputSchema), /intent_fidelity/u);
+  const preflightTool = tools.tools.find((tool) => tool.name === "vocaloid_preflight_song");
+  assert.match(JSON.stringify(preflightTool?.inputSchema), /include_theory_proposals/u);
+  assert.match(JSON.stringify(preflightTool?.outputSchema), /vocaloid-theory-proposals\/v1/u);
 
   const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
   const capabilityEntry = capabilities.contents[0];
@@ -74,6 +77,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const theoryPolicy = await client.readResource({ uri: "vocaloid://music-theory-policy" });
   const theoryEntry = theoryPolicy.contents[0];
   assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Style evidence never suppresses/u);
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Bounded proposal contract/u);
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /must not silently replace the phrase purpose/u);
 
   const editContract = await client.readResource({ uri: "vocaloid://edit-song-contract" });
   const editContractEntry = editContract.contents[0];
@@ -92,6 +97,39 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
     JSON.stringify(invalidIntentEdit.structuredContent),
     /(?:input_path|composition_intent)/u,
   );
+
+  const proposalPreflight = await client.callTool({
+    name: "vocaloid_preflight_song",
+    arguments: {
+      manifest_path: join(ROOT, "artifacts/evals/mcp-v1-agent-eval.song.json"),
+      artifact_check: "none",
+      include_performance_warnings: true,
+      check_voice_cache: false,
+      include_theory_proposals: true,
+      max_theory_proposals: 3,
+      theory_proposal_issue_codes: ["SUSTAINED_NON_CHORD_TONE_UNRESOLVED"],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(proposalPreflight.isError, true);
+  const proposalData = proposalPreflight.structuredContent as {
+    data?: {
+      theoryProposals?: {
+        constraints?: { corpusAndStyleAccess?: string; applyRequiresDryRun?: boolean };
+        candidates?: Array<{
+          apply?: { tool?: string; requiredDryRun?: boolean };
+          predictedDelta?: { verification?: string };
+        }>;
+      };
+    };
+  };
+  assert.equal(proposalData.data?.theoryProposals?.constraints?.corpusAndStyleAccess, "forbidden");
+  assert.equal(proposalData.data?.theoryProposals?.constraints?.applyRequiresDryRun, true);
+  assert.ok((proposalData.data?.theoryProposals?.candidates?.length ?? 0) >= 1);
+  assert.ok(proposalData.data?.theoryProposals?.candidates?.every((candidate) =>
+    candidate.apply?.tool === "vocaloid_edit_song"
+    && candidate.apply.requiredDryRun === true
+    && candidate.predictedDelta?.verification === "vocaloid_edit_song_dry_run"));
 
   const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
   const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");

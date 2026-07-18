@@ -87,6 +87,7 @@ import {
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
 import { renderSongManifestStemMix } from "./stem-mix.js";
+import { TheoryProposalKindSchema } from "./theory/proposals.js";
 import {
   getStylePalette,
   IA_ROCKS_COMPONENT_ID,
@@ -179,7 +180,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first; read vocaloid://edit-song-contract before the first vocaloid_edit_song call. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first; read vocaloid://edit-song-contract before the first vocaloid_edit_song call. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
@@ -318,7 +319,9 @@ server.registerResource(
           "Establish form, meter/tempo, key/harmony/bass, lead melody, and Japanese note allocation without corpus/style input",
           "Align explicit Japanese readings; preserve original lyric provenance",
           "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
-          "Run vocaloid_preflight_song until the requested readiness gate passes",
+          "Run vocaloid_preflight_song; when repair hypotheses are useful, request 3-8 theory-only proposals and hold each group's listening question constant",
+          "Evaluate a selected proposal through vocaloid_edit_song dry_run and inspect actual theory/intent deltas before a separate write",
+          "Repeat preflight until the requested readiness gate passes",
           "Build VSQX/backing and render either stems or a manifest master",
           "Render a 20-30 second lead_solo, lead_harmony, and minimal_band anchor ladder",
           "Run one-question loudness-matched A/B and attach an explicit digest-bound keep/reject/revise review",
@@ -338,6 +341,7 @@ server.registerResource(
           provenance: "composition_hash, mix_hash, file SHA-256, dependency hashes, Editor/helper fingerprints",
           lyrics: "original surface text, explicit kana reading, alignment, and V3 phonemes remain distinct evidence",
           creative_judgement: "symbolic/audio metrics locate evidence; only an explicit listening author records keep/reject/revise",
+          proposals: "read-only revision/hash-bound A/B/C hypotheses; no corpus/profile access, no direct write, mandatory edit dry-run and listening check",
           style_boundary: "optional post-composition observation; never writes intent or supplies melody/chord continuation",
         },
         renderer_boundaries: {
@@ -463,6 +467,42 @@ const CreativePreflightSummaryOutputSchema = z.object({
   }).strict()),
 }).passthrough();
 
+const TheoryProposalSummaryOutputSchema = z.object({
+  schema: z.literal("vocaloid-theory-proposals/v1"),
+  constraints: z.object({
+    corpusAndStyleAccess: z.literal("forbidden"),
+    applyRequiresDryRun: z.literal(true),
+  }).passthrough(),
+  summary: z.object({
+    candidateCount: z.number().int(),
+    unproposedIssueCount: z.number().int(),
+  }).passthrough(),
+  candidates: z.array(z.object({
+    id: z.string(),
+    kind: TheoryProposalKindSchema,
+    sourceIssue: z.object({ code: z.string(), targetFingerprint: z.string() }).passthrough(),
+    title: z.string(),
+    predictedDelta: z.object({
+      verification: z.literal("vocaloid_edit_song_dry_run"),
+    }).passthrough(),
+    apply: z.object({
+      tool: z.literal("vocaloid_edit_song"),
+      action: z.string(),
+      requiredDryRun: z.literal(true),
+    }).passthrough(),
+    listeningCheck: z.object({
+      required: z.literal(true),
+      question: z.string(),
+      preserveQuestionAcrossGroup: z.literal(true),
+    }).passthrough(),
+  }).passthrough()),
+  unproposedIssues: z.array(z.object({
+    code: z.string(),
+    targetFingerprint: z.string(),
+    reason: z.enum(["no_bounded_edit", "filtered_kind", "candidate_budget"]),
+  }).strict()),
+}).passthrough();
+
 const PreflightDataOutputSchema = z.object({
   path: z.string(),
   revision: z.number().int(),
@@ -484,6 +524,7 @@ const PreflightDataOutputSchema = z.object({
   }).strict(),
   readiness: WorkflowReadinessOutputSchema,
   theory: TheoryPreflightSummaryOutputSchema,
+  theoryProposals: TheoryProposalSummaryOutputSchema.optional(),
   creativeReadiness: CreativePreflightSummaryOutputSchema,
   checkedArtifactIds: z.array(z.string()),
   issues: z.array(PreflightIssueOutputSchema),
@@ -3328,7 +3369,7 @@ server.registerTool(
   "vocaloid_preflight_song",
   {
     title: "Preflight Complete Song Workflow",
-    description: "Run non-mutating structural, theory, vocal, arrangement, mix, artifact, intent, and host readiness checks with stable issue codes.",
+    description: "Run non-mutating structural, theory, vocal, arrangement, mix, artifact, intent, and host readiness checks with stable issue codes. Optionally return 3–8 deterministic theory-only repair hypotheses; every apply blueprint remains revision-bound and requires vocaloid_edit_song dry_run plus listening review.",
     inputSchema: z.object({
       manifest_path: PathSchema.describe("Canonical .song.json to lint"),
       artifact_check: z.enum(["none", "current", "all"]).default("current")
@@ -3339,6 +3380,12 @@ server.registerTool(
         .describe("Require non-expired voice verification for this exact Editor/helper fingerprint without launching Editor"),
       allow_unknown_editor: z.boolean().default(false)
         .describe("Allow reading a cache tied to an unknown but manually verified Editor build"),
+      include_theory_proposals: z.boolean().default(false)
+        .describe("Return bounded read-only repair hypotheses; never consults corpus/style data and never mutates"),
+      max_theory_proposals: z.number().int().min(3).max(8).default(6),
+      theory_proposal_kinds: z.array(TheoryProposalKindSchema).max(5).default([]),
+      theory_proposal_issue_codes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,95}$/u)).max(64).default([]),
+      theory_proposal_object_ids: z.array(ManifestIdSchema).max(256).default([]),
       response_format: ResponseFormatSchema,
     }).strict(),
     outputSchema: workflowOutputSchema(PreflightDataOutputSchema),
@@ -3358,11 +3405,19 @@ server.registerTool(
         artifactCheck: params.artifact_check,
         includePerformanceWarnings: params.include_performance_warnings,
         ...(verified ? { verifiedVoiceComponentIds: verified } : {}),
+        ...(params.include_theory_proposals ? {
+          theoryProposalOptions: {
+            maxCandidates: params.max_theory_proposals,
+            kinds: params.theory_proposal_kinds,
+            issueCodes: params.theory_proposal_issue_codes,
+            objectIds: params.theory_proposal_object_ids,
+          },
+        } : {}),
       });
       return workflowResult(
         result,
         params.response_format,
-        `Preflight found ${result.counts.errors} error(s) and ${result.counts.warnings} warning(s)`,
+        `Preflight found ${result.counts.errors} error(s), ${result.counts.warnings} warning(s), and ${result.theoryProposals?.summary.candidateCount ?? 0} bounded proposal(s)`,
       );
     } catch (error) {
       return workflowError(error);
