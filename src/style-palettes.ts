@@ -6,12 +6,14 @@ export interface StylePaletteSummary {
   tags: string[];
 }
 
+export const IA_ROCKS_COMPONENT_ID = "BDREB7P2KTWKYDC5" as const;
+
 export interface StylePalette extends StylePaletteSummary {
   status: "production-guidance";
   rendererBoundary: string;
   voice: {
     preferredName: "IA_ROCKS";
-    componentId: "BDREB7P2KTWKYDC5";
+    componentId: typeof IA_ROCKS_COMPONENT_ID;
     rangeGuidance: string;
     performance: string[];
   };
@@ -35,7 +37,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
     rendererBoundary: boundary,
     voice: {
       preferredName: "IA_ROCKS",
-      componentId: "BDREB7P2KTWKYDC5",
+      componentId: IA_ROCKS_COMPONENT_ID,
       rangeGuidance: "中心は G3–D5、chorus peak は E5–G5 を短く使い、尺八と同じ octave を長時間占有しない。",
       performance: [
         "Aメロは opening 58–78、chorus は 82–108 の弧を event IDs に明示する。",
@@ -88,7 +90,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
     rendererBoundary: boundary,
     voice: {
       preferredName: "IA_ROCKS",
-      componentId: "BDREB7P2KTWKYDC5",
+      componentId: IA_ROCKS_COMPONENT_ID,
       rangeGuidance: "Verse A3–C5, chorus B3–F#5, only isolated peaks above F#5.",
       performance: [
         "Consonant velocity 68–92 for rapid lines; do not increase every syllable equally.",
@@ -127,7 +129,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
     rendererBoundary: boundary,
     voice: {
       preferredName: "IA_ROCKS",
-      componentId: "BDREB7P2KTWKYDC5",
+      componentId: IA_ROCKS_COMPONENT_ID,
       rangeGuidance: "A3–E5, mostly stepwise; use breathy low dynamics and let one or two chorus tones bloom.",
       performance: [
         "Opening 45–72 and BRE 15–38 are color choices, not a blanket preset; compare section previews.",
@@ -167,7 +169,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
     rendererBoundary: boundary,
     voice: {
       preferredName: "IA_ROCKS",
-      componentId: "BDREB7P2KTWKYDC5",
+      componentId: IA_ROCKS_COMPONENT_ID,
       rangeGuidance: "G3–E5 with infrequent climactic F5; avoid staying at the ceiling.",
       performance: ["Prioritize phrase timing and consonant clarity because the arrangement is exposed.", "Use DYN/opening arcs across semantic lines and vibrato only on earned endpoints."],
     },
@@ -186,7 +188,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
     rendererBoundary: boundary,
     voice: {
       preferredName: "IA_ROCKS",
-      componentId: "BDREB7P2KTWKYDC5",
+      componentId: IA_ROCKS_COMPONENT_ID,
       rangeGuidance: "B3–F#5; rapid notes should cluster near the middle of the range.",
       performance: ["Use explicit 1/16–1/32 cells and repeated mora indices for controlled melisma.", "Alternate dense bars with held vowel/rest bars so intelligibility has contrast."],
     },

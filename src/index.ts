@@ -68,7 +68,12 @@ import {
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
 import { renderSongManifestStemMix } from "./stem-mix.js";
-import { getStylePalette, STYLE_PALETTES, stylePaletteSummaries } from "./style-palettes.js";
+import {
+  getStylePalette,
+  IA_ROCKS_COMPONENT_ID,
+  STYLE_PALETTES,
+  stylePaletteSummaries,
+} from "./style-palettes.js";
 import { expandTempoCurve } from "./tempo.js";
 import {
   renderSongManifestInstrumentStems,
@@ -155,7 +160,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest; use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master through manifest-aware tools. Read vocaloid://capabilities and a vocaloid://styles/* resource before a new song. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component BLRGDDR4M3WM2LC6 unless the user requests another verified voice. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest; use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master through manifest-aware tools. Read vocaloid://capabilities and a vocaloid://styles/* resource before a new song. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
