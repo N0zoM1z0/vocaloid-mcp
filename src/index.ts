@@ -11,6 +11,7 @@ import {
   addControlPointsToProject,
   addNotesToProject,
   createProject,
+  createSong,
   inspectProject,
   listControlPoints,
   listNotes,
@@ -20,9 +21,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.1.0" },
+  { name: "vocaloid-mcp-server", version: "0.2.0" },
   {
-    instructions: `Use this server to compose and iteratively tune native VOCALOID projects. Start with vocaloid_list_voices. For an original song, design the form, melody, rhythm, lyrics, raw voice-appropriate phonemes, note expressions, selective vibrato, and sparse musical control curves, then call vocaloid_create_project; it creates a VSQX from nothing and does not require a source project. All note/control ticks are relative to a musical part; returned partStart is the absolute project tick. Validate and inspect before vocaloid_render_wav. After analyzing or listening to the rendered vocal, use vocaloid_update_note_expressions and replace-range control edits for local revisions. Prefer new output paths; explicit overwrites create backups. A rendered vocal WAV is not by itself a complete song with accompaniment, mixing, and mastering, so report that remaining boundary accurately.`,
+    instructions: `Use this server to compose and iteratively tune native VOCALOID projects. Start with vocaloid_list_voices. For a long-form original song, design the form, tempo/meter map, lead, doubles, harmony, lyrics, voice-appropriate phonemes, note expressions, selective vibrato, sparse musical control curves, and optional real WAV accompaniment, then call vocaloid_create_song. It creates a multi-track/multi-part VSQX from nothing using zero-based measure/beat/tick positions. Use vocaloid_create_project only for a simple single-part draft; its note/control ticks are relative to that part. Validate and inspect before vocaloid_render_wav. After analyzing or listening to the Master render, use note-expression and replace-range control edits for local revisions. Prefer new output paths; explicit overwrites create backups. Native WAV parts make a complete lead/harmony/backing render possible, but this server does not yet generate instrumental stems or make perceptual mix/master decisions, so report that boundary accurately.`,
   },
 );
 
@@ -107,6 +108,89 @@ const ControlPointSchema = z
   })
   .strict();
 
+const MusicalPositionSchema = z
+  .object({
+    measure: z.number().int().min(0).max(100_000).describe("Zero-based song measure"),
+    beat: z
+      .number()
+      .int()
+      .min(0)
+      .max(31)
+      .describe("Zero-based beat in the active time signature denominator"),
+    tick: z.number().int().min(0).max(1919).default(0).describe("Tick offset within the beat"),
+  })
+  .strict();
+
+const PositionedNoteSchema = NoteSchema.omit({ tick: true })
+  .extend({
+    position: MusicalPositionSchema.describe("Absolute musical position in the song"),
+  })
+  .strict();
+
+const PositionedControlPointSchema = z
+  .object({
+    position: MusicalPositionSchema.describe("Absolute musical position in the song"),
+    value: z.number().int().describe("Curve value; range is checked for the selected curve"),
+  })
+  .strict();
+
+const SongCurveSchema = z
+  .object({
+    curve: CurveSchema,
+    points: z.array(PositionedControlPointSchema).min(1).max(10_000),
+  })
+  .strict();
+
+const SongPartSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    comment: z.string().max(256).optional(),
+    start: MusicalPositionSchema.describe("Inclusive absolute song position"),
+    end: MusicalPositionSchema.describe("Exclusive absolute song position"),
+    notes: z.array(PositionedNoteSchema).max(5000).default([]),
+    control_curves: z.array(SongCurveSchema).max(8).default([]),
+  })
+  .strict();
+
+const SongTrackSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    comment: z.string().max(256).optional(),
+    voice: z
+      .object({
+        name: z.string().min(1).max(256),
+        component_id: z.string().length(16),
+      })
+      .strict(),
+    bank_select: z.number().int().min(0).max(127).default(0),
+    program_change: z.number().int().min(0).max(127).default(0),
+    mixer: z
+      .object({
+        volume: z.number().int().min(-898).max(600).default(0),
+        pan: z.number().int().min(0).max(127).default(64),
+        mute: z.boolean().default(false),
+        solo: z.boolean().default(false),
+        send_level: z.number().int().min(-898).max(0).default(-898),
+        send_enabled: z.boolean().default(false),
+      })
+      .strict()
+      .optional(),
+    parts: z.array(SongPartSchema).min(1).max(256),
+  })
+  .strict();
+
+const SongAudioPartSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    comment: z.string().max(256).optional(),
+    kind: z
+      .enum(["mono", "stereo"])
+      .describe("Must match the WAV channel count; mono uses 1 channel and stereo uses 2"),
+    file_path: PathSchema.describe("Existing 16-bit PCM WAV accompaniment or stem"),
+    start: MusicalPositionSchema.describe("Absolute song position where audio playback begins"),
+  })
+  .strict();
+
 type ToolOutput = z.infer<typeof ToolOutputSchema>;
 
 function textResult(
@@ -159,6 +243,14 @@ function normalizeNotes(notes: z.infer<typeof NoteSchema>[]) {
         }
       : {}),
   }));
+}
+
+function normalizePositionedNotes(notes: z.infer<typeof PositionedNoteSchema>[]) {
+  return notes.map((note) => {
+    const normalized = normalizeNotes([{ ...note, tick: 0 }])[0]!;
+    const { tick: _tick, ...withoutTick } = normalized;
+    return { ...withoutTick, position: note.position };
+  });
 }
 
 const NoteExpressionSchema = z
@@ -464,6 +556,144 @@ Ticks are relative to the part. V4's single-letter curve IDs are normalized to t
         result,
         params.response_format,
         `${result.page.count} of ${result.page.total} control points`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_create_song",
+  {
+    title: "Create Structured VOCALOID Song",
+    description: `Create a complete multi-track, multi-part V3/V4 VSQX song from nothing using musical positions.
+
+Use this for long-form composition, lead/double/harmony/countermelody vocal tracks, named sections, tempo changes, meter changes, and real mono/stereo WAV backing or stems. Positions are zero-based measure/beat/tick coordinates after the count-in; the server converts them to VSQX project and part-relative ticks. Each track is monophonic and may contain many non-overlapping parts; use separate tracks for simultaneous harmony. Notes and control curves use absolute song positions, so agents can revise arrangements without manually calculating part offsets. Every track has an explicit installed voice and mixer settings. Audio headers are verified and their playTime is calculated across the tempo map. Call vocaloid_list_voices first. The project is written atomically and does not copy any source VSQX.`,
+    inputSchema: z
+      .object({
+        output_path: PathSchema,
+        format: z.enum(["vsq3", "vsq4"]).default("vsq3"),
+        sequence_name: z.string().min(1).max(256).default("Agent Song"),
+        pre_measure: z.number().int().min(0).max(127).default(1),
+        time_signatures: z
+          .array(
+            z
+              .object({
+                measure: z.number().int().min(0).max(100_000),
+                numerator: z.number().int().min(1).max(32),
+                denominator: z.union([
+                  z.literal(1),
+                  z.literal(2),
+                  z.literal(4),
+                  z.literal(8),
+                  z.literal(16),
+                  z.literal(32),
+                ]),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(256)
+          .default([{ measure: 0, numerator: 4, denominator: 4 }])
+          .describe("Strictly ordered meter changes; the first must be at measure 0"),
+        tempos: z
+          .array(
+            z
+              .object({
+                position: MusicalPositionSchema,
+                bpm: z.number().min(20).max(400),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(5000)
+          .default([{ position: { measure: 0, beat: 0, tick: 0 }, bpm: 120 }])
+          .describe("Strictly ordered tempo changes; the first must be at song position 0:0:0"),
+        tracks: z
+          .array(SongTrackSchema)
+          .min(1)
+          .max(16)
+          .describe("Independent vocal tracks; use additional tracks for doubles and harmony"),
+        audio_parts: z
+          .array(SongAudioPartSchema)
+          .max(256)
+          .default([])
+          .describe(
+            "Optional real WAV accompaniment/stems embedded as native VSQX audio parts; metadata and playTime are derived from the files",
+          ),
+        overwrite: z.boolean().default(false),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await createSong({
+        outputPath: params.output_path,
+        format: params.format,
+        sequenceName: params.sequence_name,
+        preMeasure: params.pre_measure,
+        timeSignatures: params.time_signatures,
+        tempos: params.tempos,
+        tracks: params.tracks.map((track) => ({
+          name: track.name,
+          ...(track.comment !== undefined ? { comment: track.comment } : {}),
+          voice: { name: track.voice.name, componentId: track.voice.component_id },
+          bankSelect: track.bank_select,
+          programChange: track.program_change,
+          ...(track.mixer
+            ? {
+                mixer: {
+                  volume: track.mixer.volume,
+                  pan: track.mixer.pan,
+                  mute: track.mixer.mute,
+                  solo: track.mixer.solo,
+                  sendLevel: track.mixer.send_level,
+                  sendEnabled: track.mixer.send_enabled,
+                },
+              }
+            : {}),
+          parts: track.parts.map((part) => {
+            const curveNames = new Set<string>();
+            for (const entry of part.control_curves) {
+              if (curveNames.has(entry.curve)) {
+                throw new Error(`${track.name}/${part.name} contains duplicate curve ${entry.curve}`);
+              }
+              curveNames.add(entry.curve);
+            }
+            return {
+              name: part.name,
+              ...(part.comment !== undefined ? { comment: part.comment } : {}),
+              start: part.start,
+              end: part.end,
+              notes: normalizePositionedNotes(part.notes),
+              controlCurves: Object.fromEntries(
+                part.control_curves.map((entry) => [entry.curve, entry.points]),
+              ),
+            };
+          }),
+        })),
+        audioParts: params.audio_parts.map((audio) => ({
+          name: audio.name,
+          ...(audio.comment !== undefined ? { comment: audio.comment } : {}),
+          kind: audio.kind,
+          filePath: audio.file_path,
+          start: audio.start,
+        })),
+        overwrite: params.overwrite,
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Created ${result.format} song with ${result.tracks} tracks and ${result.parts} parts`,
       );
     } catch (error) {
       return errorResult(error);

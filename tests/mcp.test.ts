@@ -30,6 +30,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_add_control_points",
       "vocaloid_add_notes",
       "vocaloid_create_project",
+      "vocaloid_create_song",
       "vocaloid_inspect_project",
       "vocaloid_list_control_points",
       "vocaloid_list_notes",
@@ -71,6 +72,40 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   });
   assert.notEqual(created.isError, true);
   assert.equal((created.structuredContent as { ok?: boolean } | undefined)?.ok, true);
+
+  const songPath = join(temporary, "mcp-structured-song.vsqx");
+  const structured = await client.callTool({
+    name: "vocaloid_create_song",
+    arguments: {
+      output_path: songPath,
+      sequence_name: "Structured MCP Smoke",
+      tracks: [
+        {
+          name: "Lead",
+          voice: { name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+          parts: [
+            {
+              name: "Verse",
+              start: { measure: 0, beat: 0 },
+              end: { measure: 4, beat: 0 },
+              notes: [
+                {
+                  position: { measure: 0, beat: 0 },
+                  duration: 480,
+                  note_number: 60,
+                  lyric: "ら",
+                  phonemes: "4 a",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(structured.isError, true);
+  assert.equal((structured.structuredContent as { ok?: boolean } | undefined)?.ok, true);
 
   const validation = await client.callTool({
     name: "vocaloid_validate_project",

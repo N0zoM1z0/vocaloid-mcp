@@ -326,3 +326,39 @@ The workflow is now exposed as `vocaloid_render_wav`. It validates the VSQX,
 renders to a temporary sibling path, parses RIFF/WAVE chunks and sample data,
 rejects silent output, then atomically renames the validated WAV. Existing
 outputs require an explicit overwrite and receive a timestamped backup.
+
+## Structured songs, harmony, and native accompaniment (2026-07-18)
+
+The single-part writer has been retained for compatibility and a separate
+`vocaloid_create_song` workflow now models long-form arrangements directly:
+
+- zero-based measure/beat/tick positions after the VSQX pre-measure count-in;
+- ordered tempo and time-signature maps;
+- up to 16 vocal tracks, each with its own singer slot and mixer unit;
+- multiple named, non-overlapping musical parts per track;
+- absolute song positions for notes and control curves, converted to each
+  part's relative ticks by the server;
+- explicit lead/double/harmony/countermelody tracks for simultaneous voices;
+- native V3 `seTrack`/`karaokeTrack` and V4 `monoTrack`/`stTrack` WAV parts.
+
+WAV parts are not accepted on metadata trust alone. The server parses the RIFF
+header and sample data, enforces the VOCALOID3 manual's 16-bit PCM plus
+44.1/48/96 kHz sample-rate and mono/stereo channel
+constraints, converts the readable WSL path to a Windows path for the Editor,
+and derives `playTime` from audio duration across the song's tempo map. Project
+inspection reports the resulting audio-part metadata and stored file path.
+
+Both V3 and V4 structured fixtures pass their Yamaha XSDs. A native V3 Editor
+integration test then combined two simultaneous IA vocal tracks (lead and a
+third/fourth harmony in a separate track) with a stereo 44.1 kHz/16-bit backing
+part. Master export completed without forced termination or residual process:
+
+- project: 2 vocal tracks, 2 musical parts, 6 notes, 4 DYN points, 1 WAV part;
+- helper runtime: 16.313 seconds;
+- output: 6.014 seconds, 44.1 kHz, 16-bit stereo, non-silent;
+- peak: -13.26 dBFS; RMS: -25.32 dBFS.
+
+This closes the structural and native-render path for harmony plus real audio
+accompaniment. It does not yet generate instrumental stems or make perceptual
+mix decisions; those require higher-level composition, listening analysis, and
+mix/master tools on top of this deterministic VSQX layer.

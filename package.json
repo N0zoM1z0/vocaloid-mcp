@@ -1,6 +1,6 @@
 {
   "name": "vocaloid-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local MCP server for inspecting and safely editing VOCALOID VSQX projects",
   "type": "module",
   "main": "dist/src/index.js",

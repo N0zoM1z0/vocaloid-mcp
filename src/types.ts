@@ -112,6 +112,18 @@ export interface PartSummary {
   singer: { bankSelect: number; programChange: number } | null;
 }
 
+export interface AudioPartSummary {
+  kind: "mono" | "stereo";
+  index: number;
+  name: string;
+  tick: number;
+  playTime: number;
+  sampleRate: number;
+  bitsPerSample: number;
+  channels: number;
+  filePath: string;
+}
+
 export interface ProjectSummary {
   path: string;
   format: VsqxFormat;
@@ -125,6 +137,7 @@ export interface ProjectSummary {
   tempos: Array<{ tick: number; bpm: number }>;
   timeSignatures: Array<{ measure: number; numerator: number; denominator: number }>;
   tracks: TrackSummary[];
+  audioParts: AudioPartSummary[];
   diagnostics: string[];
 }
 

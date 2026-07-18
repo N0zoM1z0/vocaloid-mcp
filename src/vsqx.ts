@@ -7,7 +7,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -20,6 +20,7 @@ import {
 } from "@xmldom/xmldom";
 
 import { resolveReadablePath, resolveWritablePath } from "./paths.js";
+import { analyzeWav } from "./wav.js";
 import type {
   ControlPointInfo,
   ControlPointInput,
@@ -114,6 +115,95 @@ export interface CreateProjectOptions {
   notes: NoteInput[];
   controlCurves?: Partial<Record<CurveName, ControlPointInput[]>>;
   overwrite: boolean;
+}
+
+export interface MusicalPosition {
+  /** Zero-based song measure, excluding the VSQX pre-measure count-in. */
+  measure: number;
+  /** Zero-based beat within the measure, measured in the active denominator. */
+  beat: number;
+  /** Additional ticks within the beat. */
+  tick?: number;
+}
+
+export interface SongTimeSignatureInput {
+  measure: number;
+  numerator: number;
+  denominator: number;
+}
+
+export interface SongTempoInput {
+  position: MusicalPosition;
+  bpm: number;
+}
+
+export type PositionedNoteInput = Omit<NoteInput, "tick"> & {
+  position: MusicalPosition;
+};
+
+export interface PositionedControlPointInput {
+  position: MusicalPosition;
+  value: number;
+}
+
+export interface SongPartInput {
+  name: string;
+  comment?: string;
+  start: MusicalPosition;
+  end: MusicalPosition;
+  notes: PositionedNoteInput[];
+  controlCurves?: Partial<Record<CurveName, PositionedControlPointInput[]>>;
+}
+
+export interface SongMixerInput {
+  volume?: number;
+  pan?: number;
+  mute?: boolean;
+  solo?: boolean;
+  sendLevel?: number;
+  sendEnabled?: boolean;
+}
+
+export interface SongTrackInput {
+  name: string;
+  comment?: string;
+  voice: VoiceInfo;
+  bankSelect: number;
+  programChange: number;
+  mixer?: SongMixerInput;
+  parts: SongPartInput[];
+}
+
+export interface SongAudioPartInput {
+  name: string;
+  comment?: string;
+  kind: "mono" | "stereo";
+  filePath: string;
+  start: MusicalPosition;
+}
+
+export interface CreateSongOptions {
+  outputPath: string;
+  format: VsqxFormat;
+  sequenceName: string;
+  preMeasure: number;
+  timeSignatures: SongTimeSignatureInput[];
+  tempos: SongTempoInput[];
+  tracks: SongTrackInput[];
+  audioParts?: SongAudioPartInput[];
+  overwrite: boolean;
+}
+
+interface MixerTrackInput extends SongMixerInput {
+  trackNumber: number;
+}
+
+interface ResolvedSongAudioPart extends SongAudioPartInput {
+  windowsFilePath: string;
+  sampleRate: number;
+  bitsPerSample: number;
+  channels: number;
+  playTime: number;
 }
 
 function elementChildren(parent: Node): Element[] {
@@ -422,6 +512,34 @@ function readTrackSummary(track: Element, project: LoadedProject): TrackSummary 
   };
 }
 
+function readAudioParts(project: LoadedProject): ProjectSummary["audioParts"] {
+  const format4 = project.format === "vsq4";
+  const tracks: Array<{ kind: "mono" | "stereo"; name: string }> = format4
+    ? [
+        { kind: "mono", name: "monoTrack" },
+        { kind: "stereo", name: "stTrack" },
+      ]
+    : [
+        { kind: "mono", name: "seTrack" },
+        { kind: "stereo", name: "karaokeTrack" },
+      ];
+  return tracks.flatMap(({ kind, name }) => {
+    const track = firstChild(project.root, name);
+    if (!track) return [];
+    return directChildren(track, "wavPart").map((part, index) => ({
+      kind,
+      index,
+      name: text(part, format4 ? "name" : "partName"),
+      tick: integer(part, format4 ? "t" : "posTick"),
+      playTime: integer(part, "playTime"),
+      sampleRate: integer(part, format4 ? "fs" : "sampleRate"),
+      bitsPerSample: integer(part, format4 ? "rs" : "sampleReso"),
+      channels: integer(part, format4 ? "nCh" : "channels"),
+      filePath: text(part, "filePath"),
+    }));
+  });
+}
+
 function projectDiagnostics(project: LoadedProject): string[] {
   const diagnostics: string[] = [];
   const fields = trackFields(project.format);
@@ -481,6 +599,7 @@ export async function inspectProject(inputPath: string): Promise<ProjectSummary>
       denominator: integer(signature, format4 ? "de" : "denomi"),
     })),
     tracks,
+    audioParts: readAudioParts(project),
     diagnostics: projectDiagnostics(project),
   };
 }
@@ -600,6 +719,7 @@ function appendMixer(
   namespace: string,
   root: Node,
   format: VsqxFormat,
+  tracks: readonly MixerTrackInput[] = [{ trackNumber: 0 }],
 ): void {
   const mixer = appendElement(document, namespace, root, "mixer");
   if (format === "vsq4") {
@@ -607,17 +727,19 @@ function appendMixer(
     appendElement(document, namespace, master, "oDev", 0);
     appendElement(document, namespace, master, "rLvl", 0);
     appendElement(document, namespace, master, "vol", 0);
-    const unit = appendElement(document, namespace, mixer, "vsUnit");
-    for (const [name, value] of Object.entries({
-      tNo: 0,
-      iGin: 0,
-      sLvl: -898,
-      sEnable: 0,
-      m: 0,
-      s: 0,
-      pan: 64,
-      vol: 0,
-    })) appendElement(document, namespace, unit, name, value);
+    for (const track of tracks) {
+      const unit = appendElement(document, namespace, mixer, "vsUnit");
+      for (const [name, value] of Object.entries({
+        tNo: track.trackNumber,
+        iGin: 0,
+        sLvl: track.sendLevel ?? -898,
+        sEnable: track.sendEnabled ? 1 : 0,
+        m: track.mute ? 1 : 0,
+        s: track.solo ? 1 : 0,
+        pan: track.pan ?? 64,
+        vol: track.volume ?? 0,
+      })) appendElement(document, namespace, unit, name, value);
+    }
     const mono = appendElement(document, namespace, mixer, "monoUnit");
     for (const [name, value] of Object.entries({
       iGin: 0,
@@ -637,17 +759,19 @@ function appendMixer(
     appendElement(document, namespace, master, "outDev", 0);
     appendElement(document, namespace, master, "retLevel", 0);
     appendElement(document, namespace, master, "vol", 0);
-    const unit = appendElement(document, namespace, mixer, "vsUnit");
-    for (const [name, value] of Object.entries({
-      vsTrackNo: 0,
-      inGain: 0,
-      sendLevel: -898,
-      sendEnable: 0,
-      mute: 0,
-      solo: 0,
-      pan: 64,
-      vol: 0,
-    })) appendElement(document, namespace, unit, name, value);
+    for (const track of tracks) {
+      const unit = appendElement(document, namespace, mixer, "vsUnit");
+      for (const [name, value] of Object.entries({
+        vsTrackNo: track.trackNumber,
+        inGain: 0,
+        sendLevel: track.sendLevel ?? -898,
+        sendEnable: track.sendEnabled ? 1 : 0,
+        mute: track.mute ? 1 : 0,
+        solo: track.solo ? 1 : 0,
+        pan: track.pan ?? 64,
+        vol: track.volume ?? 0,
+      })) appendElement(document, namespace, unit, name, value);
+    }
     const se = appendElement(document, namespace, mixer, "seUnit");
     for (const [name, value] of Object.entries({
       inGain: 0,
@@ -928,6 +1052,464 @@ function createDocument(options: CreateProjectOptions): LoadedProject {
   return project;
 }
 
+const SONG_RESOLUTION = 480;
+
+function measureTicks(signature: SongTimeSignatureInput): number {
+  return Math.round((SONG_RESOLUTION * 4 * signature.numerator) / signature.denominator);
+}
+
+function activeTimeSignature(
+  signatures: readonly SongTimeSignatureInput[],
+  measure: number,
+): SongTimeSignatureInput {
+  let active = signatures[0];
+  if (!active) throw new Error("timeSignatures must not be empty");
+  for (const signature of signatures) {
+    if (signature.measure > measure) break;
+    active = signature;
+  }
+  return active;
+}
+
+function measureStartTick(
+  signatures: readonly SongTimeSignatureInput[],
+  targetMeasure: number,
+): number {
+  let tick = 0;
+  for (let index = 0; index < signatures.length; index += 1) {
+    const signature = signatures[index];
+    if (!signature || signature.measure >= targetMeasure) break;
+    const nextMeasure = signatures[index + 1]?.measure ?? targetMeasure;
+    const endMeasure = Math.min(nextMeasure, targetMeasure);
+    tick += (endMeasure - signature.measure) * measureTicks(signature);
+  }
+  return tick;
+}
+
+function songPositionTick(
+  signatures: readonly SongTimeSignatureInput[],
+  position: MusicalPosition,
+  name: string,
+): number {
+  assertIntegerRange(position.measure, 0, 100_000, `${name}.measure`);
+  const signature = activeTimeSignature(signatures, position.measure);
+  assertIntegerRange(position.beat, 0, signature.numerator - 1, `${name}.beat`);
+  const ticksPerBeat = (SONG_RESOLUTION * 4) / signature.denominator;
+  assertIntegerRange(position.tick ?? 0, 0, ticksPerBeat - 1, `${name}.tick`);
+  return measureStartTick(signatures, position.measure)
+    + position.beat * ticksPerBeat
+    + (position.tick ?? 0);
+}
+
+function audioDurationTicks(
+  signatures: readonly SongTimeSignatureInput[],
+  tempos: readonly SongTempoInput[],
+  startPosition: MusicalPosition,
+  durationSeconds: number,
+): number {
+  const startTick = songPositionTick(signatures, startPosition, "audio.start");
+  const tempoEvents = tempos.map((tempo, index) => ({
+    tick: songPositionTick(signatures, tempo.position, `tempos[${index}].position`),
+    bpm: tempo.bpm,
+  }));
+  let currentTick = startTick;
+  let remaining = durationSeconds;
+  let tempoIndex = 0;
+  for (let index = 0; index < tempoEvents.length; index += 1) {
+    if (tempoEvents[index]!.tick <= startTick) tempoIndex = index;
+    else break;
+  }
+  while (remaining > 0) {
+    const active = tempoEvents[tempoIndex]!;
+    const next = tempoEvents[tempoIndex + 1];
+    if (next && next.tick > currentTick) {
+      const secondsToNext = ((next.tick - currentTick) * 60) / (SONG_RESOLUTION * active.bpm);
+      if (remaining > secondsToNext) {
+        remaining -= secondsToNext;
+        currentTick = next.tick;
+        tempoIndex += 1;
+        continue;
+      }
+    }
+    currentTick += Math.round((remaining * SONG_RESOLUTION * active.bpm) / 60);
+    remaining = 0;
+  }
+  return Math.max(1, currentTick - startTick);
+}
+
+async function windowsFilePath(path: string): Promise<string> {
+  const { stdout } = await execFileAsync("wslpath", ["-w", path], {
+    timeout: 10_000,
+    maxBuffer: 64 * 1024,
+  });
+  const converted = stdout.trim();
+  if (!converted) throw new Error(`Could not convert WAV path for Windows: ${path}`);
+  if (converted.length > 260) throw new Error(`Windows WAV path exceeds 260 characters: ${converted}`);
+  return converted;
+}
+
+async function resolveSongAudioParts(
+  options: CreateSongOptions,
+): Promise<ResolvedSongAudioPart[]> {
+  const output: ResolvedSongAudioPart[] = [];
+  for (const [index, audio] of (options.audioParts ?? []).entries()) {
+    const source = await resolveReadablePath(audio.filePath);
+    if (extname(source).toLowerCase() !== ".wav") {
+      throw new Error(`audioParts[${index}].filePath must end in .wav: ${source}`);
+    }
+    const analysis = await analyzeWav(source);
+    if (analysis.audioFormat !== "pcm") {
+      throw new Error(`audioParts[${index}] must use PCM WAV for VOCALOID3 import`);
+    }
+    if (![44_100, 48_000, 96_000].includes(analysis.sampleRate)) {
+      throw new Error(
+        `audioParts[${index}] sample rate ${analysis.sampleRate} is unsupported by VSQX; use 44100, 48000, or 96000 Hz`,
+      );
+    }
+    if (analysis.bitsPerSample !== 16) {
+      throw new Error(
+        `audioParts[${index}] resolution ${analysis.bitsPerSample} is unsupported by VOCALOID3 import; use 16-bit PCM`,
+      );
+    }
+    const expectedChannels = audio.kind === "mono" ? 1 : 2;
+    if (analysis.channels !== expectedChannels) {
+      throw new Error(
+        `audioParts[${index}] is declared ${audio.kind} but contains ${analysis.channels} channels`,
+      );
+    }
+    output.push({
+      ...audio,
+      filePath: source,
+      windowsFilePath: await windowsFilePath(source),
+      sampleRate: analysis.sampleRate,
+      bitsPerSample: analysis.bitsPerSample,
+      channels: analysis.channels,
+      playTime: audioDurationTicks(
+        options.timeSignatures,
+        options.tempos,
+        audio.start,
+        analysis.durationSeconds,
+      ),
+    });
+  }
+  return output;
+}
+
+function validateSongOptions(options: CreateSongOptions): void {
+  assertIntegerRange(options.preMeasure, 0, 127, "preMeasure");
+  if (options.sequenceName.length < 1 || options.sequenceName.length > 256) {
+    throw new Error("sequenceName must contain 1..256 characters");
+  }
+  if (options.timeSignatures.length < 1) throw new Error("timeSignatures must not be empty");
+  if (options.tempos.length < 1) throw new Error("tempos must not be empty");
+  if (options.tracks.length < 1 || options.tracks.length > 16) {
+    throw new Error(`tracks must contain 1..16 entries, got ${options.tracks.length}`);
+  }
+  if ((options.audioParts?.length ?? 0) > 256) {
+    throw new Error(`audioParts must contain at most 256 entries, got ${options.audioParts?.length}`);
+  }
+
+  let previousMeasure = -1;
+  for (const [index, signature] of options.timeSignatures.entries()) {
+    assertIntegerRange(signature.measure, 0, 100_000, `timeSignatures[${index}].measure`);
+    assertIntegerRange(signature.numerator, 1, 32, `timeSignatures[${index}].numerator`);
+    if (![1, 2, 4, 8, 16, 32].includes(signature.denominator)) {
+      throw new Error(`timeSignatures[${index}].denominator must be 1, 2, 4, 8, 16, or 32`);
+    }
+    if (signature.measure <= previousMeasure) {
+      throw new Error("timeSignatures must be strictly ordered by measure without duplicates");
+    }
+    previousMeasure = signature.measure;
+  }
+  if (options.timeSignatures[0]?.measure !== 0) {
+    throw new Error("timeSignatures must begin at measure 0");
+  }
+
+  let previousTempoTick = -1;
+  for (const [index, tempo] of options.tempos.entries()) {
+    if (!Number.isFinite(tempo.bpm) || tempo.bpm < 20 || tempo.bpm > 400) {
+      throw new Error(`tempos[${index}].bpm must be in 20..400, got ${tempo.bpm}`);
+    }
+    const tick = songPositionTick(options.timeSignatures, tempo.position, `tempos[${index}].position`);
+    if (tick <= previousTempoTick) {
+      throw new Error("tempos must be strictly ordered by position without duplicates");
+    }
+    previousTempoTick = tick;
+  }
+  const firstTempo = options.tempos[0]?.position;
+  if (!firstTempo || firstTempo.measure !== 0 || firstTempo.beat !== 0 || (firstTempo.tick ?? 0) !== 0) {
+    throw new Error("tempos must begin at measure 0, beat 0, tick 0");
+  }
+
+  for (const [index, audio] of (options.audioParts ?? []).entries()) {
+    if (audio.name.length < 1 || audio.name.length > 256) {
+      throw new Error(`audioParts[${index}].name must contain 1..256 characters`);
+    }
+    if ((audio.comment ?? "").length > 256) {
+      throw new Error(`audioParts[${index}].comment exceeds 256 characters`);
+    }
+    songPositionTick(options.timeSignatures, audio.start, `audioParts[${index}].start`);
+  }
+
+  const voiceSlots = new Map<string, string>();
+  for (const [trackIndex, track] of options.tracks.entries()) {
+    if (track.name.length < 1 || track.name.length > 256) {
+      throw new Error(`tracks[${trackIndex}].name must contain 1..256 characters`);
+    }
+    if ((track.comment ?? "").length > 256) {
+      throw new Error(`tracks[${trackIndex}].comment exceeds 256 characters`);
+    }
+    if (track.voice.componentId.length !== 16) {
+      throw new Error(`tracks[${trackIndex}].voice.componentId must contain exactly 16 characters`);
+    }
+    assertIntegerRange(track.bankSelect, 0, 127, `tracks[${trackIndex}].bankSelect`);
+    assertIntegerRange(track.programChange, 0, 127, `tracks[${trackIndex}].programChange`);
+    const slot = `${track.bankSelect}:${track.programChange}`;
+    const installed = voiceSlots.get(slot);
+    if (installed && installed !== track.voice.componentId) {
+      throw new Error(
+        `Voice slot ${slot} is assigned to both ${installed} and ${track.voice.componentId}`,
+      );
+    }
+    voiceSlots.set(slot, track.voice.componentId);
+    if (track.mixer?.volume !== undefined) {
+      assertIntegerRange(track.mixer.volume, -898, 600, `tracks[${trackIndex}].mixer.volume`);
+    }
+    if (track.mixer?.pan !== undefined) {
+      assertIntegerRange(track.mixer.pan, 0, 127, `tracks[${trackIndex}].mixer.pan`);
+    }
+    if (track.mixer?.sendLevel !== undefined) {
+      assertIntegerRange(track.mixer.sendLevel, -898, 0, `tracks[${trackIndex}].mixer.sendLevel`);
+    }
+    if (track.parts.length < 1) throw new Error(`tracks[${trackIndex}].parts must not be empty`);
+
+    let previousPartEnd = -1;
+    for (const [partIndex, part] of track.parts.entries()) {
+      const prefix = `tracks[${trackIndex}].parts[${partIndex}]`;
+      if (part.name.length < 1 || part.name.length > 256) {
+        throw new Error(`${prefix}.name must contain 1..256 characters`);
+      }
+      if ((part.comment ?? "").length > 256) throw new Error(`${prefix}.comment exceeds 256 characters`);
+      const start = songPositionTick(options.timeSignatures, part.start, `${prefix}.start`);
+      const end = songPositionTick(options.timeSignatures, part.end, `${prefix}.end`);
+      if (end <= start) throw new Error(`${prefix}.end must be after start`);
+      if (start < previousPartEnd) throw new Error(`${prefix} overlaps the previous part on its track`);
+      previousPartEnd = end;
+
+      const relativeNotes: NoteInput[] = part.notes.map((note, noteIndex) => {
+        const absolute = songPositionTick(
+          options.timeSignatures,
+          note.position,
+          `${prefix}.notes[${noteIndex}].position`,
+        );
+        if (absolute < start || absolute >= end) {
+          throw new Error(`${prefix}.notes[${noteIndex}] starts outside its part`);
+        }
+        if (absolute + note.duration > end) {
+          throw new Error(`${prefix}.notes[${noteIndex}] ends outside its part`);
+        }
+        return { ...note, tick: absolute - start };
+      });
+      validateNotes(relativeNotes);
+      const orderedNotes = [...relativeNotes].sort((left, right) => left.tick - right.tick);
+      let previousNoteEnd = -1;
+      for (const note of orderedNotes) {
+        if (note.tick < previousNoteEnd) throw new Error(`${prefix}.notes overlap; use another track for polyphony`);
+        previousNoteEnd = note.tick + note.duration;
+      }
+
+      for (const [curve, points] of Object.entries(part.controlCurves ?? {}) as Array<
+        [CurveName, PositionedControlPointInput[]]
+      >) {
+        const relativePoints = points.map((point, pointIndex) => {
+          const absolute = songPositionTick(
+            options.timeSignatures,
+            point.position,
+            `${prefix}.controlCurves.${curve}[${pointIndex}].position`,
+          );
+          if (absolute < start || absolute >= end) {
+            throw new Error(`${prefix}.controlCurves.${curve}[${pointIndex}] is outside its part`);
+          }
+          return { tick: absolute - start, value: point.value };
+        });
+        validateControlPoints(curve, relativePoints);
+      }
+    }
+  }
+}
+
+function createSongDocument(
+  options: CreateSongOptions,
+  audioParts: readonly ResolvedSongAudioPart[],
+): LoadedProject {
+  validateSongOptions(options);
+  const namespace = FORMAT_NAMESPACE[options.format];
+  const document = new DOMImplementation().createDocument(namespace, options.format, null);
+  const root = document.documentElement;
+  if (!root) throw new Error("Could not create VSQX document root");
+  root.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xsi", XSI_NAMESPACE);
+  root.setAttributeNS(XSI_NAMESPACE, "xsi:schemaLocation", `${namespace} ${options.format}.xsd`);
+  appendCdataElement(document, namespace, root, "vender", "Yamaha corporation");
+  appendCdataElement(
+    document,
+    namespace,
+    root,
+    "version",
+    options.format === "vsq4" ? "4.0.0.3" : "3.0.0.11",
+  );
+
+  const voices = appendElement(document, namespace, root, "vVoiceTable");
+  const appendedVoiceSlots = new Set<string>();
+  for (const track of options.tracks) {
+    const slot = `${track.bankSelect}:${track.programChange}`;
+    if (appendedVoiceSlots.has(slot)) continue;
+    appendVoice(
+      document,
+      namespace,
+      voices,
+      options.format,
+      track.voice,
+      track.bankSelect,
+      track.programChange,
+    );
+    appendedVoiceSlots.add(slot);
+  }
+  appendMixer(
+    document,
+    namespace,
+    root,
+    options.format,
+    options.tracks.map((track, trackNumber) => ({ trackNumber, ...track.mixer })),
+  );
+
+  const master = appendElement(document, namespace, root, "masterTrack");
+  appendCdataElement(document, namespace, master, "seqName", options.sequenceName);
+  appendCdataElement(document, namespace, master, "comment", "Created by vocaloid-mcp-server");
+  appendElement(document, namespace, master, "resolution", SONG_RESOLUTION);
+  appendElement(document, namespace, master, "preMeasure", options.preMeasure);
+  for (const signature of options.timeSignatures) {
+    const element = appendElement(document, namespace, master, "timeSig");
+    appendElement(document, namespace, element, options.format === "vsq4" ? "m" : "posMes", signature.measure);
+    appendElement(document, namespace, element, options.format === "vsq4" ? "nu" : "nume", signature.numerator);
+    appendElement(document, namespace, element, options.format === "vsq4" ? "de" : "denomi", signature.denominator);
+  }
+  const preMeasureTicks = options.preMeasure * measureTicks(options.timeSignatures[0]!);
+  for (const [index, tempo] of options.tempos.entries()) {
+    const element = appendElement(document, namespace, master, "tempo");
+    const songTick = songPositionTick(options.timeSignatures, tempo.position, `tempos[${index}].position`);
+    const projectTick = index === 0 ? 0 : preMeasureTicks + songTick;
+    appendElement(document, namespace, element, options.format === "vsq4" ? "t" : "posTick", projectTick);
+    appendElement(document, namespace, element, options.format === "vsq4" ? "v" : "bpm", Math.round(tempo.bpm * 100));
+  }
+
+  const project: LoadedProject = {
+    path: options.outputPath,
+    document,
+    root,
+    format: options.format,
+    namespace,
+  };
+  const fields = trackFields(options.format);
+  for (const [trackNumber, trackInput] of options.tracks.entries()) {
+    const track = appendElement(document, namespace, root, "vsTrack");
+    appendElement(document, namespace, track, fields.number, trackNumber);
+    appendCdataElement(document, namespace, track, fields.name, trackInput.name);
+    appendCdataElement(document, namespace, track, "comment", trackInput.comment ?? "Vocal track");
+    const orderedParts = [...trackInput.parts].sort(
+      (left, right) => songPositionTick(options.timeSignatures, left.start, "part.start")
+        - songPositionTick(options.timeSignatures, right.start, "part.start"),
+    );
+    for (const partInput of orderedParts) {
+      const partStartSongTick = songPositionTick(options.timeSignatures, partInput.start, "part.start");
+      const partEndSongTick = songPositionTick(options.timeSignatures, partInput.end, "part.end");
+      const part = appendElement(document, namespace, track, fields.part);
+      appendElement(document, namespace, part, fields.partTick, preMeasureTicks + partStartSongTick);
+      appendElement(document, namespace, part, "playTime", partEndSongTick - partStartSongTick);
+      appendCdataElement(document, namespace, part, fields.partName, partInput.name);
+      appendCdataElement(document, namespace, part, "comment", partInput.comment ?? "Musical part");
+      appendStyleAndSinger(
+        document,
+        namespace,
+        part,
+        options.format,
+        trackInput.bankSelect,
+        trackInput.programChange,
+      );
+      for (const [curve, points] of Object.entries(partInput.controlCurves ?? {}) as Array<
+        [CurveName, PositionedControlPointInput[]]
+      >) {
+        for (const point of points) {
+          createControl(project, part, curve, {
+            tick: songPositionTick(options.timeSignatures, point.position, "control.position")
+              - partStartSongTick,
+            value: point.value,
+          });
+        }
+      }
+      const notes = partInput.notes.map((note) => ({
+        ...note,
+        tick: songPositionTick(options.timeSignatures, note.position, "note.position")
+          - partStartSongTick,
+      }));
+      for (const note of notes.sort((left, right) => left.tick - right.tick)) {
+        appendNote(document, namespace, part, options.format, note);
+      }
+    }
+  }
+  const appendAudioTrack = (kind: "mono" | "stereo", trackName: string): void => {
+    const audioTrack = appendElement(document, namespace, root, trackName);
+    for (const audio of audioParts.filter((entry) => entry.kind === kind)) {
+      const part = appendElement(document, namespace, audioTrack, "wavPart");
+      appendElement(
+        document,
+        namespace,
+        part,
+        options.format === "vsq4" ? "t" : "posTick",
+        preMeasureTicks + songPositionTick(options.timeSignatures, audio.start, "audio.start"),
+      );
+      appendElement(document, namespace, part, "playTime", audio.playTime);
+      appendCdataElement(
+        document,
+        namespace,
+        part,
+        options.format === "vsq4" ? "name" : "partName",
+        audio.name,
+      );
+      appendCdataElement(document, namespace, part, "comment", audio.comment ?? "Audio accompaniment");
+      appendElement(
+        document,
+        namespace,
+        part,
+        options.format === "vsq4" ? "fs" : "sampleRate",
+        audio.sampleRate,
+      );
+      appendElement(
+        document,
+        namespace,
+        part,
+        options.format === "vsq4" ? "rs" : "sampleReso",
+        audio.bitsPerSample,
+      );
+      appendElement(
+        document,
+        namespace,
+        part,
+        options.format === "vsq4" ? "nCh" : "channels",
+        audio.channels,
+      );
+      appendCdataElement(document, namespace, part, "filePath", audio.windowsFilePath);
+    }
+  };
+  if (options.format === "vsq4") {
+    appendAudioTrack("mono", "monoTrack");
+    appendAudioTrack("stereo", "stTrack");
+  } else {
+    appendAudioTrack("mono", "seTrack");
+    appendAudioTrack("stereo", "karaokeTrack");
+  }
+  return project;
+}
+
 function serialize(project: LoadedProject): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n${new XMLSerializer().serializeToString(project.root)}\n`;
 }
@@ -979,6 +1561,39 @@ async function persist(
 export async function createProject(options: CreateProjectOptions): Promise<WriteResult> {
   const project = createDocument(options);
   return persist(project, options.outputPath, options.overwrite);
+}
+
+export async function createSong(
+  options: CreateSongOptions,
+): Promise<WriteResult & {
+  tracks: number;
+  parts: number;
+  notes: number;
+  controlPoints: number;
+  audioParts: number;
+}> {
+  validateSongOptions(options);
+  const audioParts = await resolveSongAudioParts(options);
+  const project = createSongDocument(options, audioParts);
+  const result = await persist(project, options.outputPath, options.overwrite);
+  return {
+    ...result,
+    tracks: options.tracks.length,
+    audioParts: audioParts.length,
+    parts: options.tracks.reduce((sum, track) => sum + track.parts.length, 0),
+    notes: options.tracks.reduce(
+      (sum, track) => sum + track.parts.reduce((partSum, part) => partSum + part.notes.length, 0),
+      0,
+    ),
+    controlPoints: options.tracks.reduce(
+      (sum, track) => sum + track.parts.reduce(
+        (partSum, part) => partSum + Object.values(part.controlCurves ?? {})
+          .reduce((curveSum, points) => curveSum + (points?.length ?? 0), 0),
+        0,
+      ),
+      0,
+    ),
+  };
 }
 
 function reorderDirectChildren(
