@@ -21,6 +21,7 @@ import {
   type DrumPatternPlacementInput,
 } from "./accompaniment.js";
 import { resolveReadablePath, resolveWritablePath } from "./paths.js";
+import { CompositionGuidanceSchema } from "./theory/types.js";
 import { compileVocalPhrase, rhythmValueTicks, type VocalPhraseInput } from "./vocal-phrase.js";
 import {
   createSong,
@@ -707,6 +708,7 @@ export const SongManifestSchema = z
         section_dynamics: z.array(ManifestSectionDynamicsSchema).max(5000),
       })
       .strict(),
+    composition_guidance: CompositionGuidanceSchema.optional(),
     artifacts: z.array(ManifestArtifactSchema).max(10_000),
     review_notes: z.array(ManifestReviewNoteSchema).max(10_000).optional(),
   })
@@ -722,6 +724,7 @@ export type ManifestArtifact = z.infer<typeof ManifestArtifactSchema>;
 export type ManifestReviewNote = z.infer<typeof ManifestReviewNoteSchema>;
 export type ManifestEffectChain = z.infer<typeof ManifestEffectChainSchema>;
 export type ManifestSectionDynamic = z.infer<typeof ManifestSectionDynamicsSchema>;
+export type ManifestCompositionGuidance = z.infer<typeof CompositionGuidanceSchema>;
 
 export interface CreateSongManifestOptions {
   outputPath: string;
@@ -867,6 +870,9 @@ function assertGloballyUniqueStableIds(manifest: SongManifest): void {
   for (const dynamic of manifest.mix.section_dynamics) add(dynamic.id, `section dynamic for ${dynamic.target_id}`);
   for (const artifact of manifest.artifacts) add(artifact.id, `artifact ${artifact.role}`);
   for (const note of manifest.review_notes ?? []) add(note.id, `review note by ${note.author_name}`);
+  for (const exception of manifest.composition_guidance?.exceptions ?? []) {
+    add(exception.id, `theory exception for ${exception.issue_code}`);
+  }
 }
 
 function validateManifestSemantics(manifest: SongManifest): void {
@@ -1095,6 +1101,13 @@ function validateManifestSemantics(manifest: SongManifest): void {
       }
     }
   }
+  for (const exception of manifest.composition_guidance?.exceptions ?? []) {
+    for (const id of exception.object_ids) {
+      if (!reviewTargets.has(id)) {
+        throw new Error(`Theory exception ${exception.id} references unknown object ${id}`);
+      }
+    }
+  }
   assertGloballyUniqueStableIds(manifest);
 }
 
@@ -1308,6 +1321,22 @@ function manifestSummary(path: string, manifest: SongManifest) {
         rampMs: dynamic.ramp_ms,
       })),
     },
+    compositionGuidance: manifest.composition_guidance
+      ? {
+          theoryRulesetId: manifest.composition_guidance.theory_ruleset_id,
+          strictness: manifest.composition_guidance.strictness,
+          harmonicLanguage: manifest.composition_guidance.harmonic_language,
+          requiredReviewSeverities: manifest.composition_guidance.required_review_severities,
+          styleProfile: manifest.composition_guidance.style_profile ?? null,
+          exceptions: manifest.composition_guidance.exceptions.map((exception) => ({
+            id: exception.id,
+            issueCode: exception.issue_code,
+            objectIds: exception.object_ids,
+            targetFingerprint: exception.target_fingerprint,
+            authorType: exception.author_type,
+          })),
+        }
+      : null,
     artifacts: manifest.artifacts.map((artifact) => ({
       id: artifact.id,
       role: artifact.role,

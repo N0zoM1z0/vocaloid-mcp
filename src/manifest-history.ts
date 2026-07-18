@@ -78,6 +78,7 @@ type DiffDomain =
   | "vocals"
   | "arrangement"
   | "mix"
+  | "guidance"
   | "artifacts"
   | "review_notes";
 
@@ -142,6 +143,9 @@ function entities(manifest: SongManifest): Record<DiffDomain, Entity[]> {
       ]),
       ...manifest.mix.section_dynamics.map((entry) => ({ id: entry.id, value: entry })),
     ],
+    guidance: manifest.composition_guidance
+      ? [{ id: "composition-guidance", value: manifest.composition_guidance }]
+      : [],
     artifacts: manifest.artifacts.map((entry) => ({ id: entry.id, value: entry })),
     review_notes: (manifest.review_notes ?? []).map((entry) => ({ id: entry.id, value: entry })),
   };
