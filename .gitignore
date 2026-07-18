@@ -1,0 +1,40 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+
+# Test and language caches
+.test-*/
+__pycache__/
+*.py[cod]
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Generated evaluation output and agent traces
+artifacts/evals/*.wav
+artifacts/evals/*.jsonl
+artifacts/evals/*.bak-*
+artifacts/evals/*-final.md
+
+# Local diagnostic screenshots
+/image*.png
+
+# IDA databases and crash artifacts
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+core
+core.*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
