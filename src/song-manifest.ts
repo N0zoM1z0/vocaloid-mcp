@@ -362,16 +362,130 @@ export const ManifestArrangementTrackSchema = z.discriminatedUnion("kind", [
   ManifestDrumTrackSchema,
 ]);
 
-const ManifestEffectSchema = z
-  .object({
-    id: IdSchema,
-    type: z.enum(["gain", "pan", "highpass", "lowpass", "equalizer", "compressor", "deesser", "reverb", "delay", "limiter"]),
-    enabled: z.boolean().default(true),
-    parameters: z.record(z.string().min(1).max(64), z.number()).default({}),
-  })
-  .strict();
+const GainEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("gain"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({ gain_db: z.number().min(-60).max(24) }).strict(),
+}).strict();
 
-const ManifestEffectChainSchema = z
+const PanEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("pan"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({ pan: z.number().min(-1).max(1) }).strict(),
+}).strict();
+
+const HighpassEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("highpass"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    frequency_hz: z.number().min(20).max(20_000),
+    q: z.number().min(0.1).max(20).default(0.707),
+    poles: z.union([z.literal(1), z.literal(2)]).default(2),
+  }).strict(),
+}).strict();
+
+const LowpassEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("lowpass"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    frequency_hz: z.number().min(20).max(20_000),
+    q: z.number().min(0.1).max(20).default(0.707),
+    poles: z.union([z.literal(1), z.literal(2)]).default(2),
+  }).strict(),
+}).strict();
+
+const EqualizerEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("equalizer"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    frequency_hz: z.number().min(20).max(20_000),
+    q: z.number().min(0.1).max(50),
+    gain_db: z.number().min(-24).max(24),
+    mix: z.number().min(0).max(1).default(1),
+  }).strict(),
+}).strict();
+
+const CompressorEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("compressor"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    threshold_db: z.number().min(-60).max(0),
+    ratio: z.number().min(1).max(20),
+    attack_ms: z.number().min(0.01).max(2000),
+    release_ms: z.number().min(0.01).max(9000),
+    makeup_db: z.number().min(0).max(24).default(0),
+    knee: z.number().min(1).max(8).default(2.82843),
+    detection: z.enum(["peak", "rms"]).default("rms"),
+    mix: z.number().min(0).max(1).default(1),
+  }).strict(),
+}).strict();
+
+const DeesserEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("deesser"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    intensity: z.number().min(0).max(1),
+    max_deessing: z.number().min(0).max(1).default(0.5),
+    frequency_focus: z.number().min(0).max(1).default(0.5),
+  }).strict(),
+}).strict();
+
+const ReverbEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("reverb"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    in_gain: z.number().min(0).max(1).default(0.8),
+    out_gain: z.number().min(0).max(1).default(0.7),
+    delay_ms: z.number().min(10).max(1000),
+    decay: z.number().min(0).max(0.9),
+  }).strict(),
+}).strict();
+
+const DelayEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("delay"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    in_gain: z.number().min(0).max(1).default(0.8),
+    out_gain: z.number().min(0).max(1).default(0.7),
+    delay_ms: z.number().min(1).max(5000),
+    decay: z.number().min(0).max(0.9),
+  }).strict(),
+}).strict();
+
+const LimiterEffectSchema = z.object({
+  id: IdSchema,
+  type: z.literal("limiter"),
+  enabled: z.boolean().default(true),
+  parameters: z.object({
+    limit_db: z.number().min(-24).max(-0.01),
+    attack_ms: z.number().min(0.1).max(80).default(5),
+    release_ms: z.number().min(1).max(8000).default(50),
+  }).strict(),
+}).strict();
+
+export const ManifestEffectSchema = z.discriminatedUnion("type", [
+  GainEffectSchema,
+  PanEffectSchema,
+  HighpassEffectSchema,
+  LowpassEffectSchema,
+  EqualizerEffectSchema,
+  CompressorEffectSchema,
+  DeesserEffectSchema,
+  ReverbEffectSchema,
+  DelayEffectSchema,
+  LimiterEffectSchema,
+]);
+
+export const ManifestEffectChainSchema = z
   .object({
     id: IdSchema,
     target_id: IdSchema,
@@ -379,12 +493,13 @@ const ManifestEffectChainSchema = z
   })
   .strict();
 
-const ManifestSectionDynamicsSchema = z
+export const ManifestSectionDynamicsSchema = z
   .object({
     id: IdSchema,
     section_id: IdSchema,
     target_id: IdSchema,
     gain_db: z.number().min(-60).max(24).default(0),
+    ramp_ms: z.number().int().min(0).max(5000).default(100),
   })
   .strict();
 
@@ -410,6 +525,7 @@ export const SongManifestSchema = z
     schema: z.literal(MANIFEST_SCHEMA),
     revision: z.number().int().min(1),
     composition_hash: z.string().regex(/^[a-f0-9]{64}$/u),
+    mix_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     content_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     parent_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
     song_id: IdSchema,
@@ -457,6 +573,8 @@ export type ManifestVocalTrackMetadata = z.infer<typeof ManifestVocalTrackMetada
 export type ManifestVocalPart = z.infer<typeof ManifestVocalPartSchema>;
 export type ManifestArrangementTrack = z.infer<typeof ManifestArrangementTrackSchema>;
 export type ManifestArtifact = z.infer<typeof ManifestArtifactSchema>;
+export type ManifestEffectChain = z.infer<typeof ManifestEffectChainSchema>;
+export type ManifestSectionDynamic = z.infer<typeof ManifestSectionDynamicsSchema>;
 
 export interface CreateSongManifestOptions {
   outputPath: string;
@@ -483,6 +601,7 @@ interface ManifestWriteResult {
   backupPath?: string;
   revision: number;
   compositionHash: string;
+  mixHash: string;
   contentHash: string;
   parentHash?: string;
   bytes: number;
@@ -505,7 +624,7 @@ export function songManifestHash(manifest: Omit<SongManifest, "content_hash"> | 
   return createHash("sha256").update(JSON.stringify(canonicalize(manifest))).digest("hex");
 }
 
-type HashlessSongManifest = Omit<SongManifest, "content_hash" | "composition_hash">;
+type HashlessSongManifest = Omit<SongManifest, "content_hash" | "composition_hash" | "mix_hash">;
 
 export function songCompositionHash(manifest: HashlessSongManifest | SongManifest): string {
   const creativeState = {
@@ -522,9 +641,17 @@ export function songCompositionHash(manifest: HashlessSongManifest | SongManifes
     voices: manifest.voices,
     vocal_tracks: manifest.vocal_tracks,
     accompaniment: manifest.accompaniment,
-    mix: manifest.mix,
   };
   return createHash("sha256").update(JSON.stringify(canonicalize(creativeState))).digest("hex");
+}
+
+export function songMixHash(
+  manifest: HashlessSongManifest | SongManifest,
+  compositionHash = songCompositionHash(manifest),
+): string {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalize({ composition_hash: compositionHash, mix: manifest.mix })))
+    .digest("hex");
 }
 
 function positionTick(manifest: Pick<SongManifest, "time_signatures">, position: MusicalPosition): number {
@@ -694,14 +821,46 @@ function validateManifestSemantics(manifest: SongManifest): void {
       }
     }
   }
+  const trackIds = new Set([
+    ...manifest.vocal_tracks.map((track) => track.id),
+    ...manifest.accompaniment.tracks.map((track) => track.id),
+  ]);
+  if (trackIds.has("mix-bus")) throw new Error("mix-bus is reserved for the downstream mix bus");
+  const mixTargets = new Set([...trackIds, "mix-bus"]);
+  const chainTargets = new Set<string>();
+  for (const chain of manifest.mix.effect_chains) {
+    if (!mixTargets.has(chain.target_id)) {
+      throw new Error(`Effect chain ${chain.id} references unknown mix target ${chain.target_id}`);
+    }
+    if (chainTargets.has(chain.target_id)) {
+      throw new Error(`Mix target ${chain.target_id} has more than one effect chain`);
+    }
+    chainTargets.add(chain.target_id);
+    assertUniqueIds(chain.effects, `effect chain ${chain.id} effects`);
+  }
+  const dynamicTargets = new Set<string>();
+  for (const dynamic of manifest.mix.section_dynamics) {
+    if (!sectionIds.has(dynamic.section_id)) {
+      throw new Error(`Section dynamic ${dynamic.id} references unknown section ${dynamic.section_id}`);
+    }
+    if (!mixTargets.has(dynamic.target_id)) {
+      throw new Error(`Section dynamic ${dynamic.id} references unknown mix target ${dynamic.target_id}`);
+    }
+    const key = `${dynamic.target_id}\u0000${dynamic.section_id}`;
+    if (dynamicTargets.has(key)) {
+      throw new Error(`Mix target ${dynamic.target_id} has duplicate dynamics for section ${dynamic.section_id}`);
+    }
+    dynamicTargets.add(key);
+  }
   assertUniqueIds(manifest.artifacts, "artifacts");
   assertGloballyUniqueStableIds(manifest);
 }
 
 function withHash(candidate: HashlessSongManifest): SongManifest {
   const composition_hash = songCompositionHash(candidate);
-  const content_hash = songManifestHash({ ...candidate, composition_hash });
-  const manifest = SongManifestSchema.parse({ ...candidate, composition_hash, content_hash });
+  const mix_hash = songMixHash(candidate, composition_hash);
+  const content_hash = songManifestHash({ ...candidate, composition_hash, mix_hash });
+  const manifest = SongManifestSchema.parse({ ...candidate, composition_hash, mix_hash, content_hash });
   validateManifestSemantics(manifest);
   return manifest;
 }
@@ -748,6 +907,7 @@ async function persistManifest(
     ...(backupPath ? { backupPath } : {}),
     revision: manifest.revision,
     compositionHash: manifest.composition_hash,
+    mixHash: manifest.mix_hash,
     contentHash: manifest.content_hash,
     ...(manifest.parent_hash ? { parentHash: manifest.parent_hash } : {}),
     bytes: Buffer.byteLength(serialized),
@@ -770,6 +930,13 @@ export async function loadSongManifest(inputPath: string): Promise<{ path: strin
     throw new Error(
       `Song manifest composition hash mismatch: stored ${manifest.composition_hash}, actual ${actualComposition}. `
       + "Creative state or provenance may have been edited outside the MCP.",
+    );
+  }
+  const actualMix = songMixHash(manifest, manifest.composition_hash);
+  if (actualMix !== manifest.mix_hash) {
+    throw new Error(
+      `Song manifest mix hash mismatch: stored ${manifest.mix_hash}, actual ${actualMix}. `
+      + "Mix intent or its composition dependency may have been edited outside the MCP.",
     );
   }
   const actual = songManifestHash(manifest);
@@ -824,6 +991,7 @@ function manifestSummary(path: string, manifest: SongManifest) {
     schema: manifest.schema,
     revision: manifest.revision,
     compositionHash: manifest.composition_hash,
+    mixHash: manifest.mix_hash,
     contentHash: manifest.content_hash,
     parentHash: manifest.parent_hash ?? null,
     songId: manifest.song_id,
@@ -857,6 +1025,20 @@ function manifestSummary(path: string, manifest: SongManifest) {
       patterns: track.patterns.length,
       placements: track.placements.length,
     })),
+    mix: {
+      effectChains: manifest.mix.effect_chains.map((chain) => ({
+        id: chain.id,
+        targetId: chain.target_id,
+        effects: chain.effects.map((effect) => ({ id: effect.id, type: effect.type, enabled: effect.enabled })),
+      })),
+      sectionDynamics: manifest.mix.section_dynamics.map((dynamic) => ({
+        id: dynamic.id,
+        targetId: dynamic.target_id,
+        sectionId: dynamic.section_id,
+        gainDb: dynamic.gain_db,
+        rampMs: dynamic.ramp_ms,
+      })),
+    },
     artifacts: manifest.artifacts.map((artifact) => ({
       id: artifact.id,
       role: artifact.role,
@@ -912,6 +1094,11 @@ export async function getSongManifestSection(inputPath: string, sectionId: strin
       placements,
     };
   }).filter((track) => track.placements.length > 0 || ("notes" in track ? track.notes.length > 0 : track.hits.length > 0));
+  const activeTargets = new Set([
+    "mix-bus",
+    ...vocalTracks.map((track) => track.id),
+    ...arrangementTracks.map((track) => track.id),
+  ]);
   return {
     path,
     revision: manifest.revision,
@@ -929,6 +1116,11 @@ export async function getSongManifestSection(inputPath: string, sectionId: strin
     },
     vocalTracks,
     arrangementTracks,
+    mix: {
+      effect_chains: manifest.mix.effect_chains.filter((chain) => activeTargets.has(chain.target_id)),
+      section_dynamics: manifest.mix.section_dynamics.filter((dynamic) =>
+        dynamic.section_id === sectionId && activeTargets.has(dynamic.target_id)),
+    },
   };
 }
 
@@ -954,6 +1146,7 @@ async function mutateManifest(
   const {
     content_hash: _oldHash,
     composition_hash: _oldCompositionHash,
+    mix_hash: _oldMixHash,
     parent_hash: _oldParent,
     ...withoutHashes
   } = draft;
@@ -1031,6 +1224,50 @@ export async function upsertSongManifestArrangementTrack(
     const index = draft.accompaniment.tracks.findIndex((candidate) => candidate.id === track.id);
     if (index >= 0) draft.accompaniment.tracks[index] = track;
     else draft.accompaniment.tracks.push(track);
+  });
+}
+
+export async function upsertSongManifestEffectChain(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  chainInput: z.input<typeof ManifestEffectChainSchema>,
+  overwrite: boolean,
+) {
+  const chain = ManifestEffectChainSchema.parse(chainInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const byId = draft.mix.effect_chains.findIndex((candidate) => candidate.id === chain.id);
+    const byTarget = draft.mix.effect_chains.findIndex((candidate) => candidate.target_id === chain.target_id);
+    if (byTarget >= 0 && byTarget !== byId) {
+      throw new Error(
+        `Mix target ${chain.target_id} already uses effect chain ${draft.mix.effect_chains[byTarget]?.id}`,
+      );
+    }
+    if (byId >= 0) draft.mix.effect_chains[byId] = chain;
+    else draft.mix.effect_chains.push(chain);
+  });
+}
+
+export async function upsertSongManifestSectionDynamic(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  dynamicInput: z.input<typeof ManifestSectionDynamicsSchema>,
+  overwrite: boolean,
+) {
+  const dynamic = ManifestSectionDynamicsSchema.parse(dynamicInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const byId = draft.mix.section_dynamics.findIndex((candidate) => candidate.id === dynamic.id);
+    const byTargetSection = draft.mix.section_dynamics.findIndex((candidate) =>
+      candidate.target_id === dynamic.target_id && candidate.section_id === dynamic.section_id);
+    if (byTargetSection >= 0 && byTargetSection !== byId) {
+      throw new Error(
+        `Mix target ${dynamic.target_id} already has section dynamics ${draft.mix.section_dynamics[byTargetSection]?.id} `
+        + `for ${dynamic.section_id}`,
+      );
+    }
+    if (byId >= 0) draft.mix.section_dynamics[byId] = dynamic;
+    else draft.mix.section_dynamics.push(dynamic);
   });
 }
 
@@ -1223,7 +1460,10 @@ export async function transformSongManifestEvents(
 
 export const ManifestRemovalSchema = z
   .object({
-    object_type: z.enum(["section", "vocal_part", "vocal_track", "arrangement_track", "event"]),
+    object_type: z.enum([
+      "section", "vocal_part", "vocal_track", "arrangement_track", "event",
+      "effect_chain", "section_dynamic",
+    ]),
     object_ids: z.array(IdSchema).min(1).max(20_000),
   })
   .strict();
@@ -1264,6 +1504,14 @@ export async function removeSongManifestObjects(
       const before = draft.accompaniment.tracks.length;
       draft.accompaniment.tracks = draft.accompaniment.tracks.filter((track) => !wanted.has(track.id));
       removed = before - draft.accompaniment.tracks.length;
+    } else if (removal.object_type === "effect_chain") {
+      const before = draft.mix.effect_chains.length;
+      draft.mix.effect_chains = draft.mix.effect_chains.filter((chain) => !wanted.has(chain.id));
+      removed = before - draft.mix.effect_chains.length;
+    } else if (removal.object_type === "section_dynamic") {
+      const before = draft.mix.section_dynamics.length;
+      draft.mix.section_dynamics = draft.mix.section_dynamics.filter((dynamic) => !wanted.has(dynamic.id));
+      removed = before - draft.mix.section_dynamics.length;
     } else {
       for (const track of draft.vocal_tracks) for (const part of track.parts) {
         const beforeNotes = part.notes.length;

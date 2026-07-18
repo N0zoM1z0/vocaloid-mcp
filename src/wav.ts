@@ -123,6 +123,20 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
         if (size < 16) throw new Error("WAV fmt chunk is shorter than 16 bytes");
         const format = await readExactly(handle, Math.min(size, 64), dataOffset);
         audioFormat = format.readUInt16LE(0);
+        if (audioFormat === 0xfffe) {
+          if (size < 40 || format.length < 40 || format.readUInt16LE(16) < 22) {
+            throw new Error("WAVE_FORMAT_EXTENSIBLE fmt chunk is incomplete");
+          }
+          const subFormat = format.readUInt32LE(24);
+          const standardGuidTail = Buffer.from([
+            0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa,
+            0x00, 0x38, 0x9b, 0x71,
+          ]);
+          if (!format.subarray(28, 40).equals(standardGuidTail) || ![1, 3].includes(subFormat)) {
+            throw new Error(`Unsupported WAVE_FORMAT_EXTENSIBLE subformat ${subFormat}`);
+          }
+          audioFormat = subFormat;
+        }
         channels = format.readUInt16LE(2);
         sampleRate = format.readUInt32LE(4);
         byteRate = format.readUInt32LE(8);

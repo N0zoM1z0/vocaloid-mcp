@@ -48,12 +48,15 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_remove_song_objects",
       "vocaloid_render_accompaniment",
       "vocaloid_render_instrument_stems",
+      "vocaloid_render_stem_mix",
       "vocaloid_render_vocal_stems",
       "vocaloid_render_wav",
       "vocaloid_transform_song_events",
       "vocaloid_update_mixer",
       "vocaloid_update_note_expressions",
       "vocaloid_upsert_manifest_arrangement_track",
+      "vocaloid_upsert_manifest_effect_chain",
+      "vocaloid_upsert_manifest_section_dynamic",
       "vocaloid_upsert_manifest_vocal_part",
       "vocaloid_upsert_song_section",
       "vocaloid_validate_project",
@@ -337,6 +340,81 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   assert.match(
     manifestInstrumentStemData.data?.artifacts?.[0]?.source_composition_hash ?? "",
     /^[a-f0-9]{64}$/u,
+  );
+
+  const manifestEffectChain = await client.callTool({
+    name: "vocaloid_upsert_manifest_effect_chain",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 8,
+      overwrite: true,
+      effect_chain: {
+        id: "piano-mix-chain",
+        target_id: "piano",
+        effects: [
+          { id: "piano-mix-gain", type: "gain", parameters: { gain_db: -3 } },
+          { id: "piano-mix-pan", type: "pan", parameters: { pan: -0.2 } },
+        ],
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestEffectChain.isError, true);
+
+  const manifestSectionDynamic = await client.callTool({
+    name: "vocaloid_upsert_manifest_section_dynamic",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 9,
+      overwrite: true,
+      section_dynamic: {
+        id: "piano-verse-lift",
+        target_id: "piano",
+        section_id: "verse",
+        gain_db: 1.5,
+        ramp_ms: 60,
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestSectionDynamic.isError, true);
+
+  const manifestMixPath = join(temporary, "mcp-agent-song-mix-r10.wav");
+  const manifestStemMix = await client.callTool({
+    name: "vocaloid_render_stem_mix",
+    arguments: {
+      manifest_path: manifestPath,
+      expected_revision: 10,
+      stem_artifact_ids: ["instrument-stem-piano-r7"],
+      output_path: manifestMixPath,
+      sample_rate: 44_100,
+      bit_depth: 24,
+      reference_lufs: -16,
+      reference_true_peak_dbfs: -1,
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestStemMix.isError, true);
+  const manifestStemMixData = manifestStemMix.structuredContent as {
+    data?: {
+      manifestRevision?: number;
+      sourceMixHash?: string;
+      inputs?: unknown[];
+      quality?: { bitsPerSample?: number; channels?: number; silent?: boolean };
+    };
+  };
+  assert.equal(manifestStemMixData.data?.manifestRevision, 11);
+  assert.match(manifestStemMixData.data?.sourceMixHash ?? "", /^[a-f0-9]{64}$/u);
+  assert.equal(manifestStemMixData.data?.inputs?.length, 1);
+  assert.deepEqual(
+    {
+      bits: manifestStemMixData.data?.quality?.bitsPerSample,
+      channels: manifestStemMixData.data?.quality?.channels,
+      silent: manifestStemMixData.data?.quality?.silent,
+    },
+    { bits: 24, channels: 2, silent: false },
   );
 
   const accompanimentPath = join(temporary, "mcp-backing.wav");

@@ -19,9 +19,12 @@ Every manifest contains:
 - `schema`: fixed schema identifier;
 - `revision`: monotonically increasing integer;
 - `content_hash`: SHA-256 of canonical JSON excluding `content_hash`;
-- `composition_hash`: SHA-256 of only sound-affecting creative state, excluding
-  revision/timestamps/artifacts, so a derived file remains comparable after
-  provenance-only revisions;
+- `composition_hash`: SHA-256 of performance/arrangement source state, excluding
+  downstream mix, revision, timestamps, and artifacts, so raw stems remain
+  reusable after EQ/automation revisions;
+- `mix_hash`: SHA-256 of `composition_hash` plus ordered effect chains and
+  section dynamics, so a rendered mix becomes stale when either source music or
+  downstream mix intent changes;
 - `parent_hash`: hash of the immediately preceding revision, when any;
 - stable IDs for the song, sections, voices, tracks, parts, phrases, notes,
   controls, patterns, placements, and artifacts;
@@ -56,10 +59,10 @@ nested call:
 - remove selected objects with referential-integrity checks;
 - build accompaniment and VSQX artifacts from one manifest revision.
 
-Later phases use the same manifest for separate stems, score-vs-render vocal
-analysis, stem effect chains, Japanese mora/phoneme alignment, and high-level
-tuning gestures. High-quality VST/DAW rendering is explicitly outside the
-current requested scope.
+The same manifest now drives separate stems, score-vs-render vocal analysis,
+and reproducible stem effects/section automation. Japanese mora/phoneme
+alignment and high-level tuning gestures are the remaining phase. High-quality
+VST/DAW rendering is explicitly outside the current requested scope.
 
 ## Completion evidence
 

@@ -17,9 +17,11 @@ import {
   inspectSongManifest,
   ManifestArrangementTrackSchema,
   ManifestChordChangeSchema,
+  ManifestEffectChainSchema,
   ManifestKeyChangeSchema,
   ManifestRemovalSchema,
   ManifestSectionSchema,
+  ManifestSectionDynamicsSchema,
   ManifestTempoSchema,
   ManifestTimeSignatureSchema,
   ManifestTransformSchema,
@@ -29,9 +31,12 @@ import {
   removeSongManifestObjects,
   transformSongManifestEvents,
   upsertSongManifestArrangementTrack,
+  upsertSongManifestEffectChain,
+  upsertSongManifestSectionDynamic,
   upsertSongManifestSection,
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
+import { renderSongManifestStemMix } from "./stem-mix.js";
 import {
   renderSongManifestInstrumentStems,
   renderSongManifestVocalStems,
@@ -54,9 +59,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.8.0" },
+  { name: "vocaloid-mcp-server", version: "0.9.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with voice/instrument discovery. For a new long song, use a song manifest as canonical source, add one vocal part or arrangement track per upsert, and inspect revision/hash before every mutation. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX from the manifest; use one-shot create_song only for small projects. For revisionable mixing or listening feedback, render selected instrument stems and original-Editor vocal stems. Explicitly choose preserve_pan/center and effects/dry; never assume artistic routing. Artifacts must match the current composition_hash. Run score-vs-render analysis on an isolated vocal stem before tuning: distinguish energy onset, voiced onset/consonant lead, sustained pitch center, contour, release, and vibrato. Treat rapid-note limited-resolution and estimated global offsets honestly; analysis proposes evidence and never auto-quantizes expression. Named sections, tempo/meter maps, patterns, rapid rhythm cells, tuplets, and melisma remain agent decisions. VOCALOID pan is 0=hard left, 64=center, 127=hard right. Analyze stems and Master per channel, fix clipped/unintended imbalance, then master to requested LUFS/true peak. Use slugged revision names. The bundled GM SoundFont is draft quality.`,
+    instructions: `Use this server to compose, arrange, tune, mix, and master native VOCALOID projects. For a new long song, use a revisioned manifest as canonical source, mutate one bounded domain at a time, inspect revision/hash before writes, and preserve globally unique stable IDs. Build VSQX/backing, then render selected instrument and original-Editor vocal stems. Explicitly choose pan/center and effects/dry; artifacts must match composition_hash. Analyze isolated vocals for energy/voiced onset, consonant lead, sustained pitch, contour, release, and vibrato; limited-resolution and offset estimates are evidence, never auto-quantization. Define ordered typed effect chains and section gain automation per stable track or mix-bus. Raw stems depend on composition_hash; downstream mix decisions change mix_hash without forcing resynthesis. Stem mixing applies exact pre-measure alignment, no hidden normalization/limiting, and returns the auditable filter graph plus LUFS/LRA/true peak/clipping/stereo evidence. Named sections, tempo/meter, patterns, rapid lyrics, tuplets, melisma, tuning, routing, and whether to revise remain agent decisions. VOCALOID pan is 0=left, 64=center, 127=right. Use slugged revision filenames. The bundled GM SoundFont is draft quality.`,
   },
 );
 
@@ -1930,6 +1935,82 @@ Use compact reusable patterns and section-tagged placements for long songs. Othe
 );
 
 server.registerTool(
+  "vocaloid_upsert_manifest_effect_chain",
+  {
+    title: "Upsert Manifest Effect Chain",
+    description: `Insert or replace one ordered, reproducible stem or mix-bus effect chain.
+
+target_id is a vocal/arrangement stable track ID or the reserved mix-bus. Supported typed effects are gain, pan, high/low-pass, parametric EQ, compressor, de-esser, multi-tap room, delay, and limiter; each has bounded parameters mapped to the installed FFmpeg filters. Disabled effects remain in creative intent but are skipped at render. Changing downstream effects changes mix_hash without invalidating raw stems' composition_hash.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      effect_chain: ManifestEffectChainSchema,
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestEffectChain(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.effect_chain,
+        params.overwrite,
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Upserted ${params.effect_chain.effects.length}-effect chain ${params.effect_chain.id}`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_upsert_manifest_section_dynamic",
+  {
+    title: "Upsert Manifest Section Dynamic",
+    description: `Set one section gain automation decision for a stable track or the mix-bus.
+
+gain_db applies only inside the named semantic section, with an explicit ramp_ms at both edges. Automation is pre-effect so reverb/delay tails follow the driven section naturally. One target/section pair has exactly one stable automation object.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      section_dynamic: ManifestSectionDynamicsSchema,
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestSectionDynamic(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.section_dynamic,
+        params.overwrite,
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Upserted ${params.section_dynamic.gain_db} dB automation ${params.section_dynamic.id}`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_transform_song_events",
   {
     title: "Transform Song Events",
@@ -1965,7 +2046,7 @@ server.registerTool(
   "vocaloid_remove_song_objects",
   {
     title: "Remove Song Objects",
-    description: `Remove explicitly named sections, vocal parts/tracks, arrangement tracks, or leaf events by stable ID.
+    description: `Remove explicitly named sections, vocal parts/tracks, arrangement tracks, leaf events, effect chains, or section dynamics by stable ID.
 
 The mutation is atomic. It rejects zero matches, every-section removal, dangling section references, and invalid empty phrases/patterns/parts.`,
     inputSchema: ManifestMutationPathSchema.extend({ removal: ManifestRemovalSchema }).strict(),
@@ -2206,6 +2287,73 @@ Returns per-note F0 contours, median/p95 cents error, voiced ratio, energy and v
         result,
         params.response_format,
         `Analyzed ${result.summary.events} score events (${result.summary.eventsWithPitch} with confident F0)`,
+        warnings,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_render_stem_mix",
+  {
+    title: "Render Reproducible Stem Mix",
+    description: `Render explicitly selected, hash-verified vocal/instrument stems through manifest effect chains and section dynamics.
+
+Instrument stems with song_start origin receive the exact project pre-measure delay; original-Editor vocal stems already use project_start. Each target's section gain automation is applied before its ordered effects, tracks are summed without hidden normalization, then mix-bus automation/effects run in manifest order. No hidden limiter or loudness normalization is added. The output can be 16- or 24-bit stereo PCM and is measured for LUFS, LRA, true/sample peak, clipping, and channel balance. The artifact records composition_hash, mix_hash, all input dependencies, and the exact FFmpeg filter graph is returned for audit.`,
+    inputSchema: z
+      .object({
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        stem_artifact_ids: z.array(ManifestIdSchema).min(1).max(48),
+        output_path: PathSchema.describe("New slugged .wav mix path"),
+        sample_rate: z.union([z.literal(44_100), z.literal(48_000), z.literal(96_000)]),
+        bit_depth: z.union([z.literal(16), z.literal(24)]),
+        reference_lufs: z.number().min(-36).max(-5).default(-16)
+          .describe("Analysis reference only; rendering does not normalize to this value"),
+        reference_true_peak_dbfs: z.number().min(-12).max(0).default(-1)
+          .describe("Analysis reference only; add an explicit limiter when desired"),
+        timeout_seconds: z.number().int().min(10).max(900).default(300),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await renderSongManifestStemMix({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        stemArtifactIds: params.stem_artifact_ids,
+        outputPath: params.output_path,
+        sampleRate: params.sample_rate,
+        bitDepth: params.bit_depth,
+        referenceLufs: params.reference_lufs,
+        referenceTruePeakDbfs: params.reference_true_peak_dbfs,
+        timeoutSeconds: params.timeout_seconds,
+      });
+      const warnings = [
+        ...(result.quality.sampleClipping
+          ? [`Mix contains ${result.quality.clippedSampleValues} full-scale sample values; lower source/chain gain and render a new revision`]
+          : []),
+        ...(result.quality.truePeakExceeded
+          ? [`True peak ${result.quality.truePeakDbfs.toFixed(2)} dBFS exceeds the ${params.reference_true_peak_dbfs.toFixed(2)} dBFS reference`]
+          : []),
+        ...(result.quality.channelImbalance
+          ? [`Stereo RMS balance is ${result.quality.stereoBalanceDb?.toFixed(2)} dB; confirm this is intentional before mastering`]
+          : []),
+      ];
+      return textResult(
+        result,
+        params.response_format,
+        `Rendered ${result.inputs.length}-stem mix at ${result.quality.integratedLufs.toFixed(1)} LUFS`,
         warnings,
       );
     } catch (error) {

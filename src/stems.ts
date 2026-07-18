@@ -190,6 +190,7 @@ export async function renderSongManifestInstrumentStems(options: RenderInstrumen
           preserve_pan: options.preservePan,
           renderer_effects: options.includeRendererEffects,
           renderer: "fluidsynth",
+          timeline_origin: "song_start",
         },
         created_at: new Date().toISOString(),
       };
@@ -330,6 +331,7 @@ export async function renderSongManifestVocalStems(options: RenderVocalStemsOpti
           source_project_artifact: projectArtifact.id,
           center_pan: options.centerPan,
           dry: options.dry,
+          timeline_origin: "project_start",
           ...(options.volume !== undefined ? { volume: options.volume } : {}),
         },
         created_at: new Date().toISOString(),
