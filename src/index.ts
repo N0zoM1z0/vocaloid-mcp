@@ -74,6 +74,7 @@ import {
   removeSongManifestObjects,
   resolveSongManifestReviewNote,
   restoreSongManifestSnapshot,
+  setSongManifestCompositionGuidance,
   setSongManifestCompositionIntent,
   transformSongManifestEvents,
   updateSongManifestTimeline,
@@ -83,11 +84,13 @@ import {
   upsertSongManifestSection,
   upsertSongManifestSectionIntent,
   upsertSongManifestPhraseDirection,
+  upsertSongManifestTheoryException,
   upsertSongManifestVocalPhrase,
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
 import { renderSongManifestStemMix } from "./stem-mix.js";
 import { TheoryProposalKindSchema } from "./theory/proposals.js";
+import { CompositionGuidanceSchema, TheoryExceptionSchema } from "./theory/types.js";
 import {
   getStylePalette,
   IA_ROCKS_COMPONENT_ID,
@@ -180,7 +183,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first; read vocaloid://edit-song-contract before the first vocaloid_edit_song call. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first; read vocaloid://edit-song-contract before the first vocaloid_edit_song call. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
@@ -320,13 +323,14 @@ server.registerResource(
           "Align explicit Japanese readings; preserve original lyric provenance",
           "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
           "Run vocaloid_preflight_song; when repair hypotheses are useful, request 3-8 theory-only proposals and hold each group's listening question constant",
+          "Set composition guidance when release must require exact theory-warning disposition and/or current anchor intent review",
           "Evaluate a selected proposal through vocaloid_edit_song dry_run and inspect actual theory/intent deltas before a separate write",
           "Repeat preflight until the requested readiness gate passes",
           "Build VSQX/backing and render either stems or a manifest master",
           "Render a 20-30 second lead_solo, lead_harmony, and minimal_band anchor ladder",
           "Run one-question loudness-matched A/B and attach an explicit digest-bound keep/reject/revise review",
           "Optionally inspect an aggregate style palette only after the symbolic composition and anchor question are established",
-          "Master a manifest delivery and verify loudness, true peak, clipping, channels, hashes, and dependencies",
+          "Master only after the separate releasePolicy is ready; verify loudness, true peak, clipping, channels, hashes, and dependencies",
         ],
         examples: ["vocaloid://examples/from-zero"],
         contracts: {
@@ -342,6 +346,7 @@ server.registerResource(
           lyrics: "original surface text, explicit kana reading, alignment, and V3 phonemes remain distinct evidence",
           creative_judgement: "symbolic/audio metrics locate evidence; only an explicit listening author records keep/reject/revise",
           proposals: "read-only revision/hash-bound A/B/C hypotheses; no corpus/profile access, no direct write, mandatory edit dry-run and listening check",
+          release_policy: "optional/backward-compatible; required warnings need exact current exceptions, required intent review blocks only final delivery",
           style_boundary: "optional post-composition observation; never writes intent or supplies melody/chord continuation",
         },
         renderer_boundaries: {
@@ -467,6 +472,12 @@ const CreativePreflightSummaryOutputSchema = z.object({
   }).strict()),
 }).passthrough();
 
+const ReleasePolicyOutputSchema = z.object({
+  enabled: z.boolean(),
+  ready: z.boolean(),
+  blockers: z.array(z.string()),
+}).passthrough();
+
 const TheoryProposalSummaryOutputSchema = z.object({
   schema: z.literal("vocaloid-theory-proposals/v1"),
   constraints: z.object({
@@ -526,6 +537,7 @@ const PreflightDataOutputSchema = z.object({
   theory: TheoryPreflightSummaryOutputSchema,
   theoryProposals: TheoryProposalSummaryOutputSchema.optional(),
   creativeReadiness: CreativePreflightSummaryOutputSchema,
+  releasePolicy: ReleasePolicyOutputSchema,
   checkedArtifactIds: z.array(z.string()),
   issues: z.array(PreflightIssueOutputSchema),
 }).strict();
@@ -705,6 +717,7 @@ const ManifestDeliveryDataOutputSchema = z.object({
   manifestRevision: z.number().int(),
   manifestContentHash: z.string(),
   sourceArtifactId: z.string(),
+  releasePolicy: ReleasePolicyOutputSchema,
   mastering: z.object({
     outputPath: z.string(),
     sourceClipped: z.boolean(),
@@ -804,6 +817,7 @@ const MutationPreviewDataOutputSchema = z.object({
   readiness: WorkflowReadinessOutputSchema,
   theory: TheoryPreflightSummaryOutputSchema,
   creativeReadiness: CreativePreflightSummaryOutputSchema,
+  releasePolicy: ReleasePolicyOutputSchema,
   analysisDelta: MutationAnalysisDeltaOutputSchema,
 }).passthrough();
 
@@ -877,6 +891,8 @@ const ImportVsqxDataOutputSchema = z.object({
 
 const EditMutationActionSchema = z.enum([
   "set_composition_intent",
+  "set_composition_guidance",
+  "upsert_theory_exception",
   "upsert_section_intent",
   "upsert_phrase_direction",
   "bind_phrase_realization",
@@ -1267,6 +1283,14 @@ const EditSongActionRequestSchema = z.discriminatedUnion("action", [
   ManifestMutationPathSchema.extend({
     action: z.literal("set_composition_intent"),
     composition_intent: CompositionIntentSchema,
+  }).strict(),
+  ManifestMutationPathSchema.extend({
+    action: z.literal("set_composition_guidance"),
+    composition_guidance: CompositionGuidanceSchema,
+  }).strict(),
+  ManifestMutationPathSchema.extend({
+    action: z.literal("upsert_theory_exception"),
+    theory_exception: TheoryExceptionSchema,
   }).strict(),
   ManifestMutationPathSchema.extend({
     action: z.literal("upsert_section_intent"),
@@ -3056,6 +3080,34 @@ server.registerTool(
         const data = await normalizedAppliedEdit(params.action, inputPath, result, {
           changedCount: 1 + intent.sections.length + intent.phrase_directions.length,
           objectIds,
+        });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "set_composition_guidance") {
+        const guidance = params.composition_guidance!;
+        if (params.dry_run) return preview((path) => setSongManifestCompositionGuidance(
+          path, path, expectedRevision, guidance, true,
+        ));
+        const result = await setSongManifestCompositionGuidance(
+          inputPath, outputPath, expectedRevision, guidance, params.overwrite,
+        );
+        const data = await normalizedAppliedEdit(params.action, inputPath, result, {
+          changedCount: 1 + guidance.exceptions.length,
+          objectIds: guidance.exceptions.flatMap((exception) => [exception.id, ...exception.object_ids]),
+        });
+        return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
+      }
+      if (params.action === "upsert_theory_exception") {
+        const exception = params.theory_exception!;
+        if (params.dry_run) return preview((path) => upsertSongManifestTheoryException(
+          path, path, expectedRevision, exception, true,
+        ));
+        const result = await upsertSongManifestTheoryException(
+          inputPath, outputPath, expectedRevision, exception, params.overwrite,
+        );
+        const data = await normalizedAppliedEdit(params.action, inputPath, result, {
+          changedCount: 1,
+          objectIds: [exception.id, ...exception.object_ids],
         });
         return workflowResult(data, params.response_format, `Applied ${params.action} as revision ${result.write.revision}`);
       }

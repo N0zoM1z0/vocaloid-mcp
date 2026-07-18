@@ -17,6 +17,10 @@ import {
   type TheoryProposalOptionsInput,
   type TheoryProposalReport,
 } from "./theory/proposals.js";
+import {
+  evaluateReleasePolicy,
+  type ReleasePolicyGate,
+} from "./theory/policy.js";
 import { theoryFindingBlocks } from "./theory/rules.js";
 import type { CandidateRepair, TheoryEvidence, TheoryIssue, TheoryReport } from "./theory/types.js";
 import { musicalPositionToTick, type MusicalPosition } from "./vsqx.js";
@@ -93,6 +97,7 @@ export interface SongPreflightResult {
   theory: TheoryReport;
   theoryProposals?: TheoryProposalReport;
   creativeReadiness: CreativeReadinessReport;
+  releasePolicy: ReleasePolicyGate;
   checkedArtifactIds: string[];
   issues: SongPreflightIssue[];
 }
@@ -687,6 +692,7 @@ export async function preflightSongManifest(
     ? proposeTheoryRepairs(manifest, options.theoryProposalOptions, theory)
     : undefined;
   const creativeReadiness = analyzeCompositionIntent(manifest);
+  const releasePolicy = evaluateReleasePolicy(manifest.composition_guidance, theory, creativeReadiness);
 
   const vocalEvents = addVocalIssues(manifest, issues, options.includePerformanceWarnings);
   addHarmonyIssues(manifest, issues, options.includePerformanceWarnings);
@@ -811,7 +817,9 @@ export async function preflightSongManifest(
   // Prefer the richer shared analyzer whenever an older workflow lint emits the
   // same stable code. This keeps one severity/fingerprint source without
   // removing unrelated legacy structural checks in the same migration.
-  const theoryCodes = new Set(theory.issues.map((entry) => entry.code));
+  const theoryCodes = new Set(
+    [...theory.issues, ...theory.ignoredIssues].map((entry) => entry.code),
+  );
   const mergedIssues = [
     ...issues.filter((entry) => !theoryCodes.has(entry.code)),
     ...theory.issues.map(theoryPreflightIssue),
@@ -848,10 +856,12 @@ export async function preflightSongManifest(
   if (!currentRoles.has("vocal_stem")) mixBlockers.push("CURRENT_VOCAL_STEM_REQUIRED");
   if (!currentRoles.has("instrument_stem")) mixBlockers.push("CURRENT_INSTRUMENT_STEM_REQUIRED");
   const deliveryBlockers: string[] = [];
+  deliveryBlockers.push(...build.blockers);
   if (!currentRoles.has("delivery")) deliveryBlockers.push("CURRENT_DELIVERY_REQUIRED");
   if (mergedIssues.some((entry) => entry.domain === "artifact" && entry.severity === "error")) {
     deliveryBlockers.push("ARTIFACT_INTEGRITY_ERROR");
   }
+  deliveryBlockers.push(...releasePolicy.blockers);
 
   const sorted = [...mergedIssues].sort((left, right) => {
     const severityOrder: Record<PreflightSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -889,6 +899,7 @@ export async function preflightSongManifest(
     theory,
     ...(theoryProposals ? { theoryProposals } : {}),
     creativeReadiness,
+    releasePolicy,
     checkedArtifactIds: checkedArtifacts.map((artifact) => artifact.id),
     issues: sorted,
   };

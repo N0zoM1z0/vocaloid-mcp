@@ -172,6 +172,7 @@ export const CompositionGuidanceSchema = z
       });
     }
     const exceptionIds = new Set<string>();
+    const exceptionTargets = new Set<string>();
     for (const [index, exception] of guidance.exceptions.entries()) {
       if (exceptionIds.has(exception.id)) {
         context.addIssue({
@@ -188,6 +189,15 @@ export const CompositionGuidanceSchema = z
           message: `Theory exception ${exception.id} repeats an object ID`,
         });
       }
+      const targetKey = `${exception.issue_code}\u0000${[...exception.object_ids].sort().join("\u0000")}\u0000${exception.target_fingerprint}`;
+      if (exceptionTargets.has(targetKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["exceptions", index],
+          message: `More than one theory exception targets the same exact issue state (${exception.issue_code})`,
+        });
+      }
+      exceptionTargets.add(targetKey);
     }
   });
 

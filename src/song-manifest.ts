@@ -35,7 +35,11 @@ import {
   SectionCreativeIntentSchema,
 } from "./intent/types.js";
 import { resolveReadablePath, resolveWritablePath } from "./paths.js";
-import { CompositionGuidanceSchema } from "./theory/types.js";
+import { assertTheoryExceptionApplicable } from "./theory/policy.js";
+import {
+  CompositionGuidanceSchema,
+  TheoryExceptionSchema,
+} from "./theory/types.js";
 import { compileVocalPhrase, rhythmValueTicks, type VocalPhraseInput } from "./vocal-phrase.js";
 import {
   createSong,
@@ -1674,6 +1678,81 @@ export async function setSongManifestCompositionIntent(
   });
 }
 
+async function currentTheoryReportForGuidance(inputPath: string, expectedRevision: number) {
+  const loaded = await loadSongManifest(inputPath);
+  if (loaded.manifest.revision !== expectedRevision) {
+    throw new Error(
+      `Stale manifest revision ${expectedRevision}; current revision is ${loaded.manifest.revision} `
+      + `(${loaded.manifest.content_hash}). Inspect again before applying policy.`,
+    );
+  }
+  const { analyzeManifestTheory } = await import("./theory/analyze.js");
+  return { loaded, report: analyzeManifestTheory(loaded.manifest) };
+}
+
+export async function setSongManifestCompositionGuidance(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  guidanceInput: z.input<typeof CompositionGuidanceSchema>,
+  overwrite: boolean,
+) {
+  const guidance = CompositionGuidanceSchema.parse(guidanceInput);
+  const { report } = await currentTheoryReportForGuidance(inputPath, expectedRevision);
+  if (guidance.theory_ruleset_id !== report.rulesetId) {
+    throw new Error(
+      `Unsupported theory ruleset ${guidance.theory_ruleset_id}; current analyzer is ${report.rulesetId}`,
+    );
+  }
+  const currentIssues = [...report.issues, ...report.ignoredIssues];
+  for (const exception of guidance.exceptions) {
+    assertTheoryExceptionApplicable(
+      exception,
+      currentIssues,
+      report.rulesetId,
+      guidance.theory_ruleset_id,
+    );
+  }
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    draft.composition_guidance = {
+      ...guidance,
+      exceptions: [...guidance.exceptions].sort((left, right) => left.id.localeCompare(right.id)),
+    };
+  });
+}
+
+export async function upsertSongManifestTheoryException(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  exceptionInput: z.input<typeof TheoryExceptionSchema>,
+  overwrite: boolean,
+) {
+  const exception = TheoryExceptionSchema.parse(exceptionInput);
+  const { loaded, report } = await currentTheoryReportForGuidance(inputPath, expectedRevision);
+  const guidance = loaded.manifest.composition_guidance;
+  if (!guidance) {
+    throw new Error("Manifest has no composition_guidance; set the theory/review policy before adding an exception");
+  }
+  assertTheoryExceptionApplicable(
+    exception,
+    [...report.issues, ...report.ignoredIssues],
+    report.rulesetId,
+    guidance.theory_ruleset_id,
+  );
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    if (!draft.composition_guidance) {
+      throw new Error("Manifest composition_guidance disappeared before exception write");
+    }
+    const index = draft.composition_guidance.exceptions.findIndex(
+      (candidate) => candidate.id === exception.id,
+    );
+    if (index >= 0) draft.composition_guidance.exceptions[index] = exception;
+    else draft.composition_guidance.exceptions.push(exception);
+    draft.composition_guidance.exceptions.sort((left, right) => left.id.localeCompare(right.id));
+  });
+}
+
 export async function upsertSongManifestSectionIntent(
   inputPath: string,
   outputPath: string,
@@ -2530,7 +2609,7 @@ export const ManifestRemovalSchema = z
   .object({
     object_type: z.enum([
       "section", "vocal_part", "vocal_track", "arrangement_track", "event",
-      "effect_chain", "section_dynamic",
+      "effect_chain", "section_dynamic", "theory_exception",
     ]),
     object_ids: z.array(IdSchema).min(1).max(20_000),
   })
@@ -2580,6 +2659,14 @@ export async function removeSongManifestObjects(
       const before = draft.mix.section_dynamics.length;
       draft.mix.section_dynamics = draft.mix.section_dynamics.filter((dynamic) => !wanted.has(dynamic.id));
       removed = before - draft.mix.section_dynamics.length;
+    } else if (removal.object_type === "theory_exception") {
+      const before = draft.composition_guidance?.exceptions.length ?? 0;
+      if (draft.composition_guidance) {
+        draft.composition_guidance.exceptions = draft.composition_guidance.exceptions.filter(
+          (exception) => !wanted.has(exception.id),
+        );
+      }
+      removed = before - (draft.composition_guidance?.exceptions.length ?? 0);
     } else {
       for (const track of draft.vocal_tracks) for (const part of track.parts) {
         const beforeNotes = part.notes.length;

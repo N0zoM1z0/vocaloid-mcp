@@ -51,6 +51,8 @@ The canonical mutation entry points are:
 
 They use the existing expected-revision, backup, canonical validation, and atomic write path. The same four operations are public `vocaloid_edit_song` actions: `set_composition_intent`, `upsert_section_intent`, `upsert_phrase_direction`, and `bind_phrase_realization`. The production tool keeps a compact `{ action, payload, response_format }` envelope; read `vocaloid://edit-song-contract/{action}` for the exact strict payload schema, and use `dry_run=true` before writing.
 
+Process policy is written separately through `set_composition_guidance` and `upsert_theory_exception`. Neither action is allowed to author phrase purpose or infer it from style/corpus evidence.
+
 ## Hash boundary
 
 `songIntentHash` computes a canonical SHA-256 over `composition_intent`.
@@ -94,10 +96,13 @@ New A/B reviews should use digest-bound `comparison_artifacts`; legacy ID-only c
 - XML/schema/timeline/reference contradictions may block score/build.
 - Missing intent or an unbound phrase may not block audition; the agent needs to hear experiments.
 - `composition_guidance.intent_review_policy` is optional and has no parse-time default. Old manifests retain old delivery behavior.
-- A future explicit `required_for_delivery` policy may require anchor coverage and a current listening review before final delivery.
+- `off` and `advisory` report creative state without changing delivery behavior.
+- An explicit `required_for_delivery` policy enforces its selected requirements before final mastering: song intent, full section-intent coverage, a minimum number of anchor phrases, and/or current audition review.
+- `require_current_audition_review=true` requires every current anchor to have the current lead-solo → lead-harmony → minimal-band audition ladder and an explicit digest/hash-bound `keep` review. A metric or analyzer cannot sign that review.
+- Required creative review affects only final delivery. It does not block score/build/render/anchor-preview experimentation.
 - Style outliers never satisfy or override creative readiness.
 
-`vocaloid_preflight_song` returns the shared `core/v1` theory report beside the creative-readiness report. Its score/build gates consume only registered error-level structural theory findings; missing intent, missing audition layers, and listening status remain visible but advisory at this milestone. Every edit dry-run compares before/after reports and returns introduced/resolved issue codes, changed theory metrics, changed phrase evidence, creative status, and whether a current listening decision would become stale. This comparison cannot create a new listening outcome.
+`vocaloid_preflight_song` returns the shared `core/v1` theory report, creative-readiness report, and a separate `releasePolicy` result. Its score/build gates consume only registered error-level structural theory findings; missing intent, missing audition layers, and listening status remain auditionable. The final-delivery tool reruns build/release checks before writing audio. Every edit dry-run compares before/after reports and returns introduced/resolved issue codes, changed theory metrics, changed phrase evidence, creative status, stale exceptions, predicted release policy, and whether a current listening decision would become stale. This comparison cannot create a new listening outcome.
 
 When bounded theory proposals are requested, any candidate whose stable targets intersect a phrase direction inherits that direction's exact purpose and listening-question ID. All A/B/C variants in the issue group must answer that same question. A pitch, voicing, duration, or breath repair may improve symbolic coherence, but it cannot redefine what IA is meant to sing out, manufacture a new emotional label, or silently sign `keep`; selection still requires a dry-run followed by listening.
 

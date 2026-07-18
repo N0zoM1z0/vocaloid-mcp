@@ -74,6 +74,8 @@ export const THEORY_RULE_REGISTRY = Object.freeze([
   rule("RHYTHMIC_LAYER_COLLISION", "arrangement", "warning"),
   rule("ACCOMPANIMENT_ROLE_REDUNDANCY", "arrangement", "warning"),
   rule("SECTION_DENSITY_ENERGY_MISMATCH", "arrangement", "warning"),
+
+  rule("THEORY_EXCEPTION_STALE", "policy", "error", true),
 ] satisfies readonly TheoryRuleDefinition[]);
 
 const RULE_BY_CODE = new Map(THEORY_RULE_REGISTRY.map((entry) => [entry.code, entry]));

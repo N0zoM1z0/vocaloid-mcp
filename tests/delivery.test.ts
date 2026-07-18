@@ -11,6 +11,7 @@ import {
   loadSongManifest,
   inspectSongManifest,
   recordSongManifestArtifacts,
+  setSongManifestCompositionGuidance,
   upsertSongManifestArrangementTrack,
   upsertSongManifestEffectChain,
   upsertSongManifestVocalPart,
@@ -202,4 +203,34 @@ test("manifest-aware delivery verifies provenance and atomically records masteri
     /belongs to mix hash.*current mix hash/u,
   );
   assert.equal(await access(staleDeliveryPath).then(() => true, () => false), false);
+
+  await setSongManifestCompositionGuidance(manifestPath, manifestPath, 7, {
+    theory_ruleset_id: "core/v1",
+    strictness: "balanced",
+    harmonic_language: "tonal",
+    required_review_severities: [],
+    intent_review_policy: {
+      mode: "required_for_delivery",
+      require_song_intent: true,
+      require_section_intent: false,
+      minimum_anchor_phrases: 0,
+      require_current_audition_review: false,
+    },
+    exceptions: [],
+  }, true);
+  const policyBlockedPath = join(temporary, "must-not-deliver-without-intent-review.wav");
+  await assert.rejects(
+    masterSongManifestDelivery({
+      manifestPath,
+      expectedRevision: 8,
+      sourceArtifactId: "editor-master-r3",
+      outputPath: policyBlockedPath,
+      targetLufs: -16,
+      targetTruePeakDbfs: -1,
+      targetLoudnessRangeLu: 7,
+      allowClippedSource: false,
+    }),
+    /Final delivery blocked.*COMPOSITION_INTENT_REQUIRED/u,
+  );
+  assert.equal(await access(policyBlockedPath).then(() => true, () => false), false);
 });

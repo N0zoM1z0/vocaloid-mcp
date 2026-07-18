@@ -67,6 +67,7 @@ export interface MutationPreviewResult {
   issues: Awaited<ReturnType<typeof preflightSongManifest>>["issues"];
   theory: TheoryReport;
   creativeReadiness: CreativeReadinessReport;
+  releasePolicy: Awaited<ReturnType<typeof preflightSongManifest>>["releasePolicy"];
   analysisDelta: MutationAnalysisDelta;
 }
 
@@ -222,6 +223,7 @@ export async function previewSongManifestMutation(
       issues: preflight.issues,
       theory: preflight.theory,
       creativeReadiness: preflight.creativeReadiness,
+      releasePolicy: preflight.releasePolicy,
       analysisDelta: analysisDelta(beforePreflight, preflight),
     };
   } finally {

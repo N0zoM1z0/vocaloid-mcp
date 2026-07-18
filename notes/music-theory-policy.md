@@ -17,8 +17,8 @@ Style evidence never suppresses a structural error and never supplies the next n
 ## Severity
 
 - `error`: contradictory or uninterpretable symbolic state. Score/build must stop. No exception may suppress it.
-- `warning`: concrete musical or performance risk. Delivery requires a repair or a fingerprint-bound exception.
-- `info`: composition/style observation. It never blocks build or delivery.
+- `warning`: concrete musical or performance risk. It never blocks audition/build; a delivery policy can require a repair or fingerprint-bound exception.
+- `info`: composition/style observation. It never blocks build and is release-advisory unless a caller explicitly includes `info` in `required_review_severities`.
 
 Every rule has a stable uppercase code and an explicit rule version. A ruleset has a stable ID and content hash. Reports are sorted deterministically so an unchanged composition produces byte-stable findings.
 
@@ -32,7 +32,7 @@ The analyzer can locate such things as incomplete harmonic coverage, unresolved 
 
 These findings describe symbolic coherence and audition risks. They do not infer whether a phrase is moving, authentically "IA-like", or faithful to the declared intent; they never read the corpus/style profile and never write `keep`, `accepted`, or another listening conclusion. Intent-realization evidence and the human listening gate are separate contracts.
 
-The same analyzer runs inside `vocaloid_preflight_song`, build preflight, and mutation dry-run. A dry-run evaluates both the current and predicted manifests, then reports issue identities/codes, changed metrics, changed intent evidence, and listening-review staleness without mutating the canonical file. This prevents a repair path from using a different theory implementation than the final build gate.
+The same analyzer runs inside `vocaloid_preflight_song`, build preflight, final-delivery preflight, and mutation dry-run. A dry-run evaluates both the current and predicted manifests, then reports issue identities/codes, changed metrics, changed intent evidence, listening-review staleness, stale exceptions, and the predicted release gate without mutating the canonical file. This prevents a repair path from using a different theory implementation than the final build gate.
 
 ## Bounded proposal contract
 
@@ -70,7 +70,21 @@ An exception binds:
 - a SHA-256 fingerprint of the target state;
 - a rationale, author type, and creation timestamp.
 
-Changing a target makes the exception stale. Error-level structural issues cannot be excepted. Novelty/copy-risk overrides require a human author and remain release-review events.
+`set_composition_guidance` installs the policy and validates every supplied exception against the current `core/v1` report. `upsert_theory_exception` accepts only an issue's current exact code, unordered-equal object-ID set, and target fingerprint. A free-text review note does not suppress a finding. More than one exception for the same exact issue state is invalid.
+
+A valid exception moves only that exact warning/info finding from `issues` to `ignoredIssues`; it does not rewrite the score or claim the musical choice succeeds. The fingerprint commits the rule version, symbolic evidence, target object state, and local issue context. Changing a targeted note, chord, section, or other relevant object makes the old exception stale. A stale/forbidden exception stops suppressing the underlying finding, appears in `staleExceptions`, and creates the structural `THEORY_EXCEPTION_STALE` error. Remove it with `remove_objects`/`object_type=theory_exception`, repair the current issue, or create a new exception from the newly inspected fingerprint after listening. Error-level structural issues cannot be excepted. Novelty/copy-risk overrides require a human author and remain separate release-review events.
+
+## Release policy
+
+`vocaloid_preflight_song` returns a separate `releasePolicy` object. This is deliberately not the score/build gate:
+
+- no `composition_guidance`: policy is disabled/ready and legacy delivery behavior is unchanged;
+- `required_review_severities`: every still-active finding at a listed warning/info severity must be repaired or precisely excepted;
+- any stale exception is a structural build and release blocker;
+- `intent_review_policy.mode=required_for_delivery` enforces only its explicit song/section/anchor/current-audition requirements;
+- `off` and `advisory` keep creative-readiness evidence visible without blocking delivery.
+
+`vocaloid_master_manifest_delivery` reruns current artifact, structural build, and release-policy checks before creating the output WAV. A blocked call creates no delivery file or artifact record. This does not prevent exploratory VSQX/build/render/anchor audition: creative questions must be heard before they can be reviewed.
 
 ## Hash boundary
 

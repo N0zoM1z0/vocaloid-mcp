@@ -54,6 +54,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
   assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
   assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_intent/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_guidance/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /upsert_theory_exception/u);
   assert.match(JSON.stringify(editTool?.inputSchema), /edit-song-contract/u);
   assert.match(JSON.stringify(editTool?.inputSchema), /payload/u);
   const audioReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_audio");
@@ -64,6 +66,7 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const preflightTool = tools.tools.find((tool) => tool.name === "vocaloid_preflight_song");
   assert.match(JSON.stringify(preflightTool?.inputSchema), /include_theory_proposals/u);
   assert.match(JSON.stringify(preflightTool?.outputSchema), /vocaloid-theory-proposals\/v1/u);
+  assert.match(JSON.stringify(preflightTool?.outputSchema), /releasePolicy/u);
 
   const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
   const capabilityEntry = capabilities.contents[0];
@@ -88,6 +91,16 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   });
   const intentActionEntry = intentActionContract.contents[0];
   assert.match(intentActionEntry && "text" in intentActionEntry ? intentActionEntry.text : "", /composition_intent/u);
+  const guidanceActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/set_composition_guidance",
+  });
+  const guidanceActionEntry = guidanceActionContract.contents[0];
+  assert.match(guidanceActionEntry && "text" in guidanceActionEntry ? guidanceActionEntry.text : "", /required_review_severities/u);
+  const exceptionActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/upsert_theory_exception",
+  });
+  const exceptionActionEntry = exceptionActionContract.contents[0];
+  assert.match(exceptionActionEntry && "text" in exceptionActionEntry ? exceptionActionEntry.text : "", /target_fingerprint/u);
   const invalidIntentEdit = await client.callTool({
     name: "vocaloid_edit_song",
     arguments: { action: "set_composition_intent", payload: {}, response_format: "json" },
@@ -121,6 +134,7 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
           predictedDelta?: { verification?: string };
         }>;
       };
+      releasePolicy?: { enabled?: boolean; ready?: boolean; blockers?: string[] };
     };
   };
   assert.equal(proposalData.data?.theoryProposals?.constraints?.corpusAndStyleAccess, "forbidden");
@@ -130,6 +144,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
     candidate.apply?.tool === "vocaloid_edit_song"
     && candidate.apply.requiredDryRun === true
     && candidate.predictedDelta?.verification === "vocaloid_edit_song_dry_run"));
+  assert.equal(proposalData.data?.releasePolicy?.enabled, false);
+  assert.equal(proposalData.data?.releasePolicy?.ready, true);
 
   const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
   const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
@@ -620,6 +636,67 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     before: "missing_intent",
     after: "incomplete",
   });
+
+  const guidanceDryRun = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "set_composition_guidance",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        composition_guidance: {
+          theory_ruleset_id: "core/v1",
+          strictness: "balanced",
+          harmonic_language: "tonal",
+          required_review_severities: [],
+          intent_review_policy: {
+            mode: "required_for_delivery",
+            require_song_intent: true,
+            require_section_intent: false,
+            minimum_anchor_phrases: 0,
+            require_current_audition_review: false,
+          },
+          exceptions: [],
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(guidanceDryRun.isError, true);
+  const guidanceDryRunData = guidanceDryRun.structuredContent as {
+    data?: { preview?: { releasePolicy?: { ready?: boolean; blockers?: string[] } } };
+  };
+  assert.equal(guidanceDryRunData.data?.preview?.releasePolicy?.ready, false);
+  assert.ok(guidanceDryRunData.data?.preview?.releasePolicy?.blockers?.includes("COMPOSITION_INTENT_REQUIRED"));
+
+  const invalidTheoryException = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "upsert_theory_exception",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        theory_exception: {
+          id: "invalid-exception",
+          issue_code: "LARGE_LEAP_UNBALANCED",
+          object_ids: ["lead"],
+          target_fingerprint: "not-a-fingerprint",
+          rationale: "Invalid strict-contract fixture.",
+          author_type: "agent",
+          created_at: "2026-07-19T06:00:00.000Z",
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.equal(invalidTheoryException.isError, true);
+  assert.match(JSON.stringify(invalidTheoryException.structuredContent), /target_fingerprint/u);
 
   const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r8.wav");
   const manifestProjectPath = join(temporary, "mcp-agent-song-r8.vsqx");

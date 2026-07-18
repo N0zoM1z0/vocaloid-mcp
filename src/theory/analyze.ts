@@ -7,6 +7,7 @@ import { analyzeForm } from "./form.js";
 import { analyzeHarmony } from "./harmony.js";
 import { analyzeMelody } from "./melody.js";
 import { analyzePerformance } from "./performance.js";
+import { applyTheoryExceptions } from "./policy.js";
 import { analyzeRhythm } from "./rhythm.js";
 import {
   assertRegisteredTheoryFinding,
@@ -63,6 +64,73 @@ function uniqueObjectIds(values: readonly string[]): string[] {
   return [...new Set(values)].slice(0, 256);
 }
 
+function stableObjectStates(manifest: SongManifest): ReadonlyMap<string, unknown> {
+  const states = new Map<string, unknown>();
+  const add = (id: string, value: unknown): void => {
+    states.set(id, value);
+  };
+  for (const section of manifest.sections) add(section.id, section);
+  for (const entry of manifest.harmony.key_changes) add(entry.id, entry);
+  for (const entry of manifest.harmony.chord_changes) add(entry.id, entry);
+  for (const voice of manifest.voices) add(voice.id, voice);
+  for (const track of manifest.vocal_tracks) {
+    const { parts: _parts, ...trackState } = track;
+    add(track.id, trackState);
+    for (const part of track.parts) {
+      const {
+        notes: _notes,
+        phrases: _phrases,
+        control_curves: _controlCurves,
+        tuning_gestures: _tuningGestures,
+        ...partState
+      } = part;
+      add(part.id, partState);
+      for (const note of part.notes) add(note.id, note);
+      for (const phrase of part.phrases) {
+        const { lyrics: _lyrics, cells: _cells, ...phraseState } = phrase;
+        add(phrase.id, phraseState);
+        for (const lyric of phrase.lyrics) add(lyric.id, lyric);
+        for (const cell of phrase.cells) add(cell.id, cell);
+      }
+      for (const curve of part.control_curves) {
+        const { points: _points, ...curveState } = curve;
+        add(curve.id, curveState);
+        for (const point of curve.points) add(point.id, point);
+      }
+      for (const gesture of part.tuning_gestures ?? []) add(gesture.id, gesture);
+    }
+  }
+  for (const track of manifest.accompaniment.tracks) {
+    if (track.kind === "pitched") {
+      const { notes: _notes, patterns: _patterns, placements: _placements, ...trackState } = track;
+      add(track.id, trackState);
+      for (const note of track.notes) add(note.id, note);
+      for (const pattern of track.patterns) {
+        const { notes: _patternNotes, ...patternState } = pattern;
+        add(pattern.id, patternState);
+        for (const note of pattern.notes) add(note.id, note);
+      }
+    } else {
+      const { hits: _hits, patterns: _patterns, placements: _placements, ...trackState } = track;
+      add(track.id, trackState);
+      for (const hit of track.hits) add(hit.id, hit);
+      for (const pattern of track.patterns) {
+        const { hits: _patternHits, ...patternState } = pattern;
+        add(pattern.id, patternState);
+        for (const hit of pattern.hits) add(hit.id, hit);
+      }
+    }
+    for (const placement of track.placements) add(placement.id, placement);
+  }
+  for (const chain of manifest.mix.effect_chains) {
+    const { effects: _effects, ...chainState } = chain;
+    add(chain.id, chainState);
+    for (const effect of chain.effects) add(effect.id, effect);
+  }
+  for (const dynamic of manifest.mix.section_dynamics) add(dynamic.id, dynamic);
+  return states;
+}
+
 function boundedMetricId(id: string): string {
   const normalized = id.toLowerCase().replace(/[^a-z0-9._-]+/gu, "-");
   if (/^[a-z][a-z0-9._-]{1,95}$/u.test(normalized)) return normalized;
@@ -84,7 +152,11 @@ function repairForFinding(finding: RawTheoryFinding, targetFingerprint: string):
   }];
 }
 
-function issueFromFinding(manifest: SongManifest, finding: RawTheoryFinding): TheoryIssue {
+function issueFromFinding(
+  manifest: SongManifest,
+  targetStates: ReadonlyMap<string, unknown>,
+  finding: RawTheoryFinding,
+): TheoryIssue {
   const definition = assertRegisteredTheoryFinding(finding);
   const objectIds = uniqueObjectIds(finding.objectIds);
   const targetFingerprint = fingerprint({
@@ -94,6 +166,7 @@ function issueFromFinding(manifest: SongManifest, finding: RawTheoryFinding): Th
     startTick: finding.startTick,
     endTick: finding.endTick,
     details: finding.details,
+    targetStates: objectIds.map((id) => [id, targetStates.get(id) ?? { id, missing: true }]),
   });
   return {
     code: finding.code,
@@ -146,6 +219,7 @@ function coverageFor(manifest: SongManifest, analyses: readonly DomainAnalysis[]
 
 export function analyzeManifestTheory(manifest: SongManifest): TheoryReport {
   const index = buildSymbolicIndex(manifest);
+  const targetStates = stableObjectStates(manifest);
   const analyses = [
     analyzeForm(manifest, index),
     analyzeHarmony(manifest, index),
@@ -158,11 +232,17 @@ export function analyzeManifestTheory(manifest: SongManifest): TheoryReport {
   const rawFindings = analyses.flatMap((analysis) => analysis.findings).sort(findingOrder);
   const issuesByFingerprint = new Map<string, TheoryIssue>();
   for (const finding of rawFindings) {
-    const issue = issueFromFinding(manifest, finding);
+    const issue = issueFromFinding(manifest, targetStates, finding);
     if (!issuesByFingerprint.has(issue.targetFingerprint)) issuesByFingerprint.set(issue.targetFingerprint, issue);
     if (issuesByFingerprint.size >= 20_000) break;
   }
-  const issues = [...issuesByFingerprint.values()];
+  const analyzedIssues = [...issuesByFingerprint.values()];
+  const policy = applyTheoryExceptions(
+    analyzedIssues,
+    manifest.composition_guidance,
+    THEORY_RULESET_ID,
+  );
+  const issues = policy.issues;
 
   const metricsById = new Map<string, TheoryMetric>();
   for (const metric of analyses.flatMap((analysis) => analysis.metrics)) {
@@ -196,8 +276,8 @@ export function analyzeManifestTheory(manifest: SongManifest): TheoryReport {
     },
     metrics,
     issues,
-    ignoredIssues: [],
-    staleExceptions: [],
+    ignoredIssues: policy.ignoredIssues,
+    staleExceptions: policy.staleExceptions,
   };
   return TheoryReportSchema.parse(report);
 }

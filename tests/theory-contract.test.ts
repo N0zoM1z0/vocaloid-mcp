@@ -36,13 +36,14 @@ test("theory rule registry owns every analyzer code, severity class, and structu
     const source = await readFile(join(directory, file), "utf8");
     for (const match of source.matchAll(/code: "([A-Z][A-Z0-9_]+)"/gu)) codes.add(match[1]!);
   }
-  assert.equal(THEORY_RULE_REGISTRY.length, 33);
+  assert.equal(THEORY_RULE_REGISTRY.length, 34);
   assert.deepEqual(
     THEORY_RULE_REGISTRY.map((entry) => entry.code).sort(),
     [...codes].sort(),
   );
   assert.deepEqual(theoryRuleDefinition("CHORD_SYMBOL_UNPARSED_STRICT").allowedSeverities, ["error", "warning"]);
   assert.equal(theoryFindingBlocks({ code: "KEY_INVALID", severity: "error" }, "build"), true);
+  assert.equal(theoryFindingBlocks({ code: "THEORY_EXCEPTION_STALE", severity: "error" }, "build"), true);
   assert.equal(theoryFindingBlocks({ code: "CHORD_SYMBOL_UNPARSED_STRICT", severity: "warning" }, "build"), false);
   assert.equal(theoryFindingBlocks({ code: "SUSTAINED_NON_CHORD_TONE_UNRESOLVED", severity: "warning" }, "score"), false);
   assert.throws(() => theoryRuleDefinition("UNREGISTERED_RULE"), /Unregistered theory issue code/u);
