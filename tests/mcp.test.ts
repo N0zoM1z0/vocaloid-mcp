@@ -29,6 +29,8 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     [
       "vocaloid_add_control_points",
       "vocaloid_add_notes",
+      "vocaloid_analyze_wav",
+      "vocaloid_compile_vocal_phrase",
       "vocaloid_create_project",
       "vocaloid_create_song",
       "vocaloid_inspect_project",
@@ -36,6 +38,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_list_instruments",
       "vocaloid_list_notes",
       "vocaloid_list_voices",
+      "vocaloid_master_wav",
       "vocaloid_render_accompaniment",
       "vocaloid_render_wav",
       "vocaloid_update_note_expressions",
@@ -52,6 +55,38 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     data?: { programs?: Array<{ program?: number; name?: string }> };
   };
   assert.ok(instrumentData.data?.programs?.some((entry) => entry.program === 33));
+
+  const phrase = await client.callTool({
+    name: "vocaloid_compile_vocal_phrase",
+    arguments: {
+      phrase: {
+        start: { measure: 0, beat: 0 },
+        allocation: "explicit",
+        lyrics: [
+          { lyric: "そ", phonemes: "s o" },
+          { lyric: "ら", phonemes: "4 a" },
+        ],
+        cells: [
+          { duration: { denominator: 16 }, note_number: 67, lyric_index: 0 },
+          { duration: { denominator: 16 }, note_number: 69, lyric_index: 0 },
+          { duration: { denominator: 16 }, note_number: 71, lyric_index: 1 },
+        ],
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(phrase.isError, true);
+  const phraseData = phrase.structuredContent as {
+    data?: { noteCells?: number; continuations?: number; fastestNoteTicks?: number };
+  };
+  assert.deepEqual(
+    {
+      notes: phraseData.data?.noteCells,
+      continuations: phraseData.data?.continuations,
+      fastest: phraseData.data?.fastestNoteTicks,
+    },
+    { notes: 3, continuations: 1, fastest: 120 },
+  );
 
   const accompanimentPath = join(temporary, "mcp-backing.wav");
   const accompaniment = await client.callTool({
@@ -89,6 +124,36 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     },
     { format: "pcm", channels: 2, bits: 16, silent: false },
   );
+
+  const quality = await client.callTool({
+    name: "vocaloid_analyze_wav",
+    arguments: { path: accompanimentPath, target_lufs: -16, response_format: "json" },
+  });
+  assert.notEqual(quality.isError, true);
+  const qualityData = quality.structuredContent as {
+    data?: { integratedLufs?: number; truePeakDbfs?: number; clippedSampleValues?: number };
+  };
+  assert.ok(Number.isFinite(qualityData.data?.integratedLufs));
+  assert.ok(Number.isFinite(qualityData.data?.truePeakDbfs));
+
+  const masteredPath = join(temporary, "mcp-backing-mastered.wav");
+  const mastered = await client.callTool({
+    name: "vocaloid_master_wav",
+    arguments: {
+      input_path: accompanimentPath,
+      output_path: masteredPath,
+      target_lufs: -16,
+      target_true_peak_dbfs: -1,
+      response_format: "json",
+    },
+  });
+  assert.notEqual(mastered.isError, true);
+  const masteredData = mastered.structuredContent as {
+    data?: { output?: { integratedLufs?: number; truePeakDbfs?: number; clippedSampleValues?: number } };
+  };
+  assert.ok(Math.abs((masteredData.data?.output?.integratedLufs ?? 0) - -16) <= 0.6);
+  assert.ok((masteredData.data?.output?.truePeakDbfs ?? 0) <= -0.8);
+  assert.equal(masteredData.data?.output?.clippedSampleValues, 0);
 
   const created = await client.callTool({
     name: "vocaloid_create_project",

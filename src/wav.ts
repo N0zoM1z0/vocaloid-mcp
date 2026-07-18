@@ -16,6 +16,9 @@ export interface WavAnalysis {
   peakDbfs: number | null;
   rms: number;
   rmsDbfs: number | null;
+  crestFactorDb: number | null;
+  clippedSampleValues: number;
+  clippedRatio: number;
   silent: boolean;
 }
 
@@ -130,7 +133,11 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
     let peak = 0;
     let squareSum = 0;
     let sampleValues = 0;
+    let clippedSampleValues = 0;
     let dataBytes = 0;
+    const clipThreshold = audioFormat === 3
+      ? 1
+      : 1 - 1 / (2 ** (bitsPerSample - 1));
     const targetBufferBytes = 256 * 1024;
     const bufferBytes = Math.max(blockAlign, Math.floor(targetBufferBytes / blockAlign) * blockAlign);
     for (const chunk of dataChunks) {
@@ -144,6 +151,7 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
           const value = normalizedSample(buffer, sampleOffset, audioFormat, bitsPerSample);
           const magnitude = Math.abs(value);
           if (magnitude > peak) peak = magnitude;
+          if (magnitude >= clipThreshold) clippedSampleValues++;
           squareSum += value * value;
           sampleValues++;
         }
@@ -152,6 +160,8 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
     }
     const rms = sampleValues > 0 ? Math.sqrt(squareSum / sampleValues) : 0;
     const durationSeconds = dataBytes / byteRate;
+    const peakDbfs = decibels(peak);
+    const rmsDbfs = decibels(rms);
     return {
       path,
       bytes: info.size,
@@ -164,9 +174,12 @@ export async function analyzeWav(path: string): Promise<WavAnalysis> {
       durationSeconds,
       sampleValues,
       peak,
-      peakDbfs: decibels(peak),
+      peakDbfs,
       rms,
-      rmsDbfs: decibels(rms),
+      rmsDbfs,
+      crestFactorDb: peakDbfs !== null && rmsDbfs !== null ? peakDbfs - rmsDbfs : null,
+      clippedSampleValues,
+      clippedRatio: sampleValues > 0 ? clippedSampleValues / sampleValues : 0,
       silent: peak < 0.000_01 || rms < 0.000_001,
     };
   } finally {

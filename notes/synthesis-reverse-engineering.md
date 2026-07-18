@@ -400,3 +400,36 @@ The workflow is therefore complete as a composition/render loop but this output
 is not claimed as mastered. The next tools must expose clipping/true-peak and
 loudness analysis, adjustable audio/mixer gain, stem replacement, and a bounded
 revision/mastering pass with explicit headroom targets.
+
+## Long-form rhythm, Japanese palette, and mastering (2026-07-18)
+
+The MCP now separates audio inspection from mutation. `vocaloid_analyze_wav`
+combines exact PCM sample-domain analysis with FFmpeg EBU R128 metrics, while
+`vocaloid_master_wav` performs two-pass loudnorm into a distinct output and
+accepts the file only after a second independent quality measurement. The old
+16-measure Master contained 9,844 full-scale sample values (about 0.277% of all
+sample values), measured -9.0 LUFS and +0.3 dBTP. Its descriptively named
+revision `hoshikuzu-letter-master-v1.wav` measures -13.8 LUFS, -1.0 dBTP and
+zero full-scale samples. The result reports `sourceClipped=true`: normalization
+can prevent further clipping but cannot reconstruct source transients, so the
+proper artistic revision remains a lower-level re-render.
+
+The phrase compiler is grounded in both the local VOCALOID3 manual and installed
+VSQX corpus behavior. The editor exposes quantization through 1/64 plus triplets,
+and a note may contain multiple phoneme symbols. Real projects use lyric `-` and
+phoneme `-` for a note that continues the previous syllable, and also split
+composite pronunciations across successive notes. The MCP therefore offers two
+high-level allocation modes: sequential lyric consumption for rapid syllabic
+runs and explicit lyric indices for melisma, with automatic native continuation
+events. It also supports rests, gates, dotted values, tuplets, cell overrides,
+note expression, and vibrato. The low-level VSQX representation is unchanged.
+
+Accompaniment patterns and placements make long structures compact without
+flattening their musical intent. A test arrangement uses eight source events and
+two placements to expand 96 measures into 192 shamisen notes plus 384 drum hits.
+Placements can repeat, transpose, or scale velocity, so intro, verse, pre-chorus,
+chorus, bridge, and outro may use different grooves over one tempo/meter map.
+FluidR3 preset inspection verified bank/program access to Shakuhachi (0/0/77),
+Shamisen (0/0/106), Koto (0/0/107), Taisho Koto (0/8/107), Taiko Drum
+(0/0/116), Timpani, Woodblock, and Shanai. These are draft composition colors,
+not a claim of realistic Japanese-instrument production quality.

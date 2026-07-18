@@ -42,6 +42,9 @@ test("analyzes PCM WAV amplitude and duration", async (context) => {
   assert.equal(result.durationSeconds, 4 / 8_000);
   assert.equal(result.peak, 0.5);
   assert.ok(Math.abs(result.rms - Math.sqrt(0.125)) < 1e-12);
+  assert.equal(result.clippedSampleValues, 0);
+  assert.equal(result.clippedRatio, 0);
+  assert.ok(Math.abs((result.crestFactorDb ?? 0) - 3.010299956639812) < 1e-9);
   assert.equal(result.silent, false);
 });
 
@@ -50,7 +53,19 @@ test("marks zero PCM as silent", async (context) => {
   context.after(async () => rm(temporary, { recursive: true, force: true }));
   const path = join(temporary, "silent.wav");
   await writeFile(path, pcm16Wav(new Array<number>(800).fill(0)));
-  assert.equal((await analyzeWav(path)).silent, true);
+  const result = await analyzeWav(path);
+  assert.equal(result.silent, true);
+  assert.equal(result.clippedSampleValues, 0);
+});
+
+test("counts full-scale PCM sample values", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-wav-clipped-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const path = join(temporary, "clipped.wav");
+  await writeFile(path, pcm16Wav([32_767, -32_768, 0, 16_384]));
+  const result = await analyzeWav(path);
+  assert.equal(result.clippedSampleValues, 2);
+  assert.equal(result.clippedRatio, 0.5);
 });
 
 test("analyzes the manually exported VOCALOID fixture when present", async (context) => {

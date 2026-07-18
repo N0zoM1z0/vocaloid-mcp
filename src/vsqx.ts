@@ -1108,6 +1108,40 @@ export function musicalPositionToTick(
   return songPositionTick(signatures, position, "position");
 }
 
+export function musicalTickToPosition(
+  signatures: readonly SongTimeSignatureInput[],
+  tick: number,
+): MusicalPosition {
+  assertIntegerRange(tick, 0, 2_147_483_647, "tick");
+  if (signatures.length === 0 || signatures[0]?.measure !== 0) {
+    throw new Error("time signatures must begin at measure 0");
+  }
+  let segmentStartTick = 0;
+  for (let index = 0; index < signatures.length; index += 1) {
+    const signature = signatures[index]!;
+    const nextMeasure = signatures[index + 1]?.measure;
+    const ticksPerMeasure = measureTicks(signature);
+    const segmentMeasures = nextMeasure === undefined
+      ? Number.POSITIVE_INFINITY
+      : nextMeasure - signature.measure;
+    const segmentTicks = segmentMeasures * ticksPerMeasure;
+    if (tick < segmentStartTick + segmentTicks) {
+      const withinSegment = tick - segmentStartTick;
+      const measureOffset = Math.floor(withinSegment / ticksPerMeasure);
+      const withinMeasure = withinSegment - measureOffset * ticksPerMeasure;
+      const ticksPerBeat = (SONG_RESOLUTION * 4) / signature.denominator;
+      const beat = Math.floor(withinMeasure / ticksPerBeat);
+      return {
+        measure: signature.measure + measureOffset,
+        beat,
+        tick: withinMeasure - beat * ticksPerBeat,
+      };
+    }
+    segmentStartTick += segmentTicks;
+  }
+  throw new Error(`Could not map tick ${tick} to a musical position`);
+}
+
 function audioDurationTicks(
   signatures: readonly SongTimeSignatureInput[],
   tempos: readonly SongTempoInput[],

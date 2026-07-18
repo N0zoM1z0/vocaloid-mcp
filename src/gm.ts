@@ -54,6 +54,8 @@ const DRUM_NAMES: Record<number, string> = {
 
 export interface GeneralMidiProgram {
   program: number;
+  bankMsb: number;
+  bankLsb: number;
   name: string;
   family: string;
 }
@@ -63,13 +65,35 @@ export interface GeneralMidiDrum {
   name: string;
 }
 
+export interface FeaturedInstrumentPreset {
+  name: string;
+  bankMsb: number;
+  bankLsb: number;
+  program: number;
+  role: string;
+}
+
+const JAPANESE_PALETTE: FeaturedInstrumentPreset[] = [
+  { name: "Shakuhachi", bankMsb: 0, bankLsb: 0, program: 77, role: "breathy lead, intro, and response phrases" },
+  { name: "Shamisen", bankMsb: 0, bankLsb: 0, program: 106, role: "plucked ostinato and rhythmic riffs" },
+  { name: "Koto", bankMsb: 0, bankLsb: 0, program: 107, role: "arpeggios, glissando-like runs, and chord color" },
+  { name: "Taisho Koto", bankMsb: 0, bankLsb: 8, program: 107, role: "brighter alternate koto color in FluidR3" },
+  { name: "Taiko Drum", bankMsb: 0, bankLsb: 0, program: 116, role: "pitched taiko accents on a melodic channel" },
+  { name: "Timpani", bankMsb: 0, bankLsb: 0, program: 47, role: "low ceremonial transitions and chorus impacts" },
+  { name: "Woodblock", bankMsb: 0, bankLsb: 0, program: 115, role: "dry rhythmic punctuation" },
+  { name: "Shanai", bankMsb: 0, bankLsb: 0, program: 111, role: "piercing folk lead color" },
+];
+
 export function listGeneralMidi(search?: string): {
   programs: GeneralMidiProgram[];
   drums: GeneralMidiDrum[];
+  featuredPalettes: { japanese: FeaturedInstrumentPreset[] };
 } {
   const needle = search?.trim().toLocaleLowerCase() ?? "";
   const programs = PROGRAM_NAMES.map((name, program) => ({
     program,
+    bankMsb: 0,
+    bankLsb: 0,
     name,
     family: FAMILIES[Math.floor(program / 8)]!,
   })).filter((entry) =>
@@ -78,5 +102,10 @@ export function listGeneralMidi(search?: string): {
   const drums = Object.entries(DRUM_NAMES)
     .map(([noteNumber, name]) => ({ noteNumber: Number(noteNumber), name }))
     .filter((entry) => !needle || entry.name.toLocaleLowerCase().includes(needle));
-  return { programs, drums };
+  const japanese = JAPANESE_PALETTE.filter((entry) =>
+    !needle
+    || [entry.name, entry.role, "japanese", "wafuu", "和風"]
+      .some((value) => value.toLocaleLowerCase().includes(needle)),
+  );
+  return { programs, drums, featuredPalettes: { japanese } };
 }

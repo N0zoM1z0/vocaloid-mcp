@@ -6,7 +6,9 @@ import { z } from "zod";
 
 import type { ResponseFormat } from "./types.js";
 import { renderAccompaniment } from "./accompaniment.js";
+import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { listGeneralMidi } from "./gm.js";
+import { compileVocalPhrase, type VocalPhraseInput } from "./vocal-phrase.js";
 import { renderProjectToWav } from "./render.js";
 import { discoverVoices } from "./voices.js";
 import {
@@ -23,9 +25,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.3.0" },
+  { name: "vocaloid-mcp-server", version: "0.4.0" },
   {
-    instructions: `Use this server to compose and iteratively tune native VOCALOID projects. Start with vocaloid_list_voices. For a complete long-form original song, design the form and shared tempo/meter map; call vocaloid_list_instruments and vocaloid_render_accompaniment for a real stereo instrumental WAV; then design lead, doubles, harmony, lyrics, voice-appropriate phonemes, note expressions, selective vibrato, and sparse musical control curves and call vocaloid_create_song with that WAV as an audio_part. It creates a multi-track/multi-part VSQX from nothing using zero-based measure/beat/tick positions. Use vocaloid_create_project only for a simple single-part draft; its note/control ticks are relative to that part. Validate and inspect before vocaloid_render_wav. After analyzing or listening to the Master render, use note-expression and replace-range control edits for local revisions. Prefer new output paths; explicit overwrites create backups. The bundled GM SoundFont is a draft-quality renderer and the server does not yet make perceptual mix/master decisions, so report that boundary accurately.`,
+    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a long song, design named sections plus a shared tempo/meter map and distinct grooves; use accompaniment patterns/placements to repeat and vary instrumental motifs without enumerating thousands of events, then vocaloid_render_accompaniment creates a real stereo WAV. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplet lyrics, while explicit lyric_index supports melisma with native '-' continuations. Call vocaloid_create_song with the backing as an audio_part, validate/inspect, then vocaloid_render_wav. Always call vocaloid_analyze_wav on backing and Master; lower source/mixer levels and re-render if clipped, otherwise vocaloid_master_wav can meet LUFS/true-peak targets. Use descriptive song slugs in every output name, for example hoshikuzu-letter-backing-v1.wav, hoshikuzu-letter.vsqx, hoshikuzu-letter-mix-v1.wav, and hoshikuzu-letter-master-v1.wav. Prefer new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
   },
 );
 
@@ -143,6 +145,64 @@ const SongCurveSchema = z
   })
   .strict();
 
+const RhythmValueSchema = z
+  .object({
+    denominator: z.union([
+      z.literal(1), z.literal(2), z.literal(4), z.literal(8),
+      z.literal(16), z.literal(32), z.literal(64),
+    ]),
+    dots: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
+    tuplet: z
+      .object({
+        played: z.number().int().min(2).max(16),
+        in_time_of: z.number().int().min(1).max(16),
+      })
+      .strict()
+      .optional()
+      .describe("For triplet eighths use denominator=8, played=3, in_time_of=2"),
+  })
+  .strict();
+
+const VocalLyricUnitSchema = z
+  .object({
+    lyric: z.string().min(1).max(32),
+    phonemes: z.string().min(1).max(32),
+    phoneme_locked: z.boolean().default(false),
+  })
+  .strict();
+
+const VocalRhythmCellSchema = z
+  .object({
+    duration: z
+      .union([z.number().int().min(1), RhythmValueSchema])
+      .describe("Explicit ticks or a whole/half/quarter/8th/16th/32nd/64th dotted/tuplet value"),
+    rest: z.boolean().default(false),
+    note_number: z.number().int().min(0).max(127).optional(),
+    lyric_index: z.number().int().min(0).optional(),
+    lyric: z.string().min(1).max(32).optional(),
+    phonemes: z.string().min(1).max(32).optional(),
+    phoneme_locked: z.boolean().optional(),
+    gate_percent: z.number().int().min(1).max(100).default(100),
+    velocity: z.number().int().min(0).max(127).default(64),
+    style: z.record(z.string().min(1).max(32), z.number().int()).optional(),
+    vibrato: VibratoSchema.optional(),
+  })
+  .strict();
+
+const VocalPhraseSchema = z
+  .object({
+    start: MusicalPositionSchema,
+    allocation: z
+      .enum(["sequential", "explicit"])
+      .default("sequential")
+      .describe(
+        "Sequential consumes one lyric per note; explicit uses lyric_index so one lyric may span several notes with automatic '-' continuations",
+      ),
+    lyrics: z.array(VocalLyricUnitSchema).min(1).max(5000),
+    cells: z.array(VocalRhythmCellSchema).min(1).max(20_000),
+  })
+  .strict();
+
 const SongPartSchema = z
   .object({
     name: z.string().min(1).max(256),
@@ -150,6 +210,13 @@ const SongPartSchema = z
     start: MusicalPositionSchema.describe("Inclusive absolute song position"),
     end: MusicalPositionSchema.describe("Exclusive absolute song position"),
     notes: z.array(PositionedNoteSchema).max(5000).default([]),
+    phrases: z
+      .array(VocalPhraseSchema)
+      .max(256)
+      .default([])
+      .describe(
+        "Phrase-level lyric/rhythm input supporting rests, syncopation, 1/64 values, tuplets, rapid syllables, and melisma",
+      ),
     control_curves: z.array(SongCurveSchema).max(8).default([]),
   })
   .strict();
@@ -202,6 +269,33 @@ const AccompanimentNoteSchema = z
   })
   .strict();
 
+const AccompanimentPatternNoteSchema = z
+  .object({
+    offset: MusicalPositionSchema.describe("Measure/beat/tick offset within the pattern"),
+    duration: z.number().int().min(1),
+    note_number: z.number().int().min(0).max(127),
+    velocity: z.number().int().min(1).max(127).default(88),
+  })
+  .strict();
+
+const AccompanimentPatternSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u),
+    measures: z.number().int().min(1).max(256),
+    notes: z.array(AccompanimentPatternNoteSchema).min(1).max(20_000),
+  })
+  .strict();
+
+const AccompanimentPlacementSchema = z
+  .object({
+    pattern_id: z.string().min(1).max(64),
+    start: MusicalPositionSchema.describe("Measure-aligned placement start"),
+    repeats: z.number().int().min(1).max(1024).default(1),
+    transpose: z.number().int().min(-48).max(48).default(0),
+    velocity_scale: z.number().gt(0).max(4).default(1),
+  })
+  .strict();
+
 const AccompanimentTrackSchema = z
   .object({
     name: z.string().min(1).max(255),
@@ -211,11 +305,18 @@ const AccompanimentTrackSchema = z
       .min(0)
       .max(127)
       .describe("Zero-based General MIDI program: 0 acoustic piano, 24 nylon guitar, 33 finger bass"),
+    bank_msb: z.number().int().min(0).max(127).default(0),
+    bank_lsb: z.number().int().min(0).max(127).default(0),
     volume: z.number().int().min(0).max(127).default(100),
     pan: z.number().int().min(0).max(127).default(64),
-    notes: z.array(AccompanimentNoteSchema).min(1).max(20_000),
+    notes: z.array(AccompanimentNoteSchema).max(20_000).default([]),
+    patterns: z.array(AccompanimentPatternSchema).max(256).default([]),
+    placements: z.array(AccompanimentPlacementSchema).max(5000).default([]),
   })
-  .strict();
+  .strict()
+  .refine((track) => track.notes.length > 0 || track.placements.length > 0, {
+    message: "Each accompaniment track needs direct notes or pattern placements",
+  });
 
 const DrumHitSchema = z
   .object({
@@ -228,6 +329,32 @@ const DrumHitSchema = z
       .describe("General MIDI percussion note on channel 10; e.g. 36 kick, 38 snare, 42 closed hi-hat"),
     velocity: z.number().int().min(1).max(127).default(96),
     duration: z.number().int().min(1).default(60),
+  })
+  .strict();
+
+const DrumPatternHitSchema = z
+  .object({
+    offset: MusicalPositionSchema,
+    note_number: z.number().int().min(0).max(127),
+    velocity: z.number().int().min(1).max(127).default(96),
+    duration: z.number().int().min(1).default(60),
+  })
+  .strict();
+
+const DrumPatternSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u),
+    measures: z.number().int().min(1).max(256),
+    hits: z.array(DrumPatternHitSchema).min(1).max(50_000),
+  })
+  .strict();
+
+const DrumPlacementSchema = z
+  .object({
+    pattern_id: z.string().min(1).max(64),
+    start: MusicalPositionSchema.describe("Measure-aligned placement start"),
+    repeats: z.number().int().min(1).max(1024).default(1),
+    velocity_scale: z.number().gt(0).max(4).default(1),
   })
   .strict();
 
@@ -291,6 +418,55 @@ function normalizePositionedNotes(notes: z.infer<typeof PositionedNoteSchema>[])
     const { tick: _tick, ...withoutTick } = normalized;
     return { ...withoutTick, position: note.position };
   });
+}
+
+function normalizeVocalPhrase(
+  phrase: z.infer<typeof VocalPhraseSchema>,
+): VocalPhraseInput {
+  return {
+    start: phrase.start,
+    allocation: phrase.allocation,
+    lyrics: phrase.lyrics.map((lyric) => ({
+      lyric: lyric.lyric,
+      phonemes: lyric.phonemes,
+      phonemeLocked: lyric.phoneme_locked,
+    })),
+    cells: phrase.cells.map((cell) => ({
+      duration: typeof cell.duration === "number"
+        ? cell.duration
+        : {
+            denominator: cell.duration.denominator,
+            dots: cell.duration.dots,
+            ...(cell.duration.tuplet
+              ? {
+                  tuplet: {
+                    played: cell.duration.tuplet.played,
+                    inTimeOf: cell.duration.tuplet.in_time_of,
+                  },
+                }
+              : {}),
+          },
+      rest: cell.rest,
+      ...(cell.note_number !== undefined ? { noteNumber: cell.note_number } : {}),
+      ...(cell.lyric_index !== undefined ? { lyricIndex: cell.lyric_index } : {}),
+      ...(cell.lyric !== undefined ? { lyric: cell.lyric } : {}),
+      ...(cell.phonemes !== undefined ? { phonemes: cell.phonemes } : {}),
+      ...(cell.phoneme_locked !== undefined ? { phonemeLocked: cell.phoneme_locked } : {}),
+      gatePercent: cell.gate_percent,
+      velocity: cell.velocity,
+      ...(cell.style !== undefined ? { style: cell.style } : {}),
+      ...(cell.vibrato !== undefined
+        ? {
+            vibrato: {
+              type: cell.vibrato.type,
+              length: cell.vibrato.length,
+              ...(cell.vibrato.depth !== undefined ? { depth: cell.vibrato.depth } : {}),
+              ...(cell.vibrato.rate !== undefined ? { rate: cell.vibrato.rate } : {}),
+            },
+          }
+        : {}),
+    })),
+  };
 }
 
 const NoteExpressionSchema = z
@@ -644,7 +820,7 @@ server.registerTool(
     title: "Render Instrumental Accompaniment",
     description: `Compose and render a real 16-bit PCM stereo WAV accompaniment from structured instrumental notes and drum hits.
 
-This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI File is used only inside the bounded FluidSynth process and is deleted afterward. Tracks use zero-based General MIDI programs, per-track volume/pan, and absolute zero-based measure/beat/tick positions. Tempo and meter changes use the same coordinate system as vocaloid_create_song. The verified non-silent WAV can be passed directly as a stereo audio_part to vocaloid_create_song, then vocaloid_render_wav exports the combined vocal/harmony/backing Master. The bundled GM SoundFont is suitable for composition drafts; soundfont_path can select a better compatible SF2 within an allowed read root.`,
+This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI File is used only inside the bounded FluidSynth process and is deleted afterward. Tracks use SoundFont bank MSB/LSB plus program, volume/pan, and absolute zero-based measure/beat/tick positions. Reusable per-track and drum patterns can be placed, repeated, transposed, and velocity-scaled across 3-4 minute arrangements, making different intro/verse/pre/chorus/bridge grooves concise. Tempo and meter changes use the same coordinate system as vocaloid_create_song. The verified non-silent WAV can be passed directly as a stereo audio_part, then vocaloid_render_wav exports the combined vocal/harmony/backing Master. The bundled GM SoundFont is suitable for drafts and includes Shamisen, Koto, Shakuhachi, Taiko, and Taisho Koto; soundfont_path can select a better compatible SF2 within an allowed read root.`,
     inputSchema: z
       .object({
         output_path: PathSchema,
@@ -678,6 +854,8 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
         end: MusicalPositionSchema.describe("Exclusive song end; all notes and drum hits must end before it"),
         tracks: z.array(AccompanimentTrackSchema).min(1).max(15),
         drums: z.array(DrumHitSchema).max(50_000).default([]),
+        drum_patterns: z.array(DrumPatternSchema).max(256).default([]),
+        drum_placements: z.array(DrumPlacementSchema).max(5000).default([]),
         sample_rate: z.union([z.literal(44_100), z.literal(48_000), z.literal(96_000)]).default(44_100),
         gain: z.number().gt(0).max(10).default(0.2),
         reverb: z.boolean().default(true),
@@ -705,6 +883,8 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
         tracks: params.tracks.map((track) => ({
           name: track.name,
           program: track.program,
+          bankMsb: track.bank_msb,
+          bankLsb: track.bank_lsb,
           volume: track.volume,
           pan: track.pan,
           notes: track.notes.map((note) => ({
@@ -713,12 +893,45 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
             noteNumber: note.note_number,
             velocity: note.velocity,
           })),
+          patterns: track.patterns.map((pattern) => ({
+            id: pattern.id,
+            measures: pattern.measures,
+            notes: pattern.notes.map((note) => ({
+              offset: note.offset,
+              duration: note.duration,
+              noteNumber: note.note_number,
+              velocity: note.velocity,
+            })),
+          })),
+          placements: track.placements.map((placement) => ({
+            patternId: placement.pattern_id,
+            start: placement.start,
+            repeats: placement.repeats,
+            transpose: placement.transpose,
+            velocityScale: placement.velocity_scale,
+          })),
         })),
         drums: params.drums.map((hit) => ({
           position: hit.position,
           noteNumber: hit.note_number,
           velocity: hit.velocity,
           duration: hit.duration,
+        })),
+        drumPatterns: params.drum_patterns.map((pattern) => ({
+          id: pattern.id,
+          measures: pattern.measures,
+          hits: pattern.hits.map((hit) => ({
+            offset: hit.offset,
+            noteNumber: hit.note_number,
+            velocity: hit.velocity,
+            duration: hit.duration,
+          })),
+        })),
+        drumPlacements: params.drum_placements.map((placement) => ({
+          patternId: placement.pattern_id,
+          start: placement.start,
+          repeats: placement.repeats,
+          velocityScale: placement.velocity_scale,
         })),
         sampleRate: params.sample_rate,
         gain: params.gain,
@@ -739,12 +952,66 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
 );
 
 server.registerTool(
+  "vocaloid_compile_vocal_phrase",
+  {
+    title: "Compile Vocal Lyrics and Rhythm Phrase",
+    description: `Compile phrase-level lyrics and rhythm cells into native VOCALOID note events without writing a project.
+
+Use this to preview rapid lyrics, tuplets, syncopation, rests, pickups, and melisma before vocaloid_create_song. Sequential allocation consumes one lyric unit per note cell, which makes 1/16–1/64 or tuplet syllabic runs concise. Explicit allocation uses lyric_index: consecutive cells pointing to the same lyric automatically compile to the real-world VSQX continuation representation lyric='-' and phonemes='-'. A cell may override lyric/phonemes to split diphthongs or consonant clusters across notes. Rhythm values use 480 PPQ and support dotted notes and N-in-the-time-of-M tuplets; explicit tick durations remain available. Returns positioned notes plus phrase density/continuation statistics.`,
+    inputSchema: z
+      .object({
+        time_signatures: z
+          .array(
+            z
+              .object({
+                measure: z.number().int().min(0).max(100_000),
+                numerator: z.number().int().min(1).max(32),
+                denominator: z.union([
+                  z.literal(1), z.literal(2), z.literal(4),
+                  z.literal(8), z.literal(16), z.literal(32),
+                ]),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(256)
+          .default([{ measure: 0, numerator: 4, denominator: 4 }]),
+        phrase: VocalPhraseSchema,
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = compileVocalPhrase(
+        params.time_signatures,
+        normalizeVocalPhrase(params.phrase),
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Compiled ${result.noteCells} vocal notes (${result.continuations} continuations, fastest ${result.fastestNoteTicks ?? 0} ticks)`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_create_song",
   {
     title: "Create Structured VOCALOID Song",
     description: `Create a complete multi-track, multi-part V3/V4 VSQX song from nothing using musical positions.
 
-Use this for long-form composition, lead/double/harmony/countermelody vocal tracks, named sections, tempo changes, meter changes, and real mono/stereo WAV backing or stems. Positions are zero-based measure/beat/tick coordinates after the count-in; the server converts them to VSQX project and part-relative ticks. Each track is monophonic and may contain many non-overlapping parts; use separate tracks for simultaneous harmony. Notes and control curves use absolute song positions, so agents can revise arrangements without manually calculating part offsets. Every track has an explicit installed voice and mixer settings. Audio headers are verified and their playTime is calculated across the tempo map. Call vocaloid_list_voices first. The project is written atomically and does not copy any source VSQX.`,
+Use this for long-form composition, lead/double/harmony/countermelody vocal tracks, named sections, tempo changes, meter changes, and real mono/stereo WAV backing or stems. Positions are zero-based measure/beat/tick coordinates after the count-in; the server converts them to VSQX project and part-relative ticks. Parts may contain direct notes and/or phrase-level lyric/rhythm cells for rapid syllables, tuplets, rests, syncopation, and melisma. Each track is monophonic and may contain many non-overlapping parts; use separate tracks for simultaneous harmony. Notes and control curves use absolute song positions, so agents can revise arrangements without manually calculating part offsets. Every track has an explicit installed voice and mixer settings. Audio headers are verified and their playTime is calculated across the tempo map. Call vocaloid_list_voices first. Use a descriptive sequence-based output filename. The project is written atomically and does not copy any source VSQX.`,
     inputSchema: z
       .object({
         output_path: PathSchema,
@@ -849,7 +1116,15 @@ Use this for long-form composition, lead/double/harmony/countermelody vocal trac
               ...(part.comment !== undefined ? { comment: part.comment } : {}),
               start: part.start,
               end: part.end,
-              notes: normalizePositionedNotes(part.notes),
+              notes: [
+                ...normalizePositionedNotes(part.notes),
+                ...part.phrases.flatMap((phrase) =>
+                  compileVocalPhrase(
+                    params.time_signatures,
+                    normalizeVocalPhrase(phrase),
+                  ).notes
+                ),
+              ],
               controlCurves: Object.fromEntries(
                 part.control_curves.map((entry) => [entry.curve, entry.points]),
               ),
@@ -1011,6 +1286,97 @@ Use vocaloid_list_notes first; note_index is the stable index returned there. Th
         result,
         params.response_format,
         `Updated expressions on ${result.updated} notes`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_analyze_wav",
+  {
+    title: "Analyze WAV Mix Quality",
+    description: `Read a WAV and return actionable mix/master quality metrics without modifying it.
+
+Combines sample-domain RIFF analysis with FFmpeg EBU R128 measurement: integrated LUFS, loudness range, sample peak, true peak, RMS, crest factor, full-scale sample count/ratio, and target deltas. Recommendations distinguish source clipping from correctable loudness/true-peak issues. Use this on accompaniment and original-Editor Master renders before deciding whether to lower source levels, re-render, or call vocaloid_master_wav.`,
+    inputSchema: z
+      .object({
+        path: PathSchema,
+        target_lufs: z.number().min(-24).max(-5).default(-14),
+        target_true_peak_dbfs: z.number().min(-6).max(-0.1).default(-1),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await analyzeAudioQuality(
+        params.path,
+        params.target_lufs,
+        params.target_true_peak_dbfs,
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Analyzed ${result.durationSeconds.toFixed(3)} seconds: ${result.integratedLufs.toFixed(1)} LUFS, ${result.truePeakDbfs.toFixed(1)} dBFS true peak`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_master_wav",
+  {
+    title: "Master WAV to Loudness and True-Peak Targets",
+    description: `Create a new mastered 16-bit PCM WAV using measured two-pass EBU R128 loudness normalization and true-peak limiting.
+
+The source is never modified and input_path must differ from output_path. The tool first measures loudness, renders to a temporary sibling, independently re-analyzes the result, and atomically commits only when integrated loudness is within 0.6 LU and true peak within 0.2 dB of the requested ceilings. Existing output is refused unless overwrite=true, which creates a timestamped backup. If the source already contains full-scale clipped samples, success reports sourceClipped=true: mastering can prevent new overs but cannot reconstruct lost transients, so a lower-level remix/re-render remains preferable.`,
+    inputSchema: z
+      .object({
+        input_path: PathSchema,
+        output_path: PathSchema,
+        target_lufs: z.number().min(-24).max(-5).default(-14),
+        target_true_peak_dbfs: z.number().min(-6).max(-0.1).default(-1),
+        target_loudness_range_lu: z.number().min(1).max(20).default(11),
+        overwrite: z.boolean().default(false),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await masterWav({
+        inputPath: params.input_path,
+        outputPath: params.output_path,
+        targetLufs: params.target_lufs,
+        targetTruePeakDbfs: params.target_true_peak_dbfs,
+        targetLoudnessRangeLu: params.target_loudness_range_lu,
+        overwrite: params.overwrite,
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Mastered to ${result.output.integratedLufs.toFixed(1)} LUFS and ${result.output.truePeakDbfs.toFixed(1)} dBFS true peak`,
+        result.sourceClipped
+          ? ["The source contained clipped samples; re-render the mix with more headroom to restore transient quality"]
+          : [],
       );
     } catch (error) {
       return errorResult(error);

@@ -26,12 +26,35 @@ export interface AccompanimentNoteInput {
   velocity?: number;
 }
 
+export interface AccompanimentPatternNoteInput extends Omit<AccompanimentNoteInput, "position"> {
+  /** Measure/beat/tick offset within the reusable pattern. */
+  offset: MusicalPosition;
+}
+
+export interface AccompanimentPatternInput {
+  id: string;
+  measures: number;
+  notes: AccompanimentPatternNoteInput[];
+}
+
+export interface AccompanimentPatternPlacementInput {
+  patternId: string;
+  start: MusicalPosition;
+  repeats: number;
+  transpose?: number;
+  velocityScale?: number;
+}
+
 export interface AccompanimentTrackInput {
   name: string;
   program: number;
+  bankMsb?: number;
+  bankLsb?: number;
   volume?: number;
   pan?: number;
-  notes: AccompanimentNoteInput[];
+  notes?: AccompanimentNoteInput[];
+  patterns?: AccompanimentPatternInput[];
+  placements?: AccompanimentPatternPlacementInput[];
 }
 
 export interface DrumHitInput {
@@ -41,6 +64,23 @@ export interface DrumHitInput {
   duration?: number;
 }
 
+export interface DrumPatternHitInput extends Omit<DrumHitInput, "position"> {
+  offset: MusicalPosition;
+}
+
+export interface DrumPatternInput {
+  id: string;
+  measures: number;
+  hits: DrumPatternHitInput[];
+}
+
+export interface DrumPatternPlacementInput {
+  patternId: string;
+  start: MusicalPosition;
+  repeats: number;
+  velocityScale?: number;
+}
+
 export interface RenderAccompanimentOptions {
   outputPath: string;
   timeSignatures: SongTimeSignatureInput[];
@@ -48,6 +88,8 @@ export interface RenderAccompanimentOptions {
   end: MusicalPosition;
   tracks: AccompanimentTrackInput[];
   drums?: DrumHitInput[];
+  drumPatterns?: DrumPatternInput[];
+  drumPlacements?: DrumPatternPlacementInput[];
   sampleRate: 44_100 | 48_000 | 96_000;
   gain: number;
   reverb: boolean;
@@ -63,7 +105,22 @@ export interface AccompanimentRenderResult extends WavAnalysis {
   tracks: number;
   notes: number;
   drumHits: number;
+  sourceNotes: number;
+  patterns: number;
+  placements: number;
   endTick: number;
+}
+
+interface ExpandedAccompanimentTrack extends AccompanimentTrackInput {
+  notes: AccompanimentNoteInput[];
+}
+
+interface ExpandedArrangement {
+  tracks: ExpandedAccompanimentTrack[];
+  drums: DrumHitInput[];
+  sourceNotes: number;
+  patterns: number;
+  placements: number;
 }
 
 interface MidiEvent {
@@ -76,6 +133,139 @@ function assertIntegerRange(value: number, minimum: number, maximum: number, nam
   if (!Number.isInteger(value) || value < minimum || value > maximum) {
     throw new Error(`${name} must be an integer in ${minimum}..${maximum}, got ${value}`);
   }
+}
+
+function scaledVelocity(value: number, scale: number, name: string): number {
+  if (!Number.isFinite(scale) || scale <= 0 || scale > 4) {
+    throw new Error(`${name} velocityScale must be greater than 0 and at most 4, got ${scale}`);
+  }
+  return Math.max(1, Math.min(127, Math.round(value * scale)));
+}
+
+function placementStart(start: MusicalPosition, name: string): void {
+  if (start.beat !== 0 || (start.tick ?? 0) !== 0) {
+    throw new Error(`${name}.start must be measure-aligned (beat 0, tick 0)`);
+  }
+}
+
+function patternOffset(offset: MusicalPosition, measures: number, name: string): void {
+  assertIntegerRange(offset.measure, 0, measures - 1, `${name}.offset.measure`);
+}
+
+export function expandArrangement(options: RenderAccompanimentOptions): ExpandedArrangement {
+  let sourceNotes = 0;
+  let patterns = 0;
+  let placements = 0;
+  let expandedEvents = 0;
+  const tracks: ExpandedAccompanimentTrack[] = options.tracks.map((track, trackIndex) => {
+    const notes = [...(track.notes ?? [])];
+    sourceNotes += notes.length;
+    const byId = new Map<string, AccompanimentPatternInput>();
+    for (const [patternIndex, pattern] of (track.patterns ?? []).entries()) {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(pattern.id)) {
+        throw new Error(`tracks[${trackIndex}].patterns[${patternIndex}].id is invalid`);
+      }
+      assertIntegerRange(pattern.measures, 1, 256, `tracks[${trackIndex}].patterns[${patternIndex}].measures`);
+      if (pattern.notes.length < 1) {
+        throw new Error(`tracks[${trackIndex}].patterns[${patternIndex}].notes must not be empty`);
+      }
+      if (byId.has(pattern.id)) throw new Error(`Track ${track.name} contains duplicate pattern id ${pattern.id}`);
+      for (const [noteIndex, note] of pattern.notes.entries()) {
+        patternOffset(note.offset, pattern.measures, `tracks[${trackIndex}].patterns[${patternIndex}].notes[${noteIndex}]`);
+      }
+      byId.set(pattern.id, pattern);
+      sourceNotes += pattern.notes.length;
+      patterns++;
+    }
+    for (const [placementIndex, placement] of (track.placements ?? []).entries()) {
+      placementStart(placement.start, `tracks[${trackIndex}].placements[${placementIndex}]`);
+      assertIntegerRange(placement.repeats, 1, 1024, `tracks[${trackIndex}].placements[${placementIndex}].repeats`);
+      assertIntegerRange(placement.transpose ?? 0, -48, 48, `tracks[${trackIndex}].placements[${placementIndex}].transpose`);
+      const pattern = byId.get(placement.patternId);
+      if (!pattern) {
+        throw new Error(
+          `Track ${track.name} placement references unknown pattern ${placement.patternId}; define it in the same track`,
+        );
+      }
+      for (let repeat = 0; repeat < placement.repeats; repeat += 1) {
+        for (const patternNote of pattern.notes) {
+          const noteNumber = patternNote.noteNumber + (placement.transpose ?? 0);
+          assertIntegerRange(noteNumber, 0, 127, `expanded ${track.name}/${pattern.id} noteNumber`);
+          notes.push({
+            position: {
+              measure:
+                placement.start.measure
+                + repeat * pattern.measures
+                + patternNote.offset.measure,
+              beat: patternNote.offset.beat,
+              tick: patternNote.offset.tick ?? 0,
+            },
+            duration: patternNote.duration,
+            noteNumber,
+            velocity: scaledVelocity(
+              patternNote.velocity ?? 88,
+              placement.velocityScale ?? 1,
+              `tracks[${trackIndex}].placements[${placementIndex}]`,
+            ),
+          });
+        }
+      }
+      placements++;
+    }
+    expandedEvents += notes.length;
+    if (notes.length === 0) {
+      throw new Error(`Track ${track.name} has no direct or pattern-expanded notes`);
+    }
+    return { ...track, notes };
+  });
+
+  const drums = [...(options.drums ?? [])];
+  sourceNotes += drums.length;
+  const drumPatterns = new Map<string, DrumPatternInput>();
+  for (const [patternIndex, pattern] of (options.drumPatterns ?? []).entries()) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(pattern.id)) {
+      throw new Error(`drumPatterns[${patternIndex}].id is invalid`);
+    }
+    assertIntegerRange(pattern.measures, 1, 256, `drumPatterns[${patternIndex}].measures`);
+    if (pattern.hits.length < 1) throw new Error(`drumPatterns[${patternIndex}].hits must not be empty`);
+    if (drumPatterns.has(pattern.id)) throw new Error(`Duplicate drum pattern id ${pattern.id}`);
+    for (const [hitIndex, hit] of pattern.hits.entries()) {
+      patternOffset(hit.offset, pattern.measures, `drumPatterns[${patternIndex}].hits[${hitIndex}]`);
+    }
+    drumPatterns.set(pattern.id, pattern);
+    sourceNotes += pattern.hits.length;
+    patterns++;
+  }
+  for (const [placementIndex, placement] of (options.drumPlacements ?? []).entries()) {
+    placementStart(placement.start, `drumPlacements[${placementIndex}]`);
+    assertIntegerRange(placement.repeats, 1, 1024, `drumPlacements[${placementIndex}].repeats`);
+    const pattern = drumPatterns.get(placement.patternId);
+    if (!pattern) throw new Error(`Drum placement references unknown pattern ${placement.patternId}`);
+    for (let repeat = 0; repeat < placement.repeats; repeat += 1) {
+      for (const hit of pattern.hits) {
+        drums.push({
+          position: {
+            measure: placement.start.measure + repeat * pattern.measures + hit.offset.measure,
+            beat: hit.offset.beat,
+            tick: hit.offset.tick ?? 0,
+          },
+          noteNumber: hit.noteNumber,
+          velocity: scaledVelocity(
+            hit.velocity ?? 96,
+            placement.velocityScale ?? 1,
+            `drumPlacements[${placementIndex}]`,
+          ),
+          duration: hit.duration ?? 60,
+        });
+      }
+    }
+    placements++;
+  }
+  expandedEvents += drums.length;
+  if (expandedEvents > 200_000) {
+    throw new Error(`Expanded arrangement contains ${expandedEvents} events; maximum is 200000`);
+  }
+  return { tracks, drums, sourceNotes, patterns, placements };
 }
 
 function encodeVariableLength(value: number): number[] {
@@ -149,16 +339,18 @@ function conductorTrack(
 }
 
 function instrumentTrack(
-  track: AccompanimentTrackInput,
+  track: ExpandedAccompanimentTrack,
   channel: number,
   signatures: readonly SongTimeSignatureInput[],
   endTick: number,
 ): Buffer {
   const events: MidiEvent[] = [
     { tick: 0, priority: 0, bytes: metaText(0x03, track.name) },
-    { tick: 0, priority: 1, bytes: [0xc0 | channel, track.program] },
-    { tick: 0, priority: 2, bytes: [0xb0 | channel, 7, track.volume ?? 100] },
-    { tick: 0, priority: 3, bytes: [0xb0 | channel, 10, track.pan ?? 64] },
+    { tick: 0, priority: 1, bytes: [0xb0 | channel, 0, track.bankMsb ?? 0] },
+    { tick: 0, priority: 2, bytes: [0xb0 | channel, 32, track.bankLsb ?? 0] },
+    { tick: 0, priority: 3, bytes: [0xc0 | channel, track.program] },
+    { tick: 0, priority: 4, bytes: [0xb0 | channel, 7, track.volume ?? 100] },
+    { tick: 0, priority: 5, bytes: [0xb0 | channel, 10, track.pan ?? 64] },
   ];
   for (const note of track.notes) {
     const start = musicalPositionToTick(signatures, note.position);
@@ -190,14 +382,18 @@ function drumTrack(
   return trackChunk(events, endTick);
 }
 
-function midiFile(options: RenderAccompanimentOptions, endTick: number): Buffer {
+function midiFile(
+  options: RenderAccompanimentOptions,
+  arrangement: ExpandedArrangement,
+  endTick: number,
+): Buffer {
   const tracks = [
     conductorTrack(options.timeSignatures, options.tempos, endTick),
-    ...options.tracks.map((track, index) =>
+    ...arrangement.tracks.map((track, index) =>
       instrumentTrack(track, MELODIC_CHANNELS[index]!, options.timeSignatures, endTick),
     ),
-    ...((options.drums?.length ?? 0) > 0
-      ? [drumTrack(options.drums ?? [], options.timeSignatures, endTick)]
+    ...(arrangement.drums.length > 0
+      ? [drumTrack(arrangement.drums, options.timeSignatures, endTick)]
       : []),
   ];
   const header = Buffer.from([
@@ -210,14 +406,16 @@ function midiFile(options: RenderAccompanimentOptions, endTick: number): Buffer 
   return Buffer.concat([header, ...tracks]);
 }
 
-function validateOptions(options: RenderAccompanimentOptions): number {
+function validateOptions(
+  options: RenderAccompanimentOptions,
+  arrangement: ExpandedArrangement,
+): number {
   if (options.timeSignatures.length < 1 || options.timeSignatures[0]?.measure !== 0) {
     throw new Error("timeSignatures must begin at measure 0");
   }
   let previousMeasure = -1;
   for (const [index, signature] of options.timeSignatures.entries()) {
     assertIntegerRange(signature.measure, 0, 100_000, `timeSignatures[${index}].measure`);
-    assertIntegerRange(signature.numerator, 1, 32, `timeSignatures[${index}].numerator`);
     if (![1, 2, 4, 8, 16, 32].includes(signature.denominator)) {
       throw new Error(`timeSignatures[${index}].denominator is unsupported`);
     }
@@ -240,11 +438,13 @@ function validateOptions(options: RenderAccompanimentOptions): number {
   if (options.tracks.length < 1 || options.tracks.length > MELODIC_CHANNELS.length) {
     throw new Error(`tracks must contain 1..${MELODIC_CHANNELS.length} entries`);
   }
-  for (const [trackIndex, track] of options.tracks.entries()) {
+  for (const [trackIndex, track] of arrangement.tracks.entries()) {
     if (track.name.length < 1 || track.name.length > 255) {
       throw new Error(`tracks[${trackIndex}].name must contain 1..255 characters`);
     }
     assertIntegerRange(track.program, 0, 127, `tracks[${trackIndex}].program`);
+    assertIntegerRange(track.bankMsb ?? 0, 0, 127, `tracks[${trackIndex}].bankMsb`);
+    assertIntegerRange(track.bankLsb ?? 0, 0, 127, `tracks[${trackIndex}].bankLsb`);
     assertIntegerRange(track.volume ?? 100, 0, 127, `tracks[${trackIndex}].volume`);
     assertIntegerRange(track.pan ?? 64, 0, 127, `tracks[${trackIndex}].pan`);
     for (const [noteIndex, note] of track.notes.entries()) {
@@ -254,7 +454,7 @@ function validateOptions(options: RenderAccompanimentOptions): number {
       assertIntegerRange(note.velocity ?? 88, 1, 127, `tracks[${trackIndex}].notes[${noteIndex}].velocity`);
     }
   }
-  for (const [index, hit] of (options.drums ?? []).entries()) {
+  for (const [index, hit] of arrangement.drums.entries()) {
     musicalPositionToTick(options.timeSignatures, hit.position);
     assertIntegerRange(hit.noteNumber, 0, 127, `drums[${index}].noteNumber`);
     assertIntegerRange(hit.velocity ?? 96, 1, 127, `drums[${index}].velocity`);
@@ -280,7 +480,8 @@ async function exists(path: string): Promise<boolean> {
 export async function renderAccompaniment(
   options: RenderAccompanimentOptions,
 ): Promise<AccompanimentRenderResult> {
-  const endTick = validateOptions(options);
+  const arrangement = expandArrangement(options);
+  const endTick = validateOptions(options, arrangement);
   const outputPath = await resolveWritablePath(options.outputPath);
   if (extname(outputPath).toLowerCase() !== ".wav") {
     throw new Error(`Output path must end in .wav: ${outputPath}`);
@@ -300,7 +501,7 @@ export async function renderAccompaniment(
   const temporaryMidi = join(dirname(outputPath), `.${basename(outputPath)}.${unique}.mid`);
   const temporaryWav = join(dirname(outputPath), `.${basename(outputPath)}.${unique}.wav`);
   try {
-    await writeFile(temporaryMidi, midiFile(options, endTick), { flag: "wx" });
+    await writeFile(temporaryMidi, midiFile(options, arrangement, endTick), { flag: "wx" });
     try {
       await execFileAsync(
         fluidsynth,
@@ -345,9 +546,12 @@ export async function renderAccompaniment(
       outputPath,
       ...(backupPath ? { backupPath } : {}),
       soundfontPath: soundfont,
-      tracks: options.tracks.length,
-      notes: options.tracks.reduce((sum, track) => sum + track.notes.length, 0),
-      drumHits: options.drums?.length ?? 0,
+      tracks: arrangement.tracks.length,
+      notes: arrangement.tracks.reduce((sum, track) => sum + track.notes.length, 0),
+      drumHits: arrangement.drums.length,
+      sourceNotes: arrangement.sourceNotes,
+      patterns: arrangement.patterns,
+      placements: arrangement.placements,
       endTick,
     };
   } finally {
