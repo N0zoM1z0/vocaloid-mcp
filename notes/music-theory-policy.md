@@ -22,6 +22,14 @@ Style evidence never suppresses a structural error and never supplies the next n
 
 Every rule has a stable uppercase code and an explicit rule version. A ruleset has a stable ID and content hash. Reports are sorted deterministically so an unchanged composition produces byte-stable findings.
 
+## Symbolic analyzer boundary
+
+`analyzeManifestTheory` builds one read-only symbolic index, then reports separate form, timeline, key/harmony, melody, rhythm, vocal/note-allocation, voice-leading, arrangement, and performance metrics. Its interval queries and register occupancy use bounded indexes/sweeps; a 20,000-event vocal fixture and a 20,000-event overlapping-arrangement fixture are required to finish within two seconds on the development host without mutating the manifest.
+
+The analyzer can locate such things as incomplete harmonic coverage, unresolved sustained non-chord tones, unbalanced leaps, missing breath windows, mora/consonant timing budgets, unsuitable melisma phonemes, compound-meter/pattern conflicts, cross-voice collisions, slash-bass conflicts, register crowding, duplicated accompaniment roles, and section-density mismatches. Practical instrument and IA tessitura ranges are conservative warnings, not renderer facts.
+
+These findings describe symbolic coherence and audition risks. They do not infer whether a phrase is moving, authentically "IA-like", or faithful to the declared intent; they never read the corpus/style profile and never write `keep`, `accepted`, or another listening conclusion. Intent-realization evidence and the human listening gate are separate contracts.
+
 ## Evidence
 
 Evidence is one of:

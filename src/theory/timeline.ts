@@ -17,18 +17,25 @@ export interface IntervalTimelineEvent<T> extends PointTimelineEvent<T> {
 export interface TheoryTimeline {
   songStartTick: 0;
   songEndTick: number;
-  meters: PointTimelineEvent<SongManifest["time_signatures"][number]>[];
-  tempos: PointTimelineEvent<SongManifest["tempos"][number]>[];
-  keys: PointTimelineEvent<{
+  meters: readonly PointTimelineEvent<SongManifest["time_signatures"][number]>[];
+  tempos: readonly PointTimelineEvent<SongManifest["tempos"][number]>[];
+  keys: readonly PointTimelineEvent<{
     event: SongManifest["harmony"]["key_changes"][number];
     parsed: ParsedScale | null;
   }>[];
-  chords: IntervalTimelineEvent<{
+  chords: readonly IntervalTimelineEvent<{
     event: SongManifest["harmony"]["chord_changes"][number];
     parsed: ParsedChord | null;
   }>[];
-  sections: IntervalTimelineEvent<SongManifest["sections"][number]>[];
+  sections: readonly IntervalTimelineEvent<SongManifest["sections"][number]>[];
 }
+
+interface IntervalSearchIndex {
+  leafCount: number;
+  maximumEnds: Float64Array;
+}
+
+const intervalSearchIndexes = new WeakMap<readonly IntervalTimelineEvent<unknown>[], IntervalSearchIndex>();
 
 function byStartThenId<T extends PointTimelineEvent<unknown>>(left: T, right: T): number {
   return left.startTick - right.startTick || left.id.localeCompare(right.id);
@@ -51,6 +58,68 @@ function lastStartedIndex(events: readonly PointTimelineEvent<unknown>[], tick: 
   return selected;
 }
 
+function intervalSearchIndex<T>(events: readonly IntervalTimelineEvent<T>[]): IntervalSearchIndex {
+  const key = events as readonly IntervalTimelineEvent<unknown>[];
+  const existing = intervalSearchIndexes.get(key);
+  if (existing) return existing;
+  let leafCount = 1;
+  while (leafCount < events.length) leafCount *= 2;
+  const maximumEnds = new Float64Array(leafCount * 2);
+  maximumEnds.fill(Number.NEGATIVE_INFINITY);
+  for (let index = 0; index < events.length; index += 1) {
+    maximumEnds[leafCount + index] = events[index]!.endTick;
+  }
+  for (let index = leafCount - 1; index > 0; index -= 1) {
+    maximumEnds[index] = Math.max(maximumEnds[index * 2]!, maximumEnds[index * 2 + 1]!);
+  }
+  const built = { leafCount, maximumEnds };
+  intervalSearchIndexes.set(key, built);
+  return built;
+}
+
+function rightmostEndingAfter(
+  index: IntervalSearchIndex,
+  node: number,
+  left: number,
+  right: number,
+  maximumEventIndex: number,
+  tick: number,
+): number {
+  if (left > maximumEventIndex || index.maximumEnds[node]! <= tick) return -1;
+  if (left === right) return left;
+  const middle = Math.floor((left + right) / 2);
+  const fromRight = rightmostEndingAfter(
+    index,
+    node * 2 + 1,
+    middle + 1,
+    right,
+    maximumEventIndex,
+    tick,
+  );
+  return fromRight >= 0
+    ? fromRight
+    : rightmostEndingAfter(index, node * 2, left, middle, maximumEventIndex, tick);
+}
+
+function collectEndingAfter(
+  index: IntervalSearchIndex,
+  node: number,
+  left: number,
+  right: number,
+  maximumEventIndex: number,
+  tick: number,
+  selected: number[],
+): void {
+  if (left > maximumEventIndex || index.maximumEnds[node]! <= tick) return;
+  if (left === right) {
+    selected.push(left);
+    return;
+  }
+  const middle = Math.floor((left + right) / 2);
+  collectEndingAfter(index, node * 2, left, middle, maximumEventIndex, tick, selected);
+  collectEndingAfter(index, node * 2 + 1, middle + 1, right, maximumEventIndex, tick, selected);
+}
+
 export function activePointAt<T>(events: readonly PointTimelineEvent<T>[], tick: number): PointTimelineEvent<T> | null {
   const selected = lastStartedIndex(events, tick);
   return selected >= 0 ? events[selected]! : null;
@@ -60,27 +129,38 @@ export function activeIntervalAt<T>(
   events: readonly IntervalTimelineEvent<T>[],
   tick: number,
 ): IntervalTimelineEvent<T> | null {
-  const index = lastStartedIndex(events, tick);
-  if (index < 0) return null;
-  for (let candidateIndex = index; candidateIndex >= 0; candidateIndex -= 1) {
-    const candidate = events[candidateIndex]!;
-    if (candidate.startTick <= tick && candidate.endTick > tick) return candidate;
-  }
-  return null;
+  const maximumEventIndex = lastStartedIndex(events, tick);
+  if (maximumEventIndex < 0) return null;
+  const search = intervalSearchIndex(events);
+  const selected = rightmostEndingAfter(
+    search,
+    1,
+    0,
+    search.leafCount - 1,
+    maximumEventIndex,
+    tick,
+  );
+  return selected >= 0 ? events[selected]! : null;
 }
 
 export function intervalsAt<T>(
   events: readonly IntervalTimelineEvent<T>[],
   tick: number,
 ): IntervalTimelineEvent<T>[] {
-  const index = lastStartedIndex(events, tick);
-  if (index < 0) return [];
-  const selected: IntervalTimelineEvent<T>[] = [];
-  for (let candidateIndex = index; candidateIndex >= 0; candidateIndex -= 1) {
-    const candidate = events[candidateIndex]!;
-    if (candidate.startTick <= tick && candidate.endTick > tick) selected.push(candidate);
-  }
-  return selected.sort(byStartThenId);
+  const maximumEventIndex = lastStartedIndex(events, tick);
+  if (maximumEventIndex < 0) return [];
+  const search = intervalSearchIndex(events);
+  const selected: number[] = [];
+  collectEndingAfter(
+    search,
+    1,
+    0,
+    search.leafCount - 1,
+    maximumEventIndex,
+    tick,
+    selected,
+  );
+  return selected.map((eventIndex) => events[eventIndex]!).sort(byStartThenId);
 }
 
 export function timelineTick(

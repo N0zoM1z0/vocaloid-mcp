@@ -27,6 +27,7 @@ import {
   activeIntervalAt,
   activePointAt,
   buildTheoryTimeline,
+  intervalsAt,
   theoryContextAtTick,
   timelineTick,
 } from "../src/theory/timeline.js";
@@ -162,4 +163,16 @@ test("timeline index resolves active meter, tempo, key, chord, and section deter
   assert.equal(contextAtChorus.section?.id, "chorus");
   assert.equal(activePointAt(timeline.keys, -1), null);
   assert.equal(activeIntervalAt(timeline.chords, timeline.songEndTick), null);
+});
+
+test("interval queries find long earlier intervals without scanning intervening gaps", () => {
+  const intervals = [
+    { id: "long", startTick: 0, endTick: 1000, value: "long" },
+    { id: "short-a", startTick: 100, endTick: 200, value: "short-a" },
+    { id: "short-b", startTick: 300, endTick: 400, value: "short-b" },
+  ];
+  assert.equal(activeIntervalAt(intervals, 150)?.id, "short-a");
+  assert.equal(activeIntervalAt(intervals, 450)?.id, "long");
+  assert.equal(activeIntervalAt(intervals, 1000), null);
+  assert.deepEqual(intervalsAt(intervals, 150).map((event) => event.id), ["long", "short-a"]);
 });
