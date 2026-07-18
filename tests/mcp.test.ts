@@ -30,20 +30,29 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_add_control_points",
       "vocaloid_add_notes",
       "vocaloid_analyze_wav",
+      "vocaloid_build_song_manifest",
       "vocaloid_compile_vocal_phrase",
       "vocaloid_create_project",
       "vocaloid_create_song",
+      "vocaloid_create_song_manifest",
+      "vocaloid_get_song_section",
       "vocaloid_inspect_mixer",
       "vocaloid_inspect_project",
+      "vocaloid_inspect_song_manifest",
       "vocaloid_list_control_points",
       "vocaloid_list_instruments",
       "vocaloid_list_notes",
       "vocaloid_list_voices",
       "vocaloid_master_wav",
+      "vocaloid_remove_song_objects",
       "vocaloid_render_accompaniment",
       "vocaloid_render_wav",
+      "vocaloid_transform_song_events",
       "vocaloid_update_mixer",
       "vocaloid_update_note_expressions",
+      "vocaloid_upsert_manifest_arrangement_track",
+      "vocaloid_upsert_manifest_vocal_part",
+      "vocaloid_upsert_song_section",
       "vocaloid_validate_project",
     ],
   );
@@ -88,6 +97,213 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       fastest: phraseData.data?.fastestNoteTicks,
     },
     { notes: 3, continuations: 1, fastest: 120 },
+  );
+
+  const manifestPath = join(temporary, "mcp-agent-song.song.json");
+  const manifestCreated = await client.callTool({
+    name: "vocaloid_create_song_manifest",
+    arguments: {
+      output_path: manifestPath,
+      song_id: "mcp-agent-song",
+      slug: "mcp-agent-song",
+      title: "MCP Agent Song",
+      sections: [{
+        id: "verse",
+        name: "Verse",
+        kind: "verse",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 1, beat: 0 },
+      }],
+      key_changes: [{
+        id: "key-cmaj",
+        position: { measure: 0, beat: 0 },
+        tonic: "C",
+        mode: "major",
+      }],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestCreated.isError, true);
+  assert.equal(
+    (manifestCreated.structuredContent as { data?: { revision?: number } }).data?.revision,
+    1,
+  );
+
+  const vocalUpsert = await client.callTool({
+    name: "vocaloid_upsert_manifest_vocal_part",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 1,
+      overwrite: true,
+      voice: { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+      track: { id: "lead", name: "Lead", voice_id: "voice-ia" },
+      part: {
+        id: "verse-lead",
+        section_id: "verse",
+        name: "Verse Lead",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 1, beat: 0 },
+        notes: [
+          {
+            id: "lead-note-1",
+            position: { measure: 0, beat: 0 },
+            duration: 480,
+            note_number: 60,
+            lyric: "ら",
+            phonemes: "4 a",
+          },
+          {
+            id: "lead-note-2",
+            position: { measure: 0, beat: 1 },
+            duration: 480,
+            note_number: 62,
+            lyric: "ら",
+            phonemes: "4 a",
+          },
+        ],
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(vocalUpsert.isError, true);
+
+  const arrangementUpsert = await client.callTool({
+    name: "vocaloid_upsert_manifest_arrangement_track",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 2,
+      overwrite: true,
+      track: {
+        kind: "pitched",
+        id: "piano",
+        name: "Piano",
+        program: 0,
+        notes: [
+          { id: "piano-c", position: { measure: 0, beat: 0 }, duration: 480, note_number: 48 },
+          { id: "piano-g", position: { measure: 0, beat: 2 }, duration: 480, note_number: 55 },
+        ],
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(arrangementUpsert.isError, true);
+
+  const sectionUpsert = await client.callTool({
+    name: "vocaloid_upsert_song_section",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 3,
+      overwrite: true,
+      section: {
+        id: "verse",
+        name: "Verse",
+        kind: "verse",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 1, beat: 0 },
+        energy: 0.72,
+        description: "Agent revised this section without replacing the whole song",
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(sectionUpsert.isError, true);
+
+  const manifestSection = await client.callTool({
+    name: "vocaloid_get_song_section",
+    arguments: { path: manifestPath, section_id: "verse", response_format: "json" },
+  });
+  assert.notEqual(manifestSection.isError, true);
+  const manifestSectionData = manifestSection.structuredContent as {
+    data?: { revision?: number; section?: { energy?: number }; vocalTracks?: unknown[] };
+  };
+  assert.equal(manifestSectionData.data?.revision, 4);
+  assert.equal(manifestSectionData.data?.section?.energy, 0.72);
+  assert.equal(manifestSectionData.data?.vocalTracks?.length, 1);
+
+  const transformedManifest = await client.callTool({
+    name: "vocaloid_transform_song_events",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 4,
+      overwrite: true,
+      transform: {
+        vocal_track_id: "lead",
+        event_ids: ["lead-note-1"],
+        targets: ["vocal_notes"],
+        transpose: 2,
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(transformedManifest.isError, true);
+  assert.equal(
+    (transformedManifest.structuredContent as { data?: { changed?: number } }).data?.changed,
+    1,
+  );
+
+  const removedManifestEvent = await client.callTool({
+    name: "vocaloid_remove_song_objects",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 5,
+      overwrite: true,
+      removal: { object_type: "event", object_ids: ["lead-note-2"] },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(removedManifestEvent.isError, true);
+  assert.equal(
+    (removedManifestEvent.structuredContent as { data?: { removed?: number } }).data?.removed,
+    1,
+  );
+
+  const manifestInspect = await client.callTool({
+    name: "vocaloid_inspect_song_manifest",
+    arguments: { path: manifestPath, response_format: "json" },
+  });
+  assert.notEqual(manifestInspect.isError, true);
+  assert.equal(
+    (manifestInspect.structuredContent as { data?: { revision?: number } }).data?.revision,
+    6,
+  );
+
+  const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r6.wav");
+  const manifestProjectPath = join(temporary, "mcp-agent-song-r6.vsqx");
+  const manifestBuild = await client.callTool({
+    name: "vocaloid_build_song_manifest",
+    arguments: {
+      manifest_path: manifestPath,
+      expected_revision: 6,
+      backing_output_path: manifestBackingPath,
+      project_output_path: manifestProjectPath,
+      response_format: "json",
+    },
+  });
+  assert.notEqual(manifestBuild.isError, true);
+  const manifestBuildData = manifestBuild.structuredContent as {
+    data?: {
+      sourceRevision?: number;
+      manifestRevision?: number;
+      backing?: { channels?: number; silent?: boolean };
+      validation?: { valid?: boolean };
+      artifacts?: unknown[];
+    };
+  };
+  assert.deepEqual(
+    {
+      source: manifestBuildData.data?.sourceRevision,
+      manifest: manifestBuildData.data?.manifestRevision,
+      channels: manifestBuildData.data?.backing?.channels,
+      silent: manifestBuildData.data?.backing?.silent,
+      valid: manifestBuildData.data?.validation?.valid,
+      artifacts: manifestBuildData.data?.artifacts?.length,
+    },
+    { source: 6, manifest: 7, channels: 2, silent: false, valid: true, artifacts: 2 },
   );
 
   const accompanimentPath = join(temporary, "mcp-backing.wav");

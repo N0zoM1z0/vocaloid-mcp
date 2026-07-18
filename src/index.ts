@@ -10,6 +10,28 @@ import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { listGeneralMidi } from "./gm.js";
 import { compileVocalPhrase, type VocalPhraseInput } from "./vocal-phrase.js";
 import { renderProjectToWav } from "./render.js";
+import {
+  buildSongManifest,
+  createSongManifest,
+  getSongManifestSection,
+  inspectSongManifest,
+  ManifestArrangementTrackSchema,
+  ManifestChordChangeSchema,
+  ManifestKeyChangeSchema,
+  ManifestRemovalSchema,
+  ManifestSectionSchema,
+  ManifestTempoSchema,
+  ManifestTimeSignatureSchema,
+  ManifestTransformSchema,
+  ManifestVocalPartSchema,
+  ManifestVocalTrackMetadataSchema,
+  ManifestVoiceSchema,
+  removeSongManifestObjects,
+  transformSongManifestEvents,
+  upsertSongManifestArrangementTrack,
+  upsertSongManifestSection,
+  upsertSongManifestVocalPart,
+} from "./song-manifest.js";
 import { discoverVoices } from "./voices.js";
 import {
   addControlPointsToProject,
@@ -27,9 +49,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.5.0" },
+  { name: "vocaloid-mcp-server", version: "0.6.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a long song, design named sections plus a shared tempo/meter map and distinct grooves; use accompaniment patterns/placements to repeat and vary instrumental motifs without enumerating thousands of events, then vocaloid_render_accompaniment creates a real stereo WAV. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplet lyrics, while explicit lyric_index supports melisma with native '-' continuations. Call vocaloid_create_song with the backing as an audio_part, validate/inspect, then vocaloid_render_wav. VOCALOID vocal mixer pan is 0=hard left, 64=center, 127=hard right; use vocaloid_inspect_mixer before render and vocaloid_update_mixer when revising intentional placement. Always call vocaloid_analyze_wav on backing and Master; inspect per-channel RMS/peak and revise mixer routing if channelImbalance is true, lower source/mixer levels and re-render if clipped, otherwise vocaloid_master_wav can meet LUFS/true-peak targets. Use descriptive song slugs in every output name, for example hoshikuzu-letter-backing-v1.wav, hoshikuzu-letter.vsqx, hoshikuzu-letter-mix-v1.wav, and hoshikuzu-letter-master-v1.wav. Prefer new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
+    instructions: `Use this server to compose, arrange, tune, mix-check, and master native VOCALOID projects. Start with vocaloid_list_voices and vocaloid_list_instruments. For a new long song, use vocaloid_create_song_manifest as the canonical source, then add one vocal part or arrangement track per upsert; inspect its revision/hash before every mutation and use vocaloid_get_song_section for bounded revision context. Preserve globally unique stable IDs. Build a stereo backing and validated VSQX with vocaloid_build_song_manifest; use vocaloid_create_song directly only for small one-shot projects. Design named sections plus a shared tempo/meter map and distinct grooves; patterns/placements repeat and vary motifs without enumerating thousands of events. Design lead, doubles, harmony, and counterlines with vocal phrase rhythm cells: sequential allocation supports rapid 1/16-1/64 or tuplets, while explicit lyric_index supports melisma with native '-' continuations. Render the built VSQX with vocaloid_render_wav. VOCALOID vocal mixer pan is 0=hard left, 64=center, 127=hard right; inspect before render and revise intentional placement explicitly. Analyze backing and Master per channel; re-render clipped or unintended imbalanced sources, then master to requested LUFS/true peak. Use the song slug in every output name and new revision paths; explicit overwrites create backups. The bundled GM SoundFont is draft quality, so report that boundary accurately.`,
   },
 );
 
@@ -369,6 +391,23 @@ const DrumPlacementSchema = z
     start: MusicalPositionSchema.describe("Measure-aligned placement start"),
     repeats: z.number().int().min(1).max(1024).default(1),
     velocity_scale: z.number().gt(0).max(4).default(1),
+  })
+  .strict();
+
+const ManifestIdSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._-]{0,95}$/u)
+  .describe("Globally unique stable lowercase ID; preserve it across unrelated revisions");
+
+const ManifestMutationPathSchema = z
+  .object({
+    input_path: PathSchema.describe("Readable canonical .song.json manifest"),
+    output_path: PathSchema.describe(
+      "Destination .song.json; may equal input_path only with overwrite=true, which creates a backup",
+    ),
+    expected_revision: z.number().int().min(1).describe("Revision returned by the latest inspect/mutation"),
+    overwrite: z.boolean().default(false),
+    response_format: ResponseFormatSchema,
   })
   .strict();
 
@@ -1648,6 +1687,343 @@ DYN shapes loudness; BRE breathiness; BRI brightness; CLE clarity; GEN formant/g
         result,
         params.response_format,
         `Added ${result.added} ${result.curve} points`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_create_song_manifest",
+  {
+    title: "Create Canonical Song Manifest",
+    description: `Create the canonical, revisioned source for an agent-composed song.
+
+The manifest retains semantic sections, timeline, harmony, stable IDs, vocal sources, arrangement intent, mix intent, and artifact provenance. VSQX/WAV files are derived later with vocaloid_build_song_manifest. IDs are lowercase and globally unique across the manifest. Create only the song skeleton here; add one vocal part or arrangement track per bounded upsert call.`,
+    inputSchema: z
+      .object({
+        output_path: PathSchema.describe("New .song.json path"),
+        song_id: ManifestIdSchema,
+        slug: ManifestIdSchema.describe("Filename-safe song slug used in all derived artifact names"),
+        title: z.string().min(1).max(256),
+        format: z.enum(["vsq3", "vsq4"]).default("vsq3"),
+        pre_measure: z.number().int().min(0).max(127).default(1),
+        time_signatures: z.array(ManifestTimeSignatureSchema).min(1).max(256)
+          .default([{ measure: 0, numerator: 4, denominator: 4 }]),
+        tempos: z.array(ManifestTempoSchema).min(1).max(5000)
+          .default([{ position: { measure: 0, beat: 0, tick: 0 }, bpm: 120 }]),
+        sections: z.array(ManifestSectionSchema).min(1).max(1024)
+          .describe("Ordered, non-overlapping semantic song sections"),
+        key_changes: z.array(ManifestKeyChangeSchema).max(1024).default([]),
+        chord_changes: z.array(ManifestChordChangeSchema).max(20_000).default([]),
+        sample_rate: z.union([z.literal(44_100), z.literal(48_000), z.literal(96_000)]).default(44_100),
+        accompaniment_gain: z.number().gt(0).max(10).default(0.2),
+        reverb: z.boolean().default(true),
+        chorus: z.boolean().default(true),
+        soundfont_path: PathSchema.optional(),
+        overwrite: z.boolean().default(false),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await createSongManifest({
+        outputPath: params.output_path,
+        songId: params.song_id,
+        slug: params.slug,
+        title: params.title,
+        format: params.format,
+        preMeasure: params.pre_measure,
+        timeSignatures: params.time_signatures,
+        tempos: params.tempos,
+        sections: params.sections,
+        keyChanges: params.key_changes,
+        chordChanges: params.chord_changes,
+        sampleRate: params.sample_rate,
+        gain: params.accompaniment_gain,
+        reverb: params.reverb,
+        chorus: params.chorus,
+        ...(params.soundfont_path !== undefined ? { soundfontPath: params.soundfont_path } : {}),
+        overwrite: params.overwrite,
+      });
+      return textResult(result, params.response_format, `Created song manifest revision ${result.revision}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_inspect_song_manifest",
+  {
+    title: "Inspect Song Manifest",
+    description: `Read a canonical .song.json and verify its SHA-256 content hash and semantic references.
+
+Returns the current revision/hash, stable section IDs, vocal/arrangement inventory, and artifact provenance. Always inspect immediately before a mutation and pass its revision as expected_revision.`,
+    inputSchema: z.object({ path: PathSchema, response_format: ResponseFormatSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ path, response_format }) => {
+    try {
+      const result = await inspectSongManifest(path);
+      return textResult(result, response_format, `Song manifest revision ${result.revision}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_get_song_section",
+  {
+    title: "Get One Song Section",
+    description: `Fetch one semantic section plus only its intersecting vocal parts, harmony, arrangement patterns, placements, and direct events.
+
+Use this bounded read before revising a verse/chorus instead of resubmitting or rereading the whole song.`,
+    inputSchema: z
+      .object({
+        path: PathSchema,
+        section_id: ManifestIdSchema,
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ path, section_id, response_format }) => {
+    try {
+      const result = await getSongManifestSection(path, section_id);
+      return textResult(result, response_format, `Loaded section ${section_id} from revision ${result.revision}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_upsert_song_section",
+  {
+    title: "Upsert Song Section",
+    description: `Insert or replace exactly one section by stable ID using optimistic revision control.
+
+Unrelated IDs and creative content remain unchanged. Overlapping sections and dangling references are rejected.`,
+    inputSchema: ManifestMutationPathSchema.extend({ section: ManifestSectionSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestSection(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.section,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Upserted section ${params.section.id}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_upsert_manifest_vocal_part",
+  {
+    title: "Upsert Manifest Vocal Part",
+    description: `Insert or replace one vocal part and its voice/track metadata by stable ID.
+
+Direct notes and phrase sources can express rapid syllables, rests, tuplets, melisma, note expression, vibrato, and control curves. This bounded operation keeps other parts and tracks intact. The supplied track voice_id must equal voice.id.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      voice: ManifestVoiceSchema,
+      track: ManifestVocalTrackMetadataSchema,
+      part: ManifestVocalPartSchema,
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestVocalPart(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.voice,
+        params.track,
+        params.part,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Upserted vocal part ${params.part.id}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_upsert_manifest_arrangement_track",
+  {
+    title: "Upsert Manifest Arrangement Track",
+    description: `Insert or replace one pitched or drum arrangement track by stable ID.
+
+Use compact reusable patterns and section-tagged placements for long songs. Other tracks remain unchanged, and every pattern/section reference is validated.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      track: ManifestArrangementTrackSchema,
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestArrangementTrack(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.track,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Upserted arrangement track ${params.track.id}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_transform_song_events",
+  {
+    title: "Transform Song Events",
+    description: `Apply one deterministic transpose, velocity, duration, or tick-shift transform to selected stable event IDs or a bounded semantic scope.
+
+Use event_ids for surgical edits. An empty event_ids list intentionally selects every matching event inside the supplied section/track/part scope. Pattern-relative events cannot be tick-shifted.`,
+    inputSchema: ManifestMutationPathSchema.extend({ transform: ManifestTransformSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await transformSongManifestEvents(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.transform,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Transformed ${result.changed} stable events`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_remove_song_objects",
+  {
+    title: "Remove Song Objects",
+    description: `Remove explicitly named sections, vocal parts/tracks, arrangement tracks, or leaf events by stable ID.
+
+The mutation is atomic. It rejects zero matches, every-section removal, dangling section references, and invalid empty phrases/patterns/parts.`,
+    inputSchema: ManifestMutationPathSchema.extend({ removal: ManifestRemovalSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await removeSongManifestObjects(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.removal,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Removed ${result.removed} song objects`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_build_song_manifest",
+  {
+    title: "Build Song Manifest Artifacts",
+    description: `Build a verified stereo accompaniment WAV and validated native VSQX from one immutable manifest revision.
+
+Both output paths must be new and should include the song slug. On success the manifest is atomically advanced by one revision and records SHA-256, byte size, source revision, dependencies, and paths for both artifacts. On failure incomplete outputs are removed. This does not render VOCALOID vocals; pass the VSQX to vocaloid_render_wav afterward.`,
+    inputSchema: z
+      .object({
+        manifest_path: PathSchema,
+        expected_revision: z.number().int().min(1),
+        backing_output_path: PathSchema.describe("New slugged .wav accompaniment path"),
+        project_output_path: PathSchema.describe("New slugged .vsqx project path"),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await buildSongManifest({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        backingOutputPath: params.backing_output_path,
+        projectOutputPath: params.project_output_path,
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Built manifest revision ${result.sourceRevision} into validated WAV and VSQX artifacts`,
       );
     } catch (error) {
       return errorResult(error);
