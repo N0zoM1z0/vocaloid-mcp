@@ -94,3 +94,26 @@ labels VVD discovery as metadata-only and Editor availability as unverified
 until render. Earlier gated IA lead/harmony Editor integrations remain the
 successful synthesis regression; rerunning this particular eval needs the host
 IA registration/licensing state restored.
+
+The host owner subsequently confirmed that IA_ROCKS is the currently registered
+singer. A derived manifest keeps the original agent composition unchanged while
+binding `track-vocal-ia-main` to `IA_ROCKS` / component ID
+`BDREB7P2KTWKYDC5`:
+
+- `artifacts/evals/mcp-v1-agent-eval-ia-rocks.song.json`
+- `artifacts/evals/mcp-v1-agent-eval-ia-rocks-backing-v1.wav`
+- `artifacts/evals/mcp-v1-agent-eval-ia-rocks.vsqx`
+
+The derived VSQX contains only IA_ROCKS in its voice table and passes both the
+Yamaha VSQ3 XSD and structural validation. The first bounded Editor attempt
+also exposed a writer defect: control curves had been sorted within each curve
+but not across curves, producing native event ticks such as `3840, 5760, ...,
+0`. Editor correctly stopped on `Event Verification` because the late tick-zero
+event appeared in its Message Delay Zone. The writer now globally orders all
+control points by tick, the validator rejects non-monotonic native control
+events, and the clean IA_ROCKS rebuild emits `0, 0, 3840, ... 7679`. The local
+manual explains that accepting the dialog would reduce Editor's global
+Pre-Send time to fit the pre-measures; automation deliberately fixes the score
+instead of silently changing that preference. A final Editor audio render was
+not repeated in the same run, so IA_ROCKS synthesis availability remains gated
+on the next single bounded render rather than inferred from VVD metadata.

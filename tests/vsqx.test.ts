@@ -253,6 +253,9 @@ for (const format of ["vsq3", "vsq4"] as const) {
                   { position: { measure: 0, beat: 0 }, value: 64 },
                   { position: { measure: 3, beat: 3 }, value: 72 },
                 ],
+                PIT: [
+                  { position: { measure: 1, beat: 0 }, value: -256 },
+                ],
               },
             },
             {
@@ -326,7 +329,7 @@ for (const format of ["vsq3", "vsq4"] as const) {
     assert.equal(remixedValidation.valid, true, remixedValidation.diagnostics.join("\n"));
     assert.deepEqual(
       { tracks: result.tracks, parts: result.parts, notes: result.notes, controls: result.controlPoints },
-      { tracks: 2, parts: 3, notes: 3, controls: 2 },
+      { tracks: 2, parts: 3, notes: 3, controls: 3 },
     );
     assert.equal(result.audioParts, 1);
     const validation = await validateProject(output);

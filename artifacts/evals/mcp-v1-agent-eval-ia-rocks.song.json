@@ -1,0 +1,885 @@
+{
+  "schema": "vocaloid-song-manifest/v1",
+  "revision": 9,
+  "composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
+  "mix_hash": "7459c70d79d523d29a27702217f90bb39b415f2bb36a8821000aec5bedc7bb1b",
+  "content_hash": "598ccc61e194edaf54bedcdd4cea59861e20e1c399bebb8173311cce95f958b1",
+  "parent_hash": "10d78f9fb817e20728d1dd8b8e9a981fb3200098c354604a948c33fecdf0f966",
+  "song_id": "song-mcp-v1-agent-eval",
+  "slug": "mcp-v1-agent-eval",
+  "title": "星駆ける声",
+  "format": "vsq3",
+  "pre_measure": 1,
+  "created_at": "2026-07-18T10:37:57.705Z",
+  "updated_at": "2026-07-18T11:22:32.588Z",
+  "time_signatures": [
+    {
+      "measure": 0,
+      "numerator": 4,
+      "denominator": 4
+    }
+  ],
+  "tempos": [
+    {
+      "position": {
+        "measure": 0,
+        "beat": 0,
+        "tick": 0
+      },
+      "bpm": 128
+    }
+  ],
+  "sections": [
+    {
+      "id": "section-four-bar-miniature",
+      "name": "四小節",
+      "kind": "verse",
+      "start": {
+        "measure": 0,
+        "beat": 0,
+        "tick": 0
+      },
+      "end": {
+        "measure": 4,
+        "beat": 0,
+        "tick": 0
+      },
+      "energy": 0.72,
+      "description": "Rapid morae bloom into a held melisma."
+    }
+  ],
+  "harmony": {
+    "key_changes": [],
+    "chord_changes": [
+      {
+        "id": "chord-m1-cmaj7",
+        "position": {
+          "measure": 0,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Cmaj7",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "chord-m2-am7",
+        "position": {
+          "measure": 1,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Am7",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "chord-m3-fmaj7",
+        "position": {
+          "measure": 2,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Fmaj7",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "chord-m4-g7",
+        "position": {
+          "measure": 3,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "G7",
+        "duration_ticks": 1920
+      }
+    ]
+  },
+  "voices": [
+    {
+      "id": "voice-ia-main",
+      "name": "IA",
+      "component_id": "BLRGDDR4M3WM2LC6",
+      "bank_select": 0,
+      "program_change": 0,
+      "parameters": {}
+    },
+    {
+      "id": "voice-ia-rocks-main",
+      "name": "IA_ROCKS",
+      "component_id": "BDREB7P2KTWKYDC5",
+      "bank_select": 0,
+      "program_change": 0,
+      "parameters": {}
+    }
+  ],
+  "vocal_tracks": [
+    {
+      "id": "track-vocal-ia-main",
+      "name": "IA_ROCKS Main",
+      "comment": "",
+      "voice_id": "voice-ia-rocks-main",
+      "mixer": {
+        "volume": 0,
+        "pan": 64,
+        "mute": false,
+        "solo": false,
+        "send_level": -898,
+        "send_enabled": false
+      },
+      "parts": [
+        {
+          "id": "part-vocal-four-bars",
+          "section_id": "section-four-bar-miniature",
+          "name": "星駆ける声 Vocal",
+          "comment": "Kanji readings: 星空を駆ける=ほしぞらをかける; 光=ひかり.",
+          "start": {
+            "measure": 0,
+            "beat": 0,
+            "tick": 0
+          },
+          "end": {
+            "measure": 4,
+            "beat": 0,
+            "tick": 0
+          },
+          "notes": [],
+          "phrases": [
+            {
+              "id": "phrase-rapid-hoshizora",
+              "start": {
+                "measure": 0,
+                "beat": 0,
+                "tick": 0
+              },
+              "allocation": "sequential",
+              "lyrics": [
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0001",
+                  "lyric": "ほ",
+                  "phonemes": "h o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0002",
+                  "lyric": "し",
+                  "phonemes": "S i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0003",
+                  "lyric": "ぞ",
+                  "phonemes": "z o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0004",
+                  "lyric": "ら",
+                  "phonemes": "4 a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0005",
+                  "lyric": "を",
+                  "phonemes": "o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0006",
+                  "lyric": "か",
+                  "phonemes": "k a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0007",
+                  "lyric": "け",
+                  "phonemes": "k e",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-rapid-hoshizora-mora-0008",
+                  "lyric": "る",
+                  "phonemes": "4 M",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "event-rapid-ho",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 64,
+                  "gate_percent": 100,
+                  "velocity": 76,
+                  "style": {
+                    "accent": 68,
+                    "decay": 58,
+                    "opening": 72,
+                    "bendDep": 18,
+                    "bendLen": 14,
+                    "risePort": 1
+                  }
+                },
+                {
+                  "id": "event-rapid-shi",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 67,
+                  "gate_percent": 100,
+                  "velocity": 76,
+                  "style": {
+                    "accent": 68,
+                    "decay": 58,
+                    "opening": 72,
+                    "bendDep": 18,
+                    "bendLen": 14,
+                    "risePort": 1
+                  }
+                },
+                {
+                  "id": "event-rapid-zo",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 69,
+                  "gate_percent": 100,
+                  "velocity": 76,
+                  "style": {
+                    "accent": 68,
+                    "decay": 58,
+                    "opening": 72,
+                    "bendDep": 18,
+                    "bendLen": 14,
+                    "risePort": 1
+                  }
+                },
+                {
+                  "id": "event-rapid-ra",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 71,
+                  "gate_percent": 100,
+                  "velocity": 76,
+                  "style": {
+                    "accent": 68,
+                    "decay": 58,
+                    "opening": 72,
+                    "bendDep": 18,
+                    "bendLen": 14,
+                    "risePort": 1
+                  }
+                },
+                {
+                  "id": "event-rapid-o",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 72,
+                  "gate_percent": 100,
+                  "velocity": 86,
+                  "style": {}
+                },
+                {
+                  "id": "event-rapid-ka",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 71,
+                  "gate_percent": 100,
+                  "velocity": 82,
+                  "style": {}
+                },
+                {
+                  "id": "event-rapid-ke",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 69,
+                  "gate_percent": 100,
+                  "velocity": 80,
+                  "style": {}
+                },
+                {
+                  "id": "event-rapid-ru",
+                  "duration": {
+                    "denominator": 8,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 67,
+                  "gate_percent": 100,
+                  "velocity": 78,
+                  "style": {}
+                }
+              ]
+            },
+            {
+              "id": "phrase-melisma-hikari",
+              "start": {
+                "measure": 2,
+                "beat": 0,
+                "tick": 0
+              },
+              "allocation": "explicit",
+              "lyrics": [
+                {
+                  "id": "phrase-melisma-hikari-mora-0001",
+                  "lyric": "ひ",
+                  "phonemes": "C i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-melisma-hikari-mora-0002",
+                  "lyric": "か",
+                  "phonemes": "k a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "phrase-melisma-hikari-mora-0003",
+                  "lyric": "り",
+                  "phonemes": "4' i",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "event-melisma-hi",
+                  "duration": {
+                    "denominator": 4,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 69,
+                  "lyric_index": 0,
+                  "gate_percent": 100,
+                  "velocity": 78,
+                  "style": {}
+                },
+                {
+                  "id": "event-melisma-ka",
+                  "duration": {
+                    "denominator": 4,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 71,
+                  "lyric_index": 1,
+                  "gate_percent": 100,
+                  "velocity": 80,
+                  "style": {}
+                },
+                {
+                  "id": "event-melisma-ri-a",
+                  "duration": {
+                    "denominator": 2,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 72,
+                  "lyric_index": 2,
+                  "gate_percent": 100,
+                  "velocity": 84,
+                  "style": {}
+                },
+                {
+                  "id": "event-melisma-ri-b",
+                  "duration": {
+                    "denominator": 1,
+                    "dots": 0
+                  },
+                  "rest": false,
+                  "note_number": 76,
+                  "lyric_index": 2,
+                  "gate_percent": 100,
+                  "velocity": 86,
+                  "style": {},
+                  "vibrato": {
+                    "type": 3,
+                    "length": 62,
+                    "depth": [
+                      {
+                        "position": 0,
+                        "value": 22
+                      },
+                      {
+                        "position": 32768,
+                        "value": 54
+                      },
+                      {
+                        "position": 65536,
+                        "value": 38
+                      }
+                    ],
+                    "rate": [
+                      {
+                        "position": 0,
+                        "value": 50
+                      },
+                      {
+                        "position": 65536,
+                        "value": 58
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "control_curves": [
+            {
+              "id": "gesture-pitch-scoop-hikari-pbs-curve",
+              "curve": "PBS",
+              "points": [
+                {
+                  "id": "gesture-pitch-scoop-hikari-pbs-c2664d7063",
+                  "position": {
+                    "measure": 2,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 2
+                },
+                {
+                  "id": "gesture-pitch-scoop-hikari-pbs-826984d9e7",
+                  "position": {
+                    "measure": 3,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "gesture-pitch-scoop-hikari-pit-curve",
+              "curve": "PIT",
+              "points": [
+                {
+                  "id": "gesture-pitch-scoop-hikari-pit-18e1f8d337",
+                  "position": {
+                    "measure": 2,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": -3482
+                },
+                {
+                  "id": "gesture-pitch-scoop-hikari-pit-333e3b26c9",
+                  "position": {
+                    "measure": 2,
+                    "beat": 0,
+                    "tick": 134
+                  },
+                  "value": 0
+                },
+                {
+                  "id": "gesture-pitch-scoop-hikari-pit-ee60b9676c",
+                  "position": {
+                    "measure": 3,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": -3482
+                },
+                {
+                  "id": "gesture-pitch-scoop-hikari-pit-f6436e59a1",
+                  "position": {
+                    "measure": 3,
+                    "beat": 1,
+                    "tick": 58
+                  },
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "id": "gesture-dynamics-arc-full-dyn-curve",
+              "curve": "DYN",
+              "points": [
+                {
+                  "id": "gesture-dynamics-arc-full-dyn-c8c03d7325",
+                  "position": {
+                    "measure": 0,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 62
+                },
+                {
+                  "id": "gesture-dynamics-arc-full-dyn-7edb6e4425",
+                  "position": {
+                    "measure": 2,
+                    "beat": 2,
+                    "tick": 422
+                  },
+                  "value": 92
+                },
+                {
+                  "id": "gesture-dynamics-arc-full-dyn-3e3a1859d0",
+                  "position": {
+                    "measure": 3,
+                    "beat": 3,
+                    "tick": 479
+                  },
+                  "value": 70
+                }
+              ]
+            },
+            {
+              "id": "gesture-timbre-arc-bright-bri-curve",
+              "curve": "BRI",
+              "points": [
+                {
+                  "id": "gesture-timbre-arc-bright-bri-a751d573e5",
+                  "position": {
+                    "measure": 0,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 58
+                },
+                {
+                  "id": "gesture-timbre-arc-bright-bri-562bf53a94",
+                  "position": {
+                    "measure": 2,
+                    "beat": 3,
+                    "tick": 249
+                  },
+                  "value": 88
+                },
+                {
+                  "id": "gesture-timbre-arc-bright-bri-7059d98bfd",
+                  "position": {
+                    "measure": 3,
+                    "beat": 3,
+                    "tick": 479
+                  },
+                  "value": 66
+                }
+              ]
+            }
+          ],
+          "tuning_gestures": [
+            {
+              "id": "gesture-articulation-rapid",
+              "type": "articulation",
+              "event_ids": [
+                "event-rapid-ho",
+                "event-rapid-shi",
+                "event-rapid-zo",
+                "event-rapid-ra"
+              ],
+              "accent": 68,
+              "decay": 58,
+              "opening": 72,
+              "consonant_velocity": 76,
+              "bend_depth": 18,
+              "bend_length": 14,
+              "rise_portamento": true
+            },
+            {
+              "id": "gesture-vibrato-melisma",
+              "type": "vibrato",
+              "event_ids": [
+                "event-melisma-ri-b"
+              ],
+              "vibrato_type": 3,
+              "length_percent": 62,
+              "depth_start": 22,
+              "depth_peak": 54,
+              "depth_end": 38,
+              "rate_start": 50,
+              "rate_end": 58
+            },
+            {
+              "id": "gesture-pitch-scoop-hikari",
+              "type": "pitch_scoop",
+              "event_ids": [
+                "event-melisma-hi",
+                "event-melisma-ri-b"
+              ],
+              "direction": "up_into",
+              "depth_cents": 85,
+              "duration_percent": 28,
+              "pitch_bend_sensitivity": 2
+            },
+            {
+              "id": "gesture-dynamics-arc-full",
+              "type": "dynamics_arc",
+              "event_ids": [
+                "event-rapid-ho",
+                "event-rapid-ru",
+                "event-melisma-hi",
+                "event-melisma-ri-b"
+              ],
+              "start_value": 62,
+              "peak_value": 92,
+              "end_value": 70,
+              "peak_position": 0.68
+            },
+            {
+              "id": "gesture-timbre-arc-bright",
+              "type": "timbre_arc",
+              "event_ids": [
+                "event-rapid-ho",
+                "event-rapid-ru",
+                "event-melisma-hi",
+                "event-melisma-ri-b"
+              ],
+              "curve": "BRI",
+              "start_value": 58,
+              "peak_value": 88,
+              "end_value": 66,
+              "peak_position": 0.72
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "accompaniment": {
+    "sample_rate": 44100,
+    "gain": 0.2,
+    "reverb": true,
+    "chorus": false,
+    "tracks": [
+      {
+        "kind": "pitched",
+        "id": "track-accomp-celesta",
+        "name": "Starlight Celesta",
+        "bank_msb": 0,
+        "bank_lsb": 0,
+        "program": 8,
+        "volume": 88,
+        "pan": 48,
+        "notes": [],
+        "patterns": [
+          {
+            "id": "pattern-celesta-arpeggio",
+            "measures": 1,
+            "notes": [
+              {
+                "id": "accomp-note-root",
+                "offset": {
+                  "measure": 0,
+                  "beat": 0,
+                  "tick": 0
+                },
+                "duration": 480,
+                "note_number": 60,
+                "velocity": 68
+              },
+              {
+                "id": "accomp-note-third",
+                "offset": {
+                  "measure": 0,
+                  "beat": 1,
+                  "tick": 0
+                },
+                "duration": 480,
+                "note_number": 64,
+                "velocity": 64
+              },
+              {
+                "id": "accomp-note-fifth",
+                "offset": {
+                  "measure": 0,
+                  "beat": 2,
+                  "tick": 0
+                },
+                "duration": 480,
+                "note_number": 67,
+                "velocity": 70
+              },
+              {
+                "id": "accomp-note-top",
+                "offset": {
+                  "measure": 0,
+                  "beat": 3,
+                  "tick": 0
+                },
+                "duration": 480,
+                "note_number": 72,
+                "velocity": 74
+              }
+            ]
+          }
+        ],
+        "placements": [
+          {
+            "id": "placement-celesta-four-bars",
+            "pattern_id": "pattern-celesta-arpeggio",
+            "section_id": "section-four-bar-miniature",
+            "start": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "repeats": 4,
+            "transpose": 0,
+            "velocity_scale": 1
+          }
+        ]
+      },
+      {
+        "kind": "drums",
+        "id": "track-drums-pulse",
+        "name": "Comet Pulse",
+        "hits": [],
+        "patterns": [
+          {
+            "id": "pattern-drums-driving",
+            "measures": 1,
+            "hits": [
+              {
+                "id": "drum-hit-kick-one",
+                "offset": {
+                  "measure": 0,
+                  "beat": 0,
+                  "tick": 0
+                },
+                "note_number": 36,
+                "velocity": 92,
+                "duration": 120
+              },
+              {
+                "id": "drum-hit-hat-one",
+                "offset": {
+                  "measure": 0,
+                  "beat": 1,
+                  "tick": 0
+                },
+                "note_number": 42,
+                "velocity": 66,
+                "duration": 120
+              },
+              {
+                "id": "drum-hit-snare",
+                "offset": {
+                  "measure": 0,
+                  "beat": 2,
+                  "tick": 0
+                },
+                "note_number": 38,
+                "velocity": 88,
+                "duration": 120
+              },
+              {
+                "id": "drum-hit-hat-two",
+                "offset": {
+                  "measure": 0,
+                  "beat": 3,
+                  "tick": 0
+                },
+                "note_number": 42,
+                "velocity": 70,
+                "duration": 120
+              }
+            ]
+          }
+        ],
+        "placements": [
+          {
+            "id": "placement-drums-four-bars",
+            "pattern_id": "pattern-drums-driving",
+            "section_id": "section-four-bar-miniature",
+            "start": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "repeats": 4,
+            "velocity_scale": 1
+          }
+        ]
+      }
+    ]
+  },
+  "mix": {
+    "effect_chains": [],
+    "section_dynamics": []
+  },
+  "artifacts": [
+    {
+      "id": "backing-r6",
+      "role": "backing",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/mcp-v1-agent-eval-backing-v1.wav",
+      "sha256": "187bc5250b8abf6d34fe17cefdfeb472727b3a9802332409715e1df7e9c34aff",
+      "bytes": 2017836,
+      "source_revision": 6,
+      "source_composition_hash": "542da688fe0d153413b2dbb6d0a1b68d20fb6712748176c857d6ea2abe3d9a01",
+      "dependencies": [],
+      "metadata": {
+        "renderer": "fluidsynth",
+        "sample_rate": 44100,
+        "reverb": true,
+        "chorus": false
+      },
+      "created_at": "2026-07-18T10:39:32.632Z"
+    },
+    {
+      "id": "vsqx-r6",
+      "role": "vsqx",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/mcp-v1-agent-eval.vsqx",
+      "sha256": "6bc7a42455077c7c4e7bd3b3bb8b395dbc59c65599d09cab20175c8eea86a5db",
+      "bytes": 8987,
+      "source_revision": 6,
+      "source_composition_hash": "542da688fe0d153413b2dbb6d0a1b68d20fb6712748176c857d6ea2abe3d9a01",
+      "dependencies": [
+        "backing-r6"
+      ],
+      "metadata": {
+        "format": "vsq3"
+      },
+      "created_at": "2026-07-18T10:39:32.632Z"
+    },
+    {
+      "id": "backing-r8",
+      "role": "backing",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/mcp-v1-agent-eval-ia-rocks-backing-v1.wav",
+      "sha256": "187bc5250b8abf6d34fe17cefdfeb472727b3a9802332409715e1df7e9c34aff",
+      "bytes": 2017836,
+      "source_revision": 8,
+      "source_composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
+      "dependencies": [],
+      "metadata": {
+        "renderer": "fluidsynth",
+        "sample_rate": 44100,
+        "reverb": true,
+        "chorus": false
+      },
+      "created_at": "2026-07-18T11:22:32.580Z"
+    },
+    {
+      "id": "vsqx-r8",
+      "role": "vsqx",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/mcp-v1-agent-eval-ia-rocks.vsqx",
+      "sha256": "63947f5dd611ea58ed824bd99b6e07f257f0da6c1411d173ef695ff115d0d3f7",
+      "bytes": 9008,
+      "source_revision": 8,
+      "source_composition_hash": "73cca3de17a6d91119d14471f51fdabc9614180dc164b85090cb689855fe724f",
+      "dependencies": [
+        "backing-r8"
+      ],
+      "metadata": {
+        "format": "vsq3"
+      },
+      "created_at": "2026-07-18T11:22:32.580Z"
+    }
+  ]
+}

@@ -582,6 +582,16 @@ function projectDiagnostics(project: LoadedProject): string[] {
     trackNumbers.add(trackNumber);
     for (const [partIndex, part] of directChildren(track, fields.part).entries()) {
       const playTime = integer(part, "playTime");
+      const controls = directChildren(part, fields.control)
+        .map((control, index) => readControl(control, project.format, index));
+      for (let index = 1; index < controls.length; index += 1) {
+        if (controls[index]!.tick < controls[index - 1]!.tick) {
+          diagnostics.push(
+            `Track ${trackNumber} part ${partIndex}: control points are not ordered by tick`,
+          );
+          break;
+        }
+      }
       const notes = directChildren(part, "note")
         .map((note, index) => readNote(note, project.format, index))
         .sort((left, right) => left.tick - right.tick || left.index - right.index);
@@ -1130,10 +1140,12 @@ function createDocument(options: CreateProjectOptions): LoadedProject {
     [CurveName, ControlPointInput[]]
   >;
   for (const [curve, points] of controls) validateControlPoints(curve, points);
-  for (const [curve, points] of controls) {
-    for (const point of [...points].sort((left, right) => left.tick - right.tick)) {
-      createControl(project, part, curve, point);
-    }
+  const orderedControls = controls
+    .flatMap(([curve, points]) => points.map((point) => ({ curve, point })))
+    .sort((left, right) => left.point.tick - right.point.tick
+      || left.curve.localeCompare(right.curve));
+  for (const { curve, point } of orderedControls) {
+    createControl(project, part, curve, point);
   }
   for (const note of [...options.notes].sort((left, right) => left.tick - right.tick)) {
     appendNote(document, namespace, part, options.format, note);
@@ -1572,16 +1584,19 @@ function createSongDocument(
         trackInput.bankSelect,
         trackInput.programChange,
       );
-      for (const [curve, points] of Object.entries(partInput.controlCurves ?? {}) as Array<
+      const orderedControls = (Object.entries(partInput.controlCurves ?? {}) as Array<
         [CurveName, PositionedControlPointInput[]]
-      >) {
-        for (const point of points) {
-          createControl(project, part, curve, {
-            tick: songPositionTick(options.timeSignatures, point.position, "control.position")
-              - partStartSongTick,
-            value: point.value,
-          });
-        }
+      >).flatMap(([curve, points]) => points.map((point) => ({
+        curve,
+        point: {
+          tick: songPositionTick(options.timeSignatures, point.position, "control.position")
+            - partStartSongTick,
+          value: point.value,
+        },
+      }))).sort((left, right) => left.point.tick - right.point.tick
+        || left.curve.localeCompare(right.curve));
+      for (const { curve, point } of orderedControls) {
+        createControl(project, part, curve, point);
       }
       const notes = partInput.notes.map((note) => ({
         ...note,

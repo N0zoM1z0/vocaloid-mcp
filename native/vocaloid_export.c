@@ -18,9 +18,11 @@
 typedef struct WindowSearch {
     DWORD process_id;
     HWND main_window;
+    HWND mixer_window;
     HWND export_options_dialog;
     HWND save_dialog;
     HWND singer_warning_dialog;
+    HWND event_verification_dialog;
     HWND any_dialog;
     wchar_t any_dialog_title[256];
 } WindowSearch;
@@ -91,17 +93,32 @@ static BOOL CALLBACK find_top_window(HWND window, LPARAM parameter) {
     if (wcscmp(class_name, L"#32770") == 0) {
         SetWindowPos(window, NULL, -32000, -32000, 0, 0,
                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        search->any_dialog = window;
-        wcsncpy(search->any_dialog_title, title, 255);
-        search->any_dialog_title[255] = L'\0';
+        if (wcscmp(title, L"VOCALOID MIXER") == 0) {
+            /* VOCALOID3 implements its modeless mixer as a #32770 top-level
+               window.  It is not a modal error dialog and must not replace
+               the Musical Editor as the WM_COMMAND target. */
+            search->mixer_window = window;
+        } else {
+            search->any_dialog = window;
+            wcsncpy(search->any_dialog_title, title, 255);
+            search->any_dialog_title[255] = L'\0';
+        }
         if (wcscmp(title, L"Export Wave File") == 0)
             search->export_options_dialog = window;
         else if (wcsstr(title, L"Export to Wave File") != NULL)
             search->save_dialog = window;
         else if (wcscmp(title, L"VOCALOID3 Editor") == 0)
             search->singer_warning_dialog = window;
+        else if (wcscmp(title, L"Event Verification") == 0)
+            search->event_verification_dialog = window;
     }
-    if (GetMenu(window) != NULL) search->main_window = window;
+    if (GetMenu(window) != NULL) {
+        if (wcscmp(title, L"VOCALOID MIXER") == 0) {
+            search->mixer_window = window;
+        } else {
+            search->main_window = window;
+        }
+    }
     return TRUE;
 }
 
@@ -189,6 +206,29 @@ static int wait_for_main_window(
 ) {
     while (GetTickCount() < deadline) {
         search->main_window = NULL;
+        search->mixer_window = NULL;
+        pump_window_events();
+        enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
+        if (search->main_window) return 1;
+        if (search->mixer_window) {
+            search->main_window = search->mixer_window;
+            return 1;
+        }
+        if (process_exited(process)) return 0;
+        Sleep(POLL_MS);
+    }
+    return 0;
+}
+
+static int wait_for_musical_editor_window(
+    HDESK desktop,
+    WindowSearch *search,
+    HANDLE process,
+    DWORD deadline
+) {
+    while (GetTickCount() < deadline) {
+        search->main_window = NULL;
+        search->mixer_window = NULL;
         pump_window_events();
         enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
         if (search->main_window) return 1;
@@ -208,12 +248,14 @@ static int wait_for_first_export_dialog(
         search->export_options_dialog = NULL;
         search->save_dialog = NULL;
         search->singer_warning_dialog = NULL;
+        search->event_verification_dialog = NULL;
         search->any_dialog = NULL;
         search->any_dialog_title[0] = L'\0';
         pump_window_events();
         enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
         if (search->export_options_dialog || search->save_dialog) return 1;
         if (is_known_singer_warning(search)) return -1;
+        if (search->event_verification_dialog) return -2;
         if (process_exited(process)) return 0;
         Sleep(5);
     }
@@ -465,7 +507,11 @@ int wmain(int argc, wchar_t **argv) {
     UpdateWindow(search.main_window);
     PostMessageW(search.main_window, WM_COMMAND,
                  MAKEWPARAM(COMMAND_TRACK_EDITOR, 0), 0);
-    Sleep(500);
+    if (!wait_for_musical_editor_window(
+            desktop, &search, process_info.hProcess, deadline)) {
+        return fail(70, "wait_for_musical_editor", ERROR_TIMEOUT,
+                    &process_info, &search, desktop);
+    }
 
     if (!PostMessageW(search.main_window, WM_COMMAND,
                       MAKEWPARAM(COMMAND_EXPORT_WAVE, 0), 0)) {
@@ -475,6 +521,15 @@ int wmain(int argc, wchar_t **argv) {
     export_dialog_result = wait_for_first_export_dialog(
         desktop, &search, process_info.hProcess, deadline);
     if (export_dialog_result < 0) {
+        if (export_dialog_result == -2) {
+            fwprintf(stderr,
+                     L"project requires manual Event Verification; refusing "
+                     L"to change Editor Pre-Send settings\n");
+            EnumChildWindows(search.event_verification_dialog,
+                             dump_dialog_child, 0);
+            return fail(71, "event_verification_required", ERROR_INVALID_DATA,
+                        &process_info, &search, desktop);
+        }
         fwprintf(stderr,
                  L"selected singer is unavailable to VOCALOID3 Editor\n");
         EnumChildWindows(search.singer_warning_dialog, dump_dialog_child, 0);
