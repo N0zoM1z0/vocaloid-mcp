@@ -362,3 +362,41 @@ This closes the structural and native-render path for harmony plus real audio
 accompaniment. It does not yet generate instrumental stems or make perceptual
 mix decisions; those require higher-level composition, listening analysis, and
 mix/master tools on top of this deterministic VSQX layer.
+
+## Agent-composed instrumental and 16-measure song (2026-07-18)
+
+FluidSynth 2.3.4 and the FluidR3 GM SoundFont provide the first replaceable
+instrumental renderer backend. `vocaloid_render_accompaniment` accepts the same
+measure/beat/tick timeline as the structured VSQX writer, up to 15 melodic GM
+tracks plus channel-10 percussion, per-track volume/pan, tempo/meter changes,
+and a requested song end. It writes a temporary format-1 SMF only as the
+bounded synth process input, deletes it after rendering, verifies the resulting
+16-bit stereo PCM, rejects silence, and atomically commits the WAV. The MCP
+also exposes the full 128-program and standard percussion map. This default
+SoundFont is intentionally described as draft quality; a compatible custom SF2
+can replace it without changing the composition model.
+
+An ephemeral local Codex CLI session was restricted by instruction to the
+Vocaloid MCP and given an abstract 16-measure Japanese pop-rock brief. It used
+the tools rather than shell/XML and recovered from two schema mistakes (signed
+pan and an out-of-range send level) without leaving partial outputs. The final
+artifacts were created from zero:
+
+- form: 2-bar instrumental intro, 6-bar verse, 2-bar pre-chorus, 6-bar chorus;
+- tempo: 128 BPM, rising to 132 BPM at the chorus;
+- accompaniment: four GM tracks, 176 pitched notes, 127 drum hits (303 events);
+- vocal: IA_ROCKS lead with 56 notes/17 controls and chorus harmony with 12
+  notes/6 controls, on two independent tracks;
+- VSQ3: two musical parts, 68 notes, 23 controls, one stereo WAV part;
+- validation: Yamaha XSD and structural diagnostics both clean;
+- backing: 38.368 seconds, peak -4.45 dBFS, RMS -24.15 dBFS;
+- original-Editor Master: 40.263 seconds, 44.1 kHz/16-bit stereo, non-silent,
+  26.344-second helper runtime, no forced termination or residual process.
+
+The eval also exposed the next real quality gate. Independent FFmpeg EBU R128
+analysis measured the Master at -9.0 LUFS integrated, 13.5 LU LRA, and +0.3
+dBFS true peak; the basic PCM analyzer likewise reported a 0 dBFS sample peak.
+The workflow is therefore complete as a composition/render loop but this output
+is not claimed as mastered. The next tools must expose clipping/true-peak and
+loudness analysis, adjustable audio/mixer gain, stem replacement, and a bounded
+revision/mastering pass with explicit headroom targets.

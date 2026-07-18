@@ -1101,6 +1101,13 @@ function songPositionTick(
     + (position.tick ?? 0);
 }
 
+export function musicalPositionToTick(
+  signatures: readonly SongTimeSignatureInput[],
+  position: MusicalPosition,
+): number {
+  return songPositionTick(signatures, position, "position");
+}
+
 function audioDurationTicks(
   signatures: readonly SongTimeSignatureInput[],
   tempos: readonly SongTempoInput[],

@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import type { ResponseFormat } from "./types.js";
+import { renderAccompaniment } from "./accompaniment.js";
+import { listGeneralMidi } from "./gm.js";
 import { renderProjectToWav } from "./render.js";
 import { discoverVoices } from "./voices.js";
 import {
@@ -21,9 +23,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.2.0" },
+  { name: "vocaloid-mcp-server", version: "0.3.0" },
   {
-    instructions: `Use this server to compose and iteratively tune native VOCALOID projects. Start with vocaloid_list_voices. For a long-form original song, design the form, tempo/meter map, lead, doubles, harmony, lyrics, voice-appropriate phonemes, note expressions, selective vibrato, sparse musical control curves, and optional real WAV accompaniment, then call vocaloid_create_song. It creates a multi-track/multi-part VSQX from nothing using zero-based measure/beat/tick positions. Use vocaloid_create_project only for a simple single-part draft; its note/control ticks are relative to that part. Validate and inspect before vocaloid_render_wav. After analyzing or listening to the Master render, use note-expression and replace-range control edits for local revisions. Prefer new output paths; explicit overwrites create backups. Native WAV parts make a complete lead/harmony/backing render possible, but this server does not yet generate instrumental stems or make perceptual mix/master decisions, so report that boundary accurately.`,
+    instructions: `Use this server to compose and iteratively tune native VOCALOID projects. Start with vocaloid_list_voices. For a complete long-form original song, design the form and shared tempo/meter map; call vocaloid_list_instruments and vocaloid_render_accompaniment for a real stereo instrumental WAV; then design lead, doubles, harmony, lyrics, voice-appropriate phonemes, note expressions, selective vibrato, and sparse musical control curves and call vocaloid_create_song with that WAV as an audio_part. It creates a multi-track/multi-part VSQX from nothing using zero-based measure/beat/tick positions. Use vocaloid_create_project only for a simple single-part draft; its note/control ticks are relative to that part. Validate and inspect before vocaloid_render_wav. After analyzing or listening to the Master render, use note-expression and replace-range control edits for local revisions. Prefer new output paths; explicit overwrites create backups. The bundled GM SoundFont is a draft-quality renderer and the server does not yet make perceptual mix/master decisions, so report that boundary accurately.`,
   },
 );
 
@@ -188,6 +190,44 @@ const SongAudioPartSchema = z
       .describe("Must match the WAV channel count; mono uses 1 channel and stereo uses 2"),
     file_path: PathSchema.describe("Existing 16-bit PCM WAV accompaniment or stem"),
     start: MusicalPositionSchema.describe("Absolute song position where audio playback begins"),
+  })
+  .strict();
+
+const AccompanimentNoteSchema = z
+  .object({
+    position: MusicalPositionSchema,
+    duration: z.number().int().min(1).describe("Duration in ticks; 480 is one quarter note"),
+    note_number: z.number().int().min(0).max(127),
+    velocity: z.number().int().min(1).max(127).default(88),
+  })
+  .strict();
+
+const AccompanimentTrackSchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    program: z
+      .number()
+      .int()
+      .min(0)
+      .max(127)
+      .describe("Zero-based General MIDI program: 0 acoustic piano, 24 nylon guitar, 33 finger bass"),
+    volume: z.number().int().min(0).max(127).default(100),
+    pan: z.number().int().min(0).max(127).default(64),
+    notes: z.array(AccompanimentNoteSchema).min(1).max(20_000),
+  })
+  .strict();
+
+const DrumHitSchema = z
+  .object({
+    position: MusicalPositionSchema,
+    note_number: z
+      .number()
+      .int()
+      .min(0)
+      .max(127)
+      .describe("General MIDI percussion note on channel 10; e.g. 36 kick, 38 snare, 42 closed hi-hat"),
+    velocity: z.number().int().min(1).max(127).default(96),
+    duration: z.number().int().min(1).default(60),
   })
   .strict();
 
@@ -380,6 +420,41 @@ Returns voice name, 16-character component ID, voice format version, source path
 );
 
 server.registerTool(
+  "vocaloid_list_instruments",
+  {
+    title: "List Accompaniment Instruments",
+    description: `List zero-based General MIDI programs and channel-10 percussion note numbers for vocaloid_render_accompaniment.
+
+Use search to find an instrument family or name, such as piano, guitar, bass, strings, pad, kick, snare, or hi-hat. An empty search returns all 128 programs and the standard percussion map.`,
+    inputSchema: z
+      .object({
+        search: z.string().max(128).optional(),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ search, response_format }) => {
+    try {
+      const result = listGeneralMidi(search);
+      return textResult(
+        result,
+        response_format,
+        `Found ${result.programs.length} programs and ${result.drums.length} percussion sounds`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_inspect_project",
   {
     title: "Inspect VOCALOID Project",
@@ -556,6 +631,106 @@ Ticks are relative to the part. V4's single-letter curve IDs are normalized to t
         result,
         params.response_format,
         `${result.page.count} of ${result.page.total} control points`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_render_accompaniment",
+  {
+    title: "Render Instrumental Accompaniment",
+    description: `Compose and render a real 16-bit PCM stereo WAV accompaniment from structured instrumental notes and drum hits.
+
+This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI File is used only inside the bounded FluidSynth process and is deleted afterward. Tracks use zero-based General MIDI programs, per-track volume/pan, and absolute zero-based measure/beat/tick positions. Tempo and meter changes use the same coordinate system as vocaloid_create_song. The verified non-silent WAV can be passed directly as a stereo audio_part to vocaloid_create_song, then vocaloid_render_wav exports the combined vocal/harmony/backing Master. The bundled GM SoundFont is suitable for composition drafts; soundfont_path can select a better compatible SF2 within an allowed read root.`,
+    inputSchema: z
+      .object({
+        output_path: PathSchema,
+        time_signatures: z
+          .array(
+            z
+              .object({
+                measure: z.number().int().min(0).max(100_000),
+                numerator: z.number().int().min(1).max(32),
+                denominator: z.union([
+                  z.literal(1),
+                  z.literal(2),
+                  z.literal(4),
+                  z.literal(8),
+                  z.literal(16),
+                  z.literal(32),
+                ]),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(256)
+          .default([{ measure: 0, numerator: 4, denominator: 4 }]),
+        tempos: z
+          .array(
+            z.object({ position: MusicalPositionSchema, bpm: z.number().min(20).max(400) }).strict(),
+          )
+          .min(1)
+          .max(5000)
+          .default([{ position: { measure: 0, beat: 0, tick: 0 }, bpm: 120 }]),
+        end: MusicalPositionSchema.describe("Exclusive song end; all notes and drum hits must end before it"),
+        tracks: z.array(AccompanimentTrackSchema).min(1).max(15),
+        drums: z.array(DrumHitSchema).max(50_000).default([]),
+        sample_rate: z.union([z.literal(44_100), z.literal(48_000), z.literal(96_000)]).default(44_100),
+        gain: z.number().gt(0).max(10).default(0.2),
+        reverb: z.boolean().default(true),
+        chorus: z.boolean().default(true),
+        soundfont_path: PathSchema.optional(),
+        overwrite: z.boolean().default(false),
+        response_format: ResponseFormatSchema,
+      })
+      .strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await renderAccompaniment({
+        outputPath: params.output_path,
+        timeSignatures: params.time_signatures,
+        tempos: params.tempos,
+        end: params.end,
+        tracks: params.tracks.map((track) => ({
+          name: track.name,
+          program: track.program,
+          volume: track.volume,
+          pan: track.pan,
+          notes: track.notes.map((note) => ({
+            position: note.position,
+            duration: note.duration,
+            noteNumber: note.note_number,
+            velocity: note.velocity,
+          })),
+        })),
+        drums: params.drums.map((hit) => ({
+          position: hit.position,
+          noteNumber: hit.note_number,
+          velocity: hit.velocity,
+          duration: hit.duration,
+        })),
+        sampleRate: params.sample_rate,
+        gain: params.gain,
+        reverb: params.reverb,
+        chorus: params.chorus,
+        ...(params.soundfont_path !== undefined ? { soundfontPath: params.soundfont_path } : {}),
+        overwrite: params.overwrite,
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Rendered ${result.durationSeconds.toFixed(3)} seconds of accompaniment audio`,
       );
     } catch (error) {
       return errorResult(error);

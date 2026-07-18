@@ -33,12 +33,61 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_create_song",
       "vocaloid_inspect_project",
       "vocaloid_list_control_points",
+      "vocaloid_list_instruments",
       "vocaloid_list_notes",
       "vocaloid_list_voices",
+      "vocaloid_render_accompaniment",
       "vocaloid_render_wav",
       "vocaloid_update_note_expressions",
       "vocaloid_validate_project",
     ],
+  );
+
+  const instruments = await client.callTool({
+    name: "vocaloid_list_instruments",
+    arguments: { search: "bass", response_format: "json" },
+  });
+  assert.notEqual(instruments.isError, true);
+  const instrumentData = instruments.structuredContent as {
+    data?: { programs?: Array<{ program?: number; name?: string }> };
+  };
+  assert.ok(instrumentData.data?.programs?.some((entry) => entry.program === 33));
+
+  const accompanimentPath = join(temporary, "mcp-backing.wav");
+  const accompaniment = await client.callTool({
+    name: "vocaloid_render_accompaniment",
+    arguments: {
+      output_path: accompanimentPath,
+      end: { measure: 1, beat: 0 },
+      tracks: [
+        {
+          name: "Piano",
+          program: 0,
+          notes: [
+            { position: { measure: 0, beat: 0 }, duration: 960, note_number: 60 },
+            { position: { measure: 0, beat: 2 }, duration: 960, note_number: 67 },
+          ],
+        },
+      ],
+      drums: [
+        { position: { measure: 0, beat: 0 }, note_number: 36 },
+        { position: { measure: 0, beat: 2 }, note_number: 38 },
+      ],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(accompaniment.isError, true);
+  const accompanimentData = accompaniment.structuredContent as {
+    data?: { audioFormat?: string; channels?: number; bitsPerSample?: number; silent?: boolean };
+  };
+  assert.deepEqual(
+    {
+      format: accompanimentData.data?.audioFormat,
+      channels: accompanimentData.data?.channels,
+      bits: accompanimentData.data?.bitsPerSample,
+      silent: accompanimentData.data?.silent,
+    },
+    { format: "pcm", channels: 2, bits: 16, silent: false },
   );
 
   const created = await client.callTool({
