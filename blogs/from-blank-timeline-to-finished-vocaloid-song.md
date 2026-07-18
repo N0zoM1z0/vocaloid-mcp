@@ -2,10 +2,10 @@
 
 ## Engineering an Agent-Native VOCALOID3 MCP for Composition, Tuning, Rendering, Mixing, Mastering, and Verified Delivery
 
-- **Project checkpoint:** 2026-07-18
+- **Project checkpoint:** 2026-07-18; paired VSQX delivery update 2026-07-19
 - **Implementation:** TypeScript, Model Context Protocol, native Win32 helpers, VOCALOID3 Editor, FluidSynth, FFmpeg
 - **Primary verified voice:** IA_ROCKS
-- **Repository state described:** local commit `91545a0`
+- **Implementation baseline described:** local commit `91545a0`, with the later paired-delivery convention documented below
 - **Current verification:** 47 tests discovered, 45 passed, 2 intentionally skipped, 0 failed
 
 ---
@@ -22,7 +22,7 @@ A successful system could not stop at generating a Standard MIDI File, emitting 
 
 That requirement transformed the work from “write some XML” into a small production system. It required reverse engineering enough of a legacy 32-bit Windows application to automate it safely; understanding Yamaha's VSQ3/VSQ4 data model; designing a canonical song representation suitable for long-running agent sessions; separating creative intent from derived artifacts; building deterministic accompaniment and audio-processing backends; and, perhaps most importantly, reducing the interaction cost until a fresh agent could use the system without repeatedly rediscovering its schema.
 
-This article reconstructs the entire engineering path from the first native probe to the three complete IA_ROCKS deliveries now in `artifacts/songs/`. It includes the dead ends, crashes, false assumptions, interface redesigns, quality failures, and test evidence. It also draws a strict boundary between what the system has actually proven and what still requires better instruments, broader voice coverage, human listening, or future protocol work.
+This article reconstructs the entire engineering path from the first native probe to the three complete IA_ROCKS delivery pairs now in `artifacts/songs/` and `artifacts/vsqxs/`. It includes the dead ends, crashes, false assumptions, interface redesigns, quality failures, and test evidence. It also draws a strict boundary between what the system has actually proven and what still requires better instruments, broader voice coverage, human listening, or future protocol work.
 
 This is not a claim that software has solved musical taste. It is a report on building an auditable instrument through which an agent can exercise musical judgment.
 
@@ -163,7 +163,7 @@ The following table summarizes the standard eventually used to decide whether th
 | Stems | Vocal and instrument tracks can be rendered separately with explicit pan/dry decisions and artifact provenance. |
 | Mix | Ordered effects and section dynamics are deterministic and stored as intent. |
 | Master | Integrated loudness, LRA, true peak, clipping, and stereo balance are measured independently. |
-| Delivery | A final WAV is accepted only when its dependency chain and hashes are current. |
+| Delivery | A final WAV is accepted only when its dependency chain and hashes are current; the matching current-composition VSQX is published under the same basename. |
 | Recovery | Failed renders do not produce false artifacts; successful prior work can be resumed. |
 | Agent usability | The default tool catalog is compact, typed, documented, and supplemented by on-demand resources. |
 
@@ -206,7 +206,8 @@ The mature system has five conceptually separate planes.
                hashes | dependencies | history | reviews | QC
                                 |
                                 v
-                artifacts/songs/<song>-<style>-final.wav
+        artifacts/songs/<song>-<style>-final.wav
+        artifacts/vsqxs/<song>-<style>-final.vsqx
 ```
 
 ### 3.1 The implementation layers
@@ -1091,7 +1092,7 @@ The delivery stage verifies:
 - channel-balance policy;
 - review/QC metadata.
 
-The clean listening copy is published only after this gate passes. Publication is hash-aware: an identical destination is reused, while a same-name file with different bytes is not silently overwritten.
+The clean listening copy is published only after this gate passes. The runner also publishes the current-composition VSQX under the same basename in `artifacts/vsqxs/`. It verifies both source hashes and both existing targets before creating either missing copy. Identical destinations are reused, while a same-name WAV or VSQX with different bytes is never silently overwritten. The VSQX preserves the vocal score, native tuning, mixer state, and backing reference; the final isolated-stem mix/master remains manifest provenance rather than being embedded back into the project file.
 
 ---
 
@@ -1359,7 +1360,7 @@ Final inspection should use current artifact checks and verify all readiness sta
 - sample format, stereo, loudness, LRA policy, true peak, clipping, and balance pass;
 - any intentional warnings and listening notes are preserved.
 
-Only then is the hash-identical listening copy placed under `artifacts/songs/`.
+Only then are the hash-identical listening copy and current-composition native project placed under the matching basenames in `artifacts/songs/` and `artifacts/vsqxs/`.
 
 ### 14.15 Step 14: revise without losing the past
 
@@ -1476,11 +1477,14 @@ Final delivery:
 
 The manifest intentionally retains 112 consonant-collision and eight high-density warnings across eleven rapid lyric lines. An `artifact_check=all` audit also reports one obsolete historical mix, `stem-mix-r26`; it is preserved for history but is not a dependency of the current delivery.
 
-Listening copy:
+Delivery pair:
 
 ```text
 artifacts/songs/hanairo-biyori-wa-rock-ia-rocks-final.wav
+artifacts/vsqxs/hanairo-biyori-wa-rock-ia-rocks-final.vsqx
 ```
+
+The paired VSQX comes from source revision 16, is 383,831 bytes, and has SHA-256 `81e9ad994d87d05658f520a95a56fceedecfcb2466dbed9e724bb0399e5bc153`.
 
 ### 16.2 Hibana no Kouro — driving J-Rock
 
@@ -1510,11 +1514,14 @@ Final delivery:
 
 The current song intentionally retains 50 consonant-collision and five high-density warnings in designated rapid cells.
 
-Listening copy:
+Delivery pair:
 
 ```text
 artifacts/songs/hibana-kouro-ia-rocks-j-rock-final.wav
+artifacts/vsqxs/hibana-kouro-ia-rocks-j-rock-final.vsqx
 ```
+
+The paired VSQX comes from source revision 19, is 204,646 bytes, and has SHA-256 `e3edbac8b4752b74c577c20aeb7c7e3d8b021166d218f74c41335d51d0f80c9d`.
 
 ### 16.3 Natsu no Yoru ni Ukabu Koe — summer-night dream pop
 
@@ -1544,11 +1551,14 @@ Final delivery:
 
 This manifest passes with zero warnings as well as zero errors.
 
-Listening copy:
+Delivery pair:
 
 ```text
 artifacts/songs/natsu-no-yoru-ia-rocks-dream-pop-final.wav
+artifacts/vsqxs/natsu-no-yoru-ia-rocks-dream-pop-final.vsqx
 ```
+
+The paired VSQX comes from source revision 19, is 193,720 bytes, and has SHA-256 `7d08bd7761b98dde8b887ed83a2ee59a9427eb61d19bd575fbb1164ef4e7466e`.
 
 ### 16.4 Readiness and warning interpretation
 
@@ -1819,10 +1829,11 @@ vocaloid/
 ├── notes/                       checkpoint-specific evidence and design notes
 ├── artifacts/evals/             manifests, builds, stems, mixes, analyses
 ├── artifacts/songs/             QC-passed final listening copies only
+├── artifacts/vsqxs/             matching current-composition native projects
 └── blogs/                        long-form technical retrospectives
 ```
 
-Generated audio under `artifacts/songs/` and most large evaluation media are intentionally ignored by Git. Source code, tests, and engineering notes remain the reproducible record. The externally supplied Hanairo lyric file is also deliberately untracked; its digest is captured in the manifest/report.
+The complete `artifacts/songs/` directory and most large evaluation media are intentionally ignored by Git: final listening WAVs are local-only and must not be published with the repository. The much smaller final native projects under `artifacts/vsqxs/` are intentionally trackable and publishable alongside source code, tests, and engineering notes. The externally supplied Hanairo lyric file remains deliberately untracked; its digest is captured in the manifest/report.
 
 ### 20.2 Build and test
 
@@ -1915,7 +1926,7 @@ Before committing several minutes of editor time:
 7. render lead and harmony as separate transactions;
 8. inspect exact artifact hashes before mixing;
 9. run independent final analysis after mastering;
-10. publish only a hash-identical QC-passed final WAV to `artifacts/songs/`.
+10. publish only a hash-identical QC-passed final WAV to `artifacts/songs/` and its hash-verified current-composition VSQX to `artifacts/vsqxs/` under the same basename.
 
 ---
 
@@ -1977,7 +1988,7 @@ An agent should be able to explain why the final audio differs from the stems by
 
 ### 21.7 Local source control discipline
 
-Generated audio is kept out of ordinary source commits. The Git history records code and evidence checkpoints, while final WAVs remain local delivery artifacts. User-supplied untracked lyric and planning files are left untouched. Publication to a remote repository is a separate explicit decision, not a side effect of building or documenting the project.
+Generated audio is kept out of ordinary source commits. The Git history records code, evidence checkpoints, and the compact final VSQX projects; those VSQX files may be published with the repository. Final WAVs under `artifacts/songs/` remain strictly local delivery artifacts and are ignored as a whole directory. User-supplied untracked lyric and planning files are left untouched. A remote push remains a separate explicit decision, not a side effect of building or documenting the project.
 
 ---
 
@@ -2232,7 +2243,7 @@ Detailed checkpoint evidence remains available in the repository:
 
 ## Conclusion
 
-The project now does what the original idea actually demanded: it gives an agent a practical path from an empty timeline to a complete, native, rendered, mixed, mastered, and verified VOCALOID song.
+The project now does what the original idea actually demanded: it gives an agent a practical path from an empty timeline to a complete, native, rendered, mixed, mastered, and verified VOCALOID song, delivered as both a final listening WAV and the matching current-composition VSQX project.
 
 The most important result is not any single tool or WAV. It is the closed evidence loop:
 

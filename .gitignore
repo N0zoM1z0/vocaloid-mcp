@@ -20,7 +20,11 @@ artifacts/evals/*.jsonl
 artifacts/evals/*.bak-*
 artifacts/evals/*-final.md
 artifacts/evals/*-style-eval*
-artifacts/songs/*.wav
+
+# Final listening audio is local-only and must never be tracked/published.
+artifacts/songs/
+
+# Final native projects under artifacts/vsqxs/ are intentionally trackable.
 
 # Local diagnostic screenshots
 /image*.png

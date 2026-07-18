@@ -2,6 +2,8 @@
 
 Date: 2026-07-18
 
+Paired final VSQX publication added: 2026-07-19
+
 This checkpoint tests the public production MCP as an agent-facing composition
 surface, not merely the underlying TypeScript modules. The reusable runner uses
 local deterministic helpers only to plan rhythm slots and accompaniment notes;
@@ -31,11 +33,11 @@ an already committed lead stem on the next resume.
 
 ## Delivered evidence
 
-| Song | Composition evidence | Arrangement | Final WAV evidence |
-| --- | --- | --- | --- |
-| 花色日和 — Hanairo Biyori（和風ロック） | 146 measures; 820 vocal events; lead + 13 selected harmony destinations; 4/4 → 6/8 → 4/4; 9 tempo points | shamisen, koto, shakuhachi, taiko, guitar, bass, drums | 256.474 s; stereo 44.1 kHz/16-bit; -15.2 LUFS; 5.7 LU LRA; -1.10 dBTP; 0 clipped samples; -1.14 dB balance; SHA-256 `39723f64e976601e7c86390025fe7537164423e507041eede4beedb941d0c254` |
-| 火花の航路（疾走 J-Rock） | 78 measures; 433 vocal events; lead + 8 harmony phrases; one explicit 2/4 turnaround; 9 tempo points | double guitars, bass, piano, strings, drums | 126.564 s; stereo 44.1 kHz/16-bit; -14.0 LUFS; 4.8 LU LRA; -1.00 dBTP; 0 clipped samples; +1.16 dB balance; SHA-256 `53b96224b6d8791c320785f857bc5777f2a5208e214199739d808480d1c86626` |
-| 夏の夜に浮かぶ声（Dream Pop） | 78 measures; 411 vocal events; lead + 7 harmony phrases; repeated 6/8 ↔ 4/4 changes; 8 tempo points | two pads, bells, clean guitar, fretless bass, soft kit | 198.001 s; stereo 44.1 kHz/16-bit; -17.2 LUFS; 9.6 LU LRA; -1.50 dBTP; 0 clipped samples; +0.26 dB balance; SHA-256 `5bb246d2eaf0262a2495a97e4690aa1ceced62a476f3234f06d794ba09a4daaf` |
+| Song | Composition evidence | Arrangement | Final WAV evidence | Current VSQX evidence |
+| --- | --- | --- | --- | --- |
+| 花色日和 — Hanairo Biyori（和風ロック） | 146 measures; 820 vocal events; lead + 13 selected harmony destinations; 4/4 → 6/8 → 4/4; 9 tempo points | shamisen, koto, shakuhachi, taiko, guitar, bass, drums | 256.474 s; stereo 44.1 kHz/16-bit; -15.2 LUFS; 5.7 LU LRA; -1.10 dBTP; 0 clipped samples; -1.14 dB balance; SHA-256 `39723f64e976601e7c86390025fe7537164423e507041eede4beedb941d0c254` | source revision 16; 383,831 bytes; SHA-256 `81e9ad994d87d05658f520a95a56fceedecfcb2466dbed9e724bb0399e5bc153` |
+| 火花の航路（疾走 J-Rock） | 78 measures; 433 vocal events; lead + 8 harmony phrases; one explicit 2/4 turnaround; 9 tempo points | double guitars, bass, piano, strings, drums | 126.564 s; stereo 44.1 kHz/16-bit; -14.0 LUFS; 4.8 LU LRA; -1.00 dBTP; 0 clipped samples; +1.16 dB balance; SHA-256 `53b96224b6d8791c320785f857bc5777f2a5208e214199739d808480d1c86626` | source revision 19; 204,646 bytes; SHA-256 `e3edbac8b4752b74c577c20aeb7c7e3d8b021166d218f74c41335d51d0f80c9d` |
+| 夏の夜に浮かぶ声（Dream Pop） | 78 measures; 411 vocal events; lead + 7 harmony phrases; repeated 6/8 ↔ 4/4 changes; 8 tempo points | two pads, bells, clean guitar, fretless bass, soft kit | 198.001 s; stereo 44.1 kHz/16-bit; -17.2 LUFS; 9.6 LU LRA; -1.50 dBTP; 0 clipped samples; +0.26 dB balance; SHA-256 `5bb246d2eaf0262a2495a97e4690aa1ceced62a476f3234f06d794ba09a4daaf` | source revision 19; 193,720 bytes; SHA-256 `7d08bd7761b98dde8b887ed83a2ee59a9427eb61d19bd575fbb1164ef4e7466e` |
 
 Clean listening copies (only QC-passed final WAVs; no backing/stems/mixes):
 
@@ -43,10 +45,23 @@ Clean listening copies (only QC-passed final WAVs; no backing/stems/mixes):
 - `artifacts/songs/hibana-kouro-ia-rocks-j-rock-final.wav`
 - `artifacts/songs/natsu-no-yoru-ia-rocks-dream-pop-final.wav`
 
+Matching current-composition native projects:
+
+- `artifacts/vsqxs/hanairo-biyori-wa-rock-ia-rocks-final.vsqx`
+- `artifacts/vsqxs/hibana-kouro-ia-rocks-j-rock-final.vsqx`
+- `artifacts/vsqxs/natsu-no-yoru-ia-rocks-dream-pop-final.vsqx`
+
 After final independent QC, the runner copies the hash-identical canonical
-delivery into `artifacts/songs/`. It reuses an identical file and refuses to
-replace a same-name WAV with different bytes. The directory is ignored by Git;
-large generated audio is a local delivery, not source code.
+delivery into `artifacts/songs/` and the hash-identical current VSQX artifact
+into `artifacts/vsqxs/` under the same basename. It verifies both sources and
+both pre-existing targets before creating either missing copy, reuses identical
+files, and refuses to replace a same-name file with different bytes. The VSQX
+contains the current vocal composition, native tuning, and backing reference;
+the final WAV's later isolated-stem mix/master remains provenance in the
+canonical manifest rather than being embedded back into VSQX. Large generated
+audio under `artifacts/songs/` remains a local-only delivery and is ignored as
+an entire directory. The compact native projects under `artifacts/vsqxs/` are
+intentionally eligible for source control and repository publication.
 
 All three current manifests pass score, build, render, mix, and delivery
 readiness with zero errors. The summer song has zero warnings. Rock intentionally
