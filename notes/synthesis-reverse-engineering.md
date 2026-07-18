@@ -322,6 +322,12 @@ no forced termination or residual process:
 - Codex-created `雨のあとで`: 14.641 s helper runtime; 44.1 kHz, 16-bit
   stereo; 16.370 s audio; peak -7.92 dBFS; RMS -23.01 dBFS; non-silent.
 
+The helper also treats Editor's singer-substitution warning as a provenance
+failure. It matches the exact dialog text, reports `singer_unavailable`, and
+does not click through to render with an unknown default singer. VVD metadata
+on disk is therefore advertised separately from Editor registration/licensing;
+only a successful render proves current synthesis availability.
+
 The workflow is now exposed as `vocaloid_render_wav`. It validates the VSQX,
 renders to a temporary sibling path, parses RIFF/WAVE chunks and sample data,
 rejects silent output, then atomically renames the validated WAV. Existing

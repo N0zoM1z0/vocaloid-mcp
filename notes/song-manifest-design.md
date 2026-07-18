@@ -54,15 +54,18 @@ nested call:
 - create and inspect a manifest;
 - upsert one section;
 - upsert one vocal part plus its track/voice metadata;
+- compile Japanese kana into manual-backed mora/phoneme units, align one
+  phrase, and upsert only that phrase;
+- compile persistent high-level tuning gestures onto voiced stable event IDs;
 - upsert one accompaniment track;
 - transform selected events by stable ID or semantic scope;
 - remove selected objects with referential-integrity checks;
 - build accompaniment and VSQX artifacts from one manifest revision.
 
-The same manifest now drives separate stems, score-vs-render vocal analysis,
-and reproducible stem effects/section automation. Japanese mora/phoneme
-alignment and high-level tuning gestures are the remaining phase. High-quality
-VST/DAW rendering is explicitly outside the current requested scope.
+The same manifest now drives Japanese mora/phoneme alignment, persistent
+high-level tuning gestures, separate stems, score-vs-render vocal analysis,
+and reproducible stem effects/section automation. High-quality VST/DAW
+rendering is explicitly outside the current requested scope.
 
 ## Completion evidence
 

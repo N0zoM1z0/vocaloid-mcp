@@ -20,6 +20,7 @@ typedef struct WindowSearch {
     HWND main_window;
     HWND export_options_dialog;
     HWND save_dialog;
+    HWND singer_warning_dialog;
     HWND any_dialog;
     wchar_t any_dialog_title[256];
 } WindowSearch;
@@ -28,6 +29,11 @@ typedef struct ChildSearch {
     HWND filename_edit;
     HWND save_button;
 } ChildSearch;
+
+typedef struct DialogTextSearch {
+    const wchar_t *needle;
+    int matched;
+} DialogTextSearch;
 
 static HWINEVENTHOOK g_event_hook = NULL;
 
@@ -92,6 +98,8 @@ static BOOL CALLBACK find_top_window(HWND window, LPARAM parameter) {
             search->export_options_dialog = window;
         else if (wcsstr(title, L"Export to Wave File") != NULL)
             search->save_dialog = window;
+        else if (wcscmp(title, L"VOCALOID3 Editor") == 0)
+            search->singer_warning_dialog = window;
     }
     if (GetMenu(window) != NULL) search->main_window = window;
     return TRUE;
@@ -108,6 +116,30 @@ static BOOL CALLBACK find_dialog_child(HWND window, LPARAM parameter) {
         search->save_button = window;
     }
     return TRUE;
+}
+
+static BOOL CALLBACK find_dialog_text(HWND window, LPARAM parameter) {
+    DialogTextSearch *search = (DialogTextSearch *)parameter;
+    wchar_t title[1024] = {0};
+    GetWindowTextW(window, title, 1024);
+    if (wcsstr(title, search->needle) != NULL) {
+        search->matched = 1;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static int is_known_singer_warning(WindowSearch *search) {
+    static const wchar_t *warning =
+        L"Some singers in the file have been changed to the default singer";
+    DialogTextSearch text_search;
+    if (!search->singer_warning_dialog ||
+        !IsWindow(search->singer_warning_dialog)) return 0;
+    text_search.needle = warning;
+    text_search.matched = 0;
+    EnumChildWindows(search->singer_warning_dialog, find_dialog_text,
+                    (LPARAM)&text_search);
+    return text_search.matched;
 }
 
 static BOOL CALLBACK dump_dialog_child(HWND window, LPARAM parameter) {
@@ -175,9 +207,13 @@ static int wait_for_first_export_dialog(
     while (GetTickCount() < deadline) {
         search->export_options_dialog = NULL;
         search->save_dialog = NULL;
+        search->singer_warning_dialog = NULL;
+        search->any_dialog = NULL;
+        search->any_dialog_title[0] = L'\0';
         pump_window_events();
         enumerate_top_windows(desktop, find_top_window, (LPARAM)search);
         if (search->export_options_dialog || search->save_dialog) return 1;
+        if (is_known_singer_warning(search)) return -1;
         if (process_exited(process)) return 0;
         Sleep(5);
     }
@@ -347,6 +383,7 @@ int wmain(int argc, wchar_t **argv) {
     PROCESS_INFORMATION process_info;
     WindowSearch search;
     ChildSearch children;
+    int export_dialog_result;
     uint64_t output_size = 0;
     int forced = 0;
 
@@ -435,10 +472,20 @@ int wmain(int argc, wchar_t **argv) {
         return fail(70, "open_export_dialog", GetLastError(),
                     &process_info, &search, desktop);
     }
-    if (!wait_for_first_export_dialog(desktop, &search, process_info.hProcess, deadline)) {
+    export_dialog_result = wait_for_first_export_dialog(
+        desktop, &search, process_info.hProcess, deadline);
+    if (export_dialog_result < 0) {
+        fwprintf(stderr,
+                 L"selected singer is unavailable to VOCALOID3 Editor\n");
+        EnumChildWindows(search.singer_warning_dialog, dump_dialog_child, 0);
+        return fail(71, "singer_unavailable", ERROR_NOT_FOUND,
+                    &process_info, &search, desktop);
+    }
+    if (!export_dialog_result) {
         if (search.any_dialog) {
             fwprintf(stderr, L"unexpected VOCALOID dialog: %ls\n",
                      search.any_dialog_title);
+            EnumChildWindows(search.any_dialog, dump_dialog_child, 0);
         }
         return fail(71, "wait_for_export_dialog", ERROR_TIMEOUT,
                     &process_info, &search, desktop);

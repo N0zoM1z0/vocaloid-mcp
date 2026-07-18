@@ -29,8 +29,10 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     [
       "vocaloid_add_control_points",
       "vocaloid_add_notes",
+      "vocaloid_align_japanese_phrase",
       "vocaloid_analyze_vocal_stem",
       "vocaloid_analyze_wav",
+      "vocaloid_apply_tuning_gestures",
       "vocaloid_build_song_manifest",
       "vocaloid_compile_vocal_phrase",
       "vocaloid_create_project",
@@ -40,6 +42,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_inspect_mixer",
       "vocaloid_inspect_project",
       "vocaloid_inspect_song_manifest",
+      "vocaloid_japanese_g2p",
       "vocaloid_list_control_points",
       "vocaloid_list_instruments",
       "vocaloid_list_notes",
@@ -58,6 +61,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_upsert_manifest_effect_chain",
       "vocaloid_upsert_manifest_section_dynamic",
       "vocaloid_upsert_manifest_vocal_part",
+      "vocaloid_upsert_manifest_vocal_phrase",
       "vocaloid_upsert_song_section",
       "vocaloid_validate_project",
     ],
@@ -72,6 +76,17 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     data?: { programs?: Array<{ program?: number; name?: string }> };
   };
   assert.ok(instrumentData.data?.programs?.some((entry) => entry.program === 33));
+
+  const voices = await client.callTool({
+    name: "vocaloid_list_voices",
+    arguments: { response_format: "json" },
+  });
+  assert.notEqual(voices.isError, true);
+  const voiceData = voices.structuredContent as {
+    data?: { editor_availability?: string; voices?: Array<{ componentId?: string }> };
+  };
+  assert.equal(voiceData.data?.editor_availability, "unverified_until_render");
+  assert.ok(voiceData.data?.voices?.some((voice) => voice.componentId === "BLRGDDR4M3WM2LC6"));
 
   const phrase = await client.callTool({
     name: "vocaloid_compile_vocal_phrase",
@@ -104,6 +119,58 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     },
     { notes: 3, continuations: 1, fastest: 120 },
   );
+
+  const japanese = await client.callTool({
+    name: "vocaloid_japanese_g2p",
+    arguments: {
+      text: "希望のキャラ",
+      reading: "きぼうの きゃら",
+      response_format: "json",
+    },
+  });
+  assert.notEqual(japanese.isError, true);
+  const japaneseData = japanese.structuredContent as {
+    data?: { units?: Array<{ surface?: string; phonemes?: string | null }>; fallback_count?: number };
+  };
+  assert.deepEqual(
+    japaneseData.data?.units?.map((unit) => [unit.surface, unit.phonemes]),
+    [["き", "k' i"], ["ぼ", "b o"], ["う", "M"], ["の", "n o"], ["きゃ", "k' a"], ["ら", "4 a"]],
+  );
+  assert.equal(japaneseData.data?.fallback_count, 0);
+
+  const japaneseAlignment = await client.callTool({
+    name: "vocaloid_align_japanese_phrase",
+    arguments: {
+      text: "きゃら",
+      phrase_id: "jp-phrase",
+      start: { measure: 0, beat: 2 },
+      allocation: "sequential",
+      note_slots: [
+        { id: "jp-cell-1", duration: 240, note_number: 64 },
+        { id: "jp-cell-2", duration: 240, note_number: 65 },
+      ],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(japaneseAlignment.isError, true);
+  const japaneseAlignmentData = japaneseAlignment.structuredContent as {
+    data?: {
+      phrase?: Record<string, unknown>;
+      alignment?: { lyric_units?: number; voiced_slots?: number };
+    };
+  };
+  assert.deepEqual(
+    japaneseAlignmentData.data?.alignment,
+    {
+      lyric_units: 2,
+      voiced_slots: 2,
+      rest_slots: 0,
+      continuations: 0,
+      sokuon_count: 0,
+      sokuon_strategy: "not_needed",
+    },
+  );
+  assert.ok(japaneseAlignmentData.data?.phrase);
 
   const manifestPath = join(temporary, "mcp-agent-song.song.json");
   const manifestCreated = await client.callTool({
@@ -174,12 +241,97 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   });
   assert.notEqual(vocalUpsert.isError, true);
 
+  const phraseUpsert = await client.callTool({
+    name: "vocaloid_upsert_manifest_vocal_phrase",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 2,
+      overwrite: true,
+      vocal_track_id: "lead",
+      vocal_part_id: "verse-lead",
+      phrase: japaneseAlignmentData.data?.phrase,
+      response_format: "json",
+    },
+  });
+  assert.notEqual(phraseUpsert.isError, true);
+  assert.equal(
+    (phraseUpsert.structuredContent as { data?: { write?: { revision?: number } } }).data?.write?.revision,
+    3,
+  );
+
+  const tuningGestures = await client.callTool({
+    name: "vocaloid_apply_tuning_gestures",
+    arguments: {
+      input_path: manifestPath,
+      output_path: manifestPath,
+      expected_revision: 3,
+      overwrite: true,
+      vocal_track_id: "lead",
+      vocal_part_id: "verse-lead",
+      gestures: [
+        {
+          id: "mcp-articulation",
+          type: "articulation",
+          event_ids: ["lead-note-1", "jp-cell-1"],
+          accent: 72,
+          opening: 110,
+          consonant_velocity: 78,
+        },
+        {
+          id: "mcp-vibrato",
+          type: "vibrato",
+          event_ids: ["jp-cell-2"],
+          vibrato_type: 13,
+          length_percent: 55,
+        },
+        {
+          id: "mcp-scoop",
+          type: "pitch_scoop",
+          event_ids: ["lead-note-1"],
+          direction: "up_into",
+          depth_cents: 70,
+          duration_percent: 25,
+          pitch_bend_sensitivity: 2,
+        },
+        {
+          id: "mcp-dynamics",
+          type: "dynamics_arc",
+          event_ids: ["lead-note-1", "jp-cell-1", "jp-cell-2"],
+          start_value: 60,
+          peak_value: 82,
+          end_value: 68,
+        },
+        {
+          id: "mcp-brightness",
+          type: "timbre_arc",
+          event_ids: ["jp-cell-1", "jp-cell-2"],
+          curve: "BRI",
+          start_value: 52,
+          peak_value: 74,
+          end_value: 58,
+        },
+      ],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(tuningGestures.isError, true);
+  const tuningData = tuningGestures.structuredContent as {
+    data?: {
+      write?: { revision?: number };
+      applied?: { gestures?: number; curve_point_writes?: number };
+    };
+  };
+  assert.equal(tuningData.data?.write?.revision, 4);
+  assert.equal(tuningData.data?.applied?.gestures, 5);
+  assert.ok((tuningData.data?.applied?.curve_point_writes ?? 0) >= 8);
+
   const arrangementUpsert = await client.callTool({
     name: "vocaloid_upsert_manifest_arrangement_track",
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 2,
+      expected_revision: 4,
       overwrite: true,
       track: {
         kind: "pitched",
@@ -201,7 +353,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 3,
+      expected_revision: 5,
       overwrite: true,
       section: {
         id: "verse",
@@ -225,7 +377,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   const manifestSectionData = manifestSection.structuredContent as {
     data?: { revision?: number; section?: { energy?: number }; vocalTracks?: unknown[] };
   };
-  assert.equal(manifestSectionData.data?.revision, 4);
+  assert.equal(manifestSectionData.data?.revision, 6);
   assert.equal(manifestSectionData.data?.section?.energy, 0.72);
   assert.equal(manifestSectionData.data?.vocalTracks?.length, 1);
 
@@ -234,7 +386,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 4,
+      expected_revision: 6,
       overwrite: true,
       transform: {
         vocal_track_id: "lead",
@@ -256,7 +408,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 5,
+      expected_revision: 7,
       overwrite: true,
       removal: { object_type: "event", object_ids: ["lead-note-2"] },
       response_format: "json",
@@ -275,16 +427,16 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   assert.notEqual(manifestInspect.isError, true);
   assert.equal(
     (manifestInspect.structuredContent as { data?: { revision?: number } }).data?.revision,
-    6,
+    8,
   );
 
-  const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r6.wav");
-  const manifestProjectPath = join(temporary, "mcp-agent-song-r6.vsqx");
+  const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r8.wav");
+  const manifestProjectPath = join(temporary, "mcp-agent-song-r8.vsqx");
   const manifestBuild = await client.callTool({
     name: "vocaloid_build_song_manifest",
     arguments: {
       manifest_path: manifestPath,
-      expected_revision: 6,
+      expected_revision: 8,
       backing_output_path: manifestBackingPath,
       project_output_path: manifestProjectPath,
       response_format: "json",
@@ -309,14 +461,14 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       valid: manifestBuildData.data?.validation?.valid,
       artifacts: manifestBuildData.data?.artifacts?.length,
     },
-    { source: 6, manifest: 7, channels: 2, silent: false, valid: true, artifacts: 2 },
+    { source: 8, manifest: 9, channels: 2, silent: false, valid: true, artifacts: 2 },
   );
 
   const manifestInstrumentStems = await client.callTool({
     name: "vocaloid_render_instrument_stems",
     arguments: {
       manifest_path: manifestPath,
-      expected_revision: 7,
+      expected_revision: 9,
       output_directory: temporary,
       track_ids: ["piano"],
       preserve_pan: false,
@@ -332,7 +484,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       artifacts?: Array<{ source_composition_hash?: string }>;
     };
   };
-  assert.equal(manifestInstrumentStemData.data?.manifestRevision, 8);
+  assert.equal(manifestInstrumentStemData.data?.manifestRevision, 10);
   assert.deepEqual(
     manifestInstrumentStemData.data?.stems?.map((stem) => [stem.trackId, stem.channels, stem.silent]),
     [["piano", 2, false]],
@@ -347,7 +499,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 8,
+      expected_revision: 10,
       overwrite: true,
       effect_chain: {
         id: "piano-mix-chain",
@@ -367,7 +519,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     arguments: {
       input_path: manifestPath,
       output_path: manifestPath,
-      expected_revision: 9,
+      expected_revision: 11,
       overwrite: true,
       section_dynamic: {
         id: "piano-verse-lift",
@@ -381,13 +533,13 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   });
   assert.notEqual(manifestSectionDynamic.isError, true);
 
-  const manifestMixPath = join(temporary, "mcp-agent-song-mix-r10.wav");
+  const manifestMixPath = join(temporary, "mcp-agent-song-mix-r12.wav");
   const manifestStemMix = await client.callTool({
     name: "vocaloid_render_stem_mix",
     arguments: {
       manifest_path: manifestPath,
-      expected_revision: 10,
-      stem_artifact_ids: ["instrument-stem-piano-r7"],
+      expected_revision: 12,
+      stem_artifact_ids: ["instrument-stem-piano-r9"],
       output_path: manifestMixPath,
       sample_rate: 44_100,
       bit_depth: 24,
@@ -405,7 +557,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       quality?: { bitsPerSample?: number; channels?: number; silent?: boolean };
     };
   };
-  assert.equal(manifestStemMixData.data?.manifestRevision, 11);
+  assert.equal(manifestStemMixData.data?.manifestRevision, 13);
   assert.match(manifestStemMixData.data?.sourceMixHash ?? "", /^[a-f0-9]{64}$/u);
   assert.equal(manifestStemMixData.data?.inputs?.length, 1);
   assert.deepEqual(

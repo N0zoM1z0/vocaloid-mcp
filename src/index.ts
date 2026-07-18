@@ -9,8 +9,15 @@ import { renderAccompaniment } from "./accompaniment.js";
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { listGeneralMidi } from "./gm.js";
 import { compileVocalPhrase, type VocalPhraseInput } from "./vocal-phrase.js";
+import {
+  alignJapanesePhrase,
+  JapaneseG2PInputSchema,
+  JapanesePhraseAlignmentInputSchema,
+  japaneseG2P,
+} from "./japanese.js";
 import { renderProjectToWav } from "./render.js";
 import {
+  applySongManifestTuningGestures,
   buildSongManifest,
   createSongManifest,
   getSongManifestSection,
@@ -25,6 +32,8 @@ import {
   ManifestTempoSchema,
   ManifestTimeSignatureSchema,
   ManifestTransformSchema,
+  ManifestTuningGestureSchema,
+  ManifestVocalPhraseSchema,
   ManifestVocalPartSchema,
   ManifestVocalTrackMetadataSchema,
   ManifestVoiceSchema,
@@ -34,6 +43,7 @@ import {
   upsertSongManifestEffectChain,
   upsertSongManifestSectionDynamic,
   upsertSongManifestSection,
+  upsertSongManifestVocalPhrase,
   upsertSongManifestVocalPart,
 } from "./song-manifest.js";
 import { renderSongManifestStemMix } from "./stem-mix.js";
@@ -59,9 +69,9 @@ import {
 
 
 const server = new McpServer(
-  { name: "vocaloid-mcp-server", version: "0.9.0" },
+  { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Use this server to compose, arrange, tune, mix, and master native VOCALOID projects. For a new long song, use a revisioned manifest as canonical source, mutate one bounded domain at a time, inspect revision/hash before writes, and preserve globally unique stable IDs. Build VSQX/backing, then render selected instrument and original-Editor vocal stems. Explicitly choose pan/center and effects/dry; artifacts must match composition_hash. Analyze isolated vocals for energy/voiced onset, consonant lead, sustained pitch, contour, release, and vibrato; limited-resolution and offset estimates are evidence, never auto-quantization. Define ordered typed effect chains and section gain automation per stable track or mix-bus. Raw stems depend on composition_hash; downstream mix decisions change mix_hash without forcing resynthesis. Stem mixing applies exact pre-measure alignment, no hidden normalization/limiting, and returns the auditable filter graph plus LUFS/LRA/true peak/clipping/stereo evidence. Named sections, tempo/meter, patterns, rapid lyrics, tuplets, melisma, tuning, routing, and whether to revise remain agent decisions. VOCALOID pan is 0=left, 64=center, 127=right. Use slugged revision filenames. The bundled GM SoundFont is draft quality.`,
+    instructions: `Use this server to compose, arrange, tune, mix, and master native VOCALOID projects. For a new long song, use a revisioned manifest as canonical source, mutate one bounded domain at a time, inspect revision/hash before writes, and preserve globally unique stable IDs. For Japanese, convert explicit kana readings to the bundled V3 phoneme inventory, align morae to stable rhythm cells, and use repeated mora indices for melisma; never guess kanji readings, and choose small-っ timing explicitly. Apply high-level articulation, vibrato, pitch, dynamics, and timbre gestures to stable voiced event IDs. Build VSQX/backing, then render selected instrument and original-Editor vocal stems. Explicitly choose pan/center and effects/dry; artifacts must match composition_hash. Analyze isolated vocals for energy/voiced onset, consonant lead, sustained pitch, contour, release, and vibrato; limited-resolution and offset estimates are evidence, never auto-quantization. Define ordered typed effect chains and section gain automation per stable track or mix-bus. Raw stems depend on composition_hash; downstream mix decisions change mix_hash without forcing resynthesis. Stem mixing applies exact pre-measure alignment, no hidden normalization/limiting, and returns the auditable filter graph plus LUFS/LRA/true peak/clipping/stereo evidence. Named sections, tempo/meter, patterns, rapid lyrics, tuplets, melisma, tuning, routing, and whether to revise remain agent decisions. VOCALOID pan is 0=left, 64=center, 127=right. Use slugged revision filenames. The bundled GM SoundFont is draft quality.`,
   },
 );
 
@@ -620,12 +630,12 @@ function normalizeNoteExpressionUpdates(
 server.registerTool(
   "vocaloid_list_voices",
   {
-    title: "List Installed VOCALOID Voices",
-    description: `Discover installed V3/V4 voice metadata from VVD files.
+    title: "List Local VOCALOID Voice Metadata",
+    description: `Discover locally present V3/V4 voice metadata from VVD files.
 
-Use this before creating a project so the component ID and voice name match a locally installed voicebank. The default search root is /mnt/d/Vocaloid/VoiceDB. This tool only reads small VVD metadata files; it does not read DDB audio databases.
+Use this before creating a project so the component ID and voice name match local voicebank metadata. The default search root is /mnt/d/Vocaloid/VoiceDB. This tool only reads small VVD metadata files; it does not read DDB audio databases or prove that Windows Editor registration/licensing is currently available. A render remains the authoritative synthesis check, and the exporter refuses a silent substitution when Editor reports that the selected singer is unavailable.
 
-Returns voice name, 16-character component ID, voice format version, source path, and default timbre parameters.`,
+Returns voice name, 16-character component ID, voice format version, source path, default timbre parameters, and an explicit metadata-only availability boundary.`,
     inputSchema: z
       .object({
         directories: z
@@ -648,9 +658,14 @@ Returns voice name, 16-character component ID, voice format version, source path
     try {
       const voices = await discoverVoices(directories);
       return textResult(
-        { total: voices.length, voices },
+        {
+          total: voices.length,
+          discovery: "vvd_metadata",
+          editor_availability: "unverified_until_render",
+          voices,
+        },
         response_format,
-        `Found ${voices.length} VOCALOID voice${voices.length === 1 ? "" : "s"}`,
+        `Found metadata for ${voices.length} VOCALOID voice${voices.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
       return errorResult(error);
@@ -1111,6 +1126,70 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
         result,
         params.response_format,
         `Rendered ${result.durationSeconds.toFixed(3)} seconds of accompaniment audio`,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_japanese_g2p",
+  {
+    title: "Convert Japanese Reading to VOCALOID3 Phonemes",
+    description: `Convert a kana reading into auditable mora units using only symbols documented by the bundled VOCALOID3 Japanese phoneme chart.
+
+Hiragana, katakana, yoon, long vowels, moraic nasal, and common foreign-kana combinations are normalized deterministically. If displayed text contains kanji, reading is required: this tool deliberately does not guess lexical readings without a dictionary. Spaces in reading define word boundaries for positional dz/dZ versus z/Z. Optional nasal_between_vowels exposes Japanese nasal-g as an artistic choice. Small っ is reported without inventing an unsupported standalone phoneme; choose its timing later in vocaloid_align_japanese_phrase. The result includes every token, source span, fallback, and warning.`,
+    inputSchema: JapaneseG2PInputSchema.extend({ response_format: ResponseFormatSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const { response_format, ...input } = params;
+      const result = japaneseG2P(input);
+      return textResult(
+        result,
+        response_format,
+        `Converted ${result.units.length} Japanese mora units with ${result.fallback_count} fallbacks`,
+        result.warnings,
+      );
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_align_japanese_phrase",
+  {
+    title: "Align Japanese Morae to Vocal Rhythm",
+    description: `Create a manifest-compatible vocal phrase from Japanese text/reading and stable rhythm slots.
+
+Sequential mode requires one voiced slot per mora and supports dense 1/16–1/64 lyrics. Explicit mode assigns mora_index per voiced slot; consecutive repeated indices compile to native '-' melisma continuations, so lyric and note counts need not be one-to-one. Rests never consume lyrics. Kanji requires explicit kana reading. If small っ occurs, the agent must explicitly choose a timed rest or the documented experimental repeated-next-consonant strategy. The phrase retains original text, normalized reading, and pronunciation decisions as linguistic_source while native note lyrics use kana. This is a read-only compiler: include the first phrase when creating a vocal part, then use vocaloid_upsert_manifest_vocal_phrase for later lines.`,
+    inputSchema: JapanesePhraseAlignmentInputSchema.extend({ response_format: ResponseFormatSchema }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const { response_format, ...input } = params;
+      const result = alignJapanesePhrase(input);
+      return textResult(
+        result,
+        response_format,
+        `Aligned ${result.alignment.lyric_units} morae to ${result.alignment.voiced_slots} voiced slots`,
+        result.warnings,
       );
     } catch (error) {
       return errorResult(error);
@@ -1894,6 +1973,86 @@ Direct notes and phrase sources can express rapid syllables, rests, tuplets, mel
         params.overwrite,
       );
       return textResult(result, params.response_format, `Upserted vocal part ${params.part.id}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_upsert_manifest_vocal_phrase",
+  {
+    title: "Upsert One Manifest Vocal Phrase",
+    description: `Insert or replace one aligned vocal phrase inside an existing part by stable IDs.
+
+This is the bounded write companion to vocaloid_align_japanese_phrase: it preserves voice, track, other parts, direct notes, other phrases, and tuning curves. The complete manifest is revalidated, including phrase bounds, globally unique lyric/cell IDs, rhythm allocation, and optimistic revision.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      vocal_track_id: ManifestIdSchema,
+      vocal_part_id: ManifestIdSchema,
+      phrase: ManifestVocalPhraseSchema,
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await upsertSongManifestVocalPhrase(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.vocal_track_id,
+        params.vocal_part_id,
+        params.phrase,
+        params.overwrite,
+      );
+      return textResult(result, params.response_format, `Upserted vocal phrase ${params.phrase.id}`);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_apply_tuning_gestures",
+  {
+    title: "Apply High-Level Vocal Tuning Gestures",
+    description: `Compile intentional vocal gestures onto stable direct-note or phrase-cell IDs in one manifest part.
+
+Articulation writes native accent/decay/opening/consonant velocity/bend/portamento values. Vibrato writes editable type, length, depth, and rate envelopes. Pitch scoops create bounded PBS/PIT points and explicit reset points; dynamics/timbre arcs create sparse DYN/BRE/BRI/CLE/GEN/POR curves. Existing same-type curves are merged by musical tick while preserving existing stable point IDs. Gesture IDs/parameters persist beside the compiled values and cannot be silently reused. No opaque preset, randomization, or automatic quantization is applied: every compiled parameter is returned for inspection and the manifest revision/hash commits the exact result.`,
+    inputSchema: ManifestMutationPathSchema.extend({
+      vocal_track_id: ManifestIdSchema,
+      vocal_part_id: ManifestIdSchema,
+      gestures: z.array(ManifestTuningGestureSchema).min(1).max(256),
+    }).strict(),
+    outputSchema: ToolOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    try {
+      const result = await applySongManifestTuningGestures(
+        params.input_path,
+        params.output_path,
+        params.expected_revision,
+        params.vocal_track_id,
+        params.vocal_part_id,
+        params.gestures,
+        params.overwrite,
+      );
+      return textResult(
+        result,
+        params.response_format,
+        `Applied ${result.applied.gestures} tuning gestures to ${result.applied.affected_event_references} event references`,
+      );
     } catch (error) {
       return errorResult(error);
     }

@@ -42,6 +42,10 @@ const IdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9._-]{0,95}$/u)
   .describe("Stable lowercase ID; preserve it across unrelated revisions");
+const GestureIdSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._-]{0,47}$/u)
+  .describe("Stable gesture ID, limited to 48 characters so compiled curve IDs remain valid");
 
 export const ManifestPositionSchema = z
   .object({
@@ -177,6 +181,18 @@ export const ManifestVocalPhraseSchema = z
     allocation: z.enum(["sequential", "explicit"]).default("sequential"),
     lyrics: z.array(ManifestLyricUnitSchema).min(1).max(5000),
     cells: z.array(ManifestRhythmCellSchema).min(1).max(20_000),
+    linguistic_source: z
+      .object({
+        language: z.literal("ja"),
+        text: z.string().min(1).max(10_000),
+        reading: z.string().min(1).max(20_000),
+        normalized_reading: z.string().min(1).max(20_000),
+        affricate_mode: z.enum(["position", "affricate", "fricative"]),
+        g_mode: z.enum(["plosive", "nasal_between_vowels"]),
+        sokuon_strategy: z.enum(["not_needed", "rest", "attach_next"]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -192,6 +208,88 @@ const ManifestCurveSchema = z
   })
   .strict();
 
+const ArticulationGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("articulation"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    accent: z.number().int().min(0).max(100).optional(),
+    decay: z.number().int().min(0).max(100).optional(),
+    opening: z.number().int().min(0).max(127).optional(),
+    consonant_velocity: z.number().int().min(0).max(127).optional(),
+    bend_depth: z.number().int().min(0).max(100).optional(),
+    bend_length: z.number().int().min(0).max(100).optional(),
+    rise_portamento: z.boolean().optional(),
+    fall_portamento: z.boolean().optional(),
+  })
+  .strict()
+  .refine((gesture) => Object.keys(gesture).some((key) => !["id", "type", "event_ids"].includes(key)), {
+    message: "articulation needs at least one expression parameter",
+  });
+
+const VibratoGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("vibrato"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    vibrato_type: z.number().int().min(1).max(16),
+    length_percent: z.number().int().min(1).max(100),
+    depth_start: z.number().int().min(0).max(127).default(32),
+    depth_peak: z.number().int().min(0).max(127).default(64),
+    depth_end: z.number().int().min(0).max(127).default(48),
+    rate_start: z.number().int().min(0).max(127).default(48),
+    rate_end: z.number().int().min(0).max(127).default(56),
+  })
+  .strict();
+
+const PitchScoopGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("pitch_scoop"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    direction: z.enum(["up_into", "down_into", "fall_away", "rise_away"]),
+    depth_cents: z.number().int().min(1).max(2400),
+    duration_percent: z.number().int().min(1).max(100),
+    pitch_bend_sensitivity: z.number().int().min(1).max(24),
+  })
+  .strict()
+  .refine((gesture) => gesture.depth_cents <= gesture.pitch_bend_sensitivity * 100, {
+    message: "depth_cents must fit inside pitch_bend_sensitivity",
+  });
+
+const DynamicsArcGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("dynamics_arc"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    start_value: z.number().int().min(0).max(127),
+    peak_value: z.number().int().min(0).max(127),
+    end_value: z.number().int().min(0).max(127),
+    peak_position: z.number().min(0).max(1).default(0.5),
+  })
+  .strict();
+
+const TimbreArcGestureSchema = z
+  .object({
+    id: GestureIdSchema,
+    type: z.literal("timbre_arc"),
+    event_ids: z.array(IdSchema).min(1).max(5000),
+    curve: z.enum(["BRE", "BRI", "CLE", "GEN", "POR"]),
+    start_value: z.number().int().min(0).max(127),
+    peak_value: z.number().int().min(0).max(127),
+    end_value: z.number().int().min(0).max(127),
+    peak_position: z.number().min(0).max(1).default(0.5),
+  })
+  .strict();
+
+export const ManifestTuningGestureSchema = z.discriminatedUnion("type", [
+  ArticulationGestureSchema,
+  VibratoGestureSchema,
+  PitchScoopGestureSchema,
+  DynamicsArcGestureSchema,
+  TimbreArcGestureSchema,
+]);
+
 export const ManifestVocalPartSchema = z
   .object({
     id: IdSchema,
@@ -203,6 +301,7 @@ export const ManifestVocalPartSchema = z
     notes: z.array(ManifestVocalNoteSchema).max(10_000).default([]),
     phrases: z.array(ManifestVocalPhraseSchema).max(512).default([]),
     control_curves: z.array(ManifestCurveSchema).max(8).default([]),
+    tuning_gestures: z.array(ManifestTuningGestureSchema).max(256).optional(),
   })
   .strict()
   .refine((part) => part.notes.length > 0 || part.phrases.length > 0, {
@@ -693,6 +792,7 @@ function assertGloballyUniqueStableIds(manifest: SongManifest): void {
         add(curve.id, `${curve.curve} curve in ${part.id}`);
         for (const point of curve.points) add(point.id, `${curve.curve} point in ${curve.id}`);
       }
+      for (const gesture of part.tuning_gestures ?? []) add(gesture.id, `tuning gesture in ${part.id}`);
     }
   }
   for (const track of manifest.accompaniment.tracks) {
@@ -771,6 +871,48 @@ function validateManifestSemantics(manifest: SongManifest): void {
       assertUniqueIds(part.notes, `vocal part ${part.id} notes`);
       assertUniqueIds(part.phrases, `vocal part ${part.id} phrases`);
       assertUniqueIds(part.control_curves, `vocal part ${part.id} curves`);
+      assertUniqueIds(part.tuning_gestures ?? [], `vocal part ${part.id} tuning gestures`);
+      const voicedEventIds = new Set([
+        ...part.notes.map((note) => note.id),
+        ...part.phrases.flatMap((phrase) => phrase.cells.filter((cell) => !cell.rest).map((cell) => cell.id)),
+      ]);
+      for (const gesture of part.tuning_gestures ?? []) {
+        const targets = new Set<string>();
+        for (const eventId of gesture.event_ids) {
+          if (targets.has(eventId)) throw new Error(`Tuning gesture ${gesture.id} repeats event ID ${eventId}`);
+          targets.add(eventId);
+          if (!voicedEventIds.has(eventId)) {
+            throw new Error(`Tuning gesture ${gesture.id} references unknown voiced event ${eventId} in part ${part.id}`);
+          }
+        }
+      }
+      const curveTypes = new Set<CurveName>();
+      const curveRanges: Record<CurveName, readonly [number, number]> = {
+        DYN: [0, 127], BRE: [0, 127], BRI: [0, 127], CLE: [0, 127],
+        GEN: [0, 127], POR: [0, 127], PIT: [-8192, 8191], PBS: [0, 24],
+      };
+      for (const curve of part.control_curves) {
+        if (curveTypes.has(curve.curve)) {
+          throw new Error(`Vocal part ${part.id} has more than one ${curve.curve} curve; merge their points by stable ID`);
+        }
+        curveTypes.add(curve.curve);
+        assertUniqueIds(curve.points, `${curve.curve} curve ${curve.id} points`);
+        const pointTicks = new Set<number>();
+        const [minimum, maximum] = curveRanges[curve.curve];
+        for (const point of curve.points) {
+          const tick = positionTick(manifest, point.position);
+          if (tick < partStart || tick >= partEnd) {
+            throw new Error(`Control point ${point.id} lies outside part ${part.id}`);
+          }
+          if (pointTicks.has(tick)) {
+            throw new Error(`${curve.curve} curve ${curve.id} has more than one point at tick ${tick}`);
+          }
+          pointTicks.add(tick);
+          if (point.value < minimum || point.value > maximum) {
+            throw new Error(`${curve.curve} point ${point.id} value must be in ${minimum}..${maximum}`);
+          }
+        }
+      }
       for (const note of part.notes) {
         const tick = positionTick(manifest, note.position);
         if (tick < partStart || tick + note.duration > partEnd) {
@@ -1210,6 +1352,266 @@ export async function upsertSongManifestVocalPart(
     parts.sort((left, right) => positionTick(draft, left.start) - positionTick(draft, right.start));
     draft.vocal_tracks[trackIndex] = { ...track, parts };
   });
+}
+
+export async function upsertSongManifestVocalPhrase(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  vocalTrackId: string,
+  vocalPartId: string,
+  phraseInput: z.input<typeof ManifestVocalPhraseSchema>,
+  overwrite: boolean,
+) {
+  const trackId = IdSchema.parse(vocalTrackId);
+  const partId = IdSchema.parse(vocalPartId);
+  const phrase = ManifestVocalPhraseSchema.parse(phraseInput);
+  return mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const track = draft.vocal_tracks.find((candidate) => candidate.id === trackId);
+    if (!track) throw new Error(`Manifest has no vocal track ${trackId}`);
+    const part = track.parts.find((candidate) => candidate.id === partId);
+    if (!part) throw new Error(`Vocal track ${trackId} has no part ${partId}`);
+    const index = part.phrases.findIndex((candidate) => candidate.id === phrase.id);
+    if (index >= 0) part.phrases[index] = phrase;
+    else part.phrases.push(phrase);
+    part.phrases.sort((left, right) => positionTick(draft, left.start) - positionTick(draft, right.start));
+  });
+}
+
+interface MutableGestureEvent {
+  id: string;
+  tick: number;
+  duration: number;
+  setVelocity(value: number): void;
+  setStyle(values: Record<string, number>): void;
+  setVibrato(value: z.infer<typeof ManifestVibratoSchema>): void;
+}
+
+function gesturePointId(partId: string, gestureId: string, curve: CurveName, tick: number, role: string): string {
+  const suffix = createHash("sha256")
+    .update(`${partId}\u0000${gestureId}\u0000${curve}\u0000${tick}\u0000${role}`)
+    .digest("hex")
+    .slice(0, 10);
+  return `${gestureId}-${curve.toLowerCase()}-${suffix}`;
+}
+
+export async function applySongManifestTuningGestures(
+  inputPath: string,
+  outputPath: string,
+  expectedRevision: number,
+  vocalTrackId: string,
+  vocalPartId: string,
+  gestureInputs: z.input<typeof ManifestTuningGestureSchema>[],
+  overwrite: boolean,
+) {
+  const trackId = IdSchema.parse(vocalTrackId);
+  const partId = IdSchema.parse(vocalPartId);
+  const gestures = z.array(ManifestTuningGestureSchema).min(1).max(256).parse(gestureInputs);
+  assertUniqueIds(gestures, "tuning gestures");
+  let affectedEvents = 0;
+  let styleWrites = 0;
+  let velocityWrites = 0;
+  let vibratoWrites = 0;
+  let curvePointWrites = 0;
+  const compiled: Array<{
+    gesture_id: string;
+    type: z.infer<typeof ManifestTuningGestureSchema>["type"];
+    event_ids: string[];
+    curves: CurveName[];
+  }> = [];
+  const result = await mutateManifest(inputPath, outputPath, expectedRevision, overwrite, (draft) => {
+    const track = draft.vocal_tracks.find((candidate) => candidate.id === trackId);
+    if (!track) throw new Error(`Manifest has no vocal track ${trackId}`);
+    const part = track.parts.find((candidate) => candidate.id === partId);
+    if (!part) throw new Error(`Vocal track ${trackId} has no part ${partId}`);
+    const existingGestureIds = new Set((part.tuning_gestures ?? []).map((gesture) => gesture.id));
+    for (const gesture of gestures) {
+      if (existingGestureIds.has(gesture.id)) {
+        throw new Error(
+          `Tuning gesture ${gesture.id} already exists in ${partId}; use a new gesture ID or replace the whole vocal part intentionally`,
+        );
+      }
+    }
+    const partStart = positionTick(draft, part.start);
+    const partEnd = positionTick(draft, part.end);
+    const events = new Map<string, MutableGestureEvent>();
+    for (const note of part.notes) {
+      events.set(note.id, {
+        id: note.id,
+        tick: positionTick(draft, note.position),
+        duration: note.duration,
+        setVelocity: (value) => { note.velocity = value; },
+        setStyle: (values) => { note.style = { ...note.style, ...values }; },
+        setVibrato: (value) => { note.vibrato = value; },
+      });
+    }
+    for (const phrase of part.phrases) {
+      const phraseNotes = compileManifestPhrase(draft, phrase).notes;
+      let noteIndex = 0;
+      for (const cell of phrase.cells) {
+        if (cell.rest) continue;
+        const note = phraseNotes[noteIndex++];
+        if (!note) throw new Error(`Internal phrase mapping failed for ${phrase.id}/${cell.id}`);
+        events.set(cell.id, {
+          id: cell.id,
+          tick: positionTick(draft, note.position),
+          duration: note.duration,
+          setVelocity: (value) => { cell.velocity = value; },
+          setStyle: (values) => { cell.style = { ...cell.style, ...values }; },
+          setVibrato: (value) => { cell.vibrato = value; },
+        });
+      }
+    }
+
+    const resolveEvents = (ids: readonly string[]): MutableGestureEvent[] => {
+      const selected = ids.map((id) => {
+        const event = events.get(id);
+        if (!event) {
+          throw new Error(
+            `Tuning target ${id} is not a voiced direct-note or phrase-cell event in ${trackId}/${partId}`,
+          );
+        }
+        return event;
+      });
+      return selected.sort((left, right) => left.tick - right.tick || left.id.localeCompare(right.id));
+    };
+
+    const upsertCurvePoints = (
+      curveName: CurveName,
+      gestureId: string,
+      candidates: Array<{ tick: number; value: number; role: string }>,
+    ): void => {
+      let curve = part.control_curves.find((candidate) => candidate.curve === curveName);
+      if (!curve) {
+        curve = {
+          id: `${gestureId}-${curveName.toLowerCase()}-curve`,
+          curve: curveName,
+          points: [],
+        };
+        part.control_curves.push(curve);
+      }
+      for (const candidate of candidates) {
+        if (candidate.tick < partStart || candidate.tick >= partEnd) {
+          throw new Error(
+            `${gestureId} generated ${curveName} point at tick ${candidate.tick} outside part ${partId}`,
+          );
+        }
+        const existing = curve.points.find((point) => positionTick(draft, point.position) === candidate.tick);
+        if (existing) {
+          existing.value = candidate.value;
+        } else {
+          const position = musicalTickToPosition(draft.time_signatures, candidate.tick);
+          curve.points.push({
+            id: gesturePointId(partId, gestureId, curveName, candidate.tick, candidate.role),
+            position: { measure: position.measure, beat: position.beat, tick: position.tick ?? 0 },
+            value: candidate.value,
+          });
+        }
+        curvePointWrites++;
+      }
+      curve.points.sort((left, right) => positionTick(draft, left.position) - positionTick(draft, right.position));
+    };
+
+    for (const gesture of gestures) {
+      const selected = resolveEvents(gesture.event_ids);
+      affectedEvents += selected.length;
+      const curves: CurveName[] = [];
+      if (gesture.type === "articulation") {
+        const style: Record<string, number> = {};
+        if (gesture.accent !== undefined) style.accent = gesture.accent;
+        if (gesture.decay !== undefined) style.decay = gesture.decay;
+        if (gesture.opening !== undefined) style.opening = gesture.opening;
+        if (gesture.bend_depth !== undefined) style.bendDep = gesture.bend_depth;
+        if (gesture.bend_length !== undefined) style.bendLen = gesture.bend_length;
+        if (gesture.rise_portamento !== undefined) style.risePort = gesture.rise_portamento ? 1 : 0;
+        if (gesture.fall_portamento !== undefined) style.fallPort = gesture.fall_portamento ? 1 : 0;
+        for (const event of selected) {
+          if (Object.keys(style).length > 0) event.setStyle(style);
+          if (gesture.consonant_velocity !== undefined) event.setVelocity(gesture.consonant_velocity);
+        }
+        if (Object.keys(style).length > 0) styleWrites += selected.length;
+        if (gesture.consonant_velocity !== undefined) velocityWrites += selected.length;
+      } else if (gesture.type === "vibrato") {
+        const vibrato = {
+          type: gesture.vibrato_type,
+          length: gesture.length_percent,
+          depth: [
+            { position: 0, value: gesture.depth_start },
+            { position: 32_768, value: gesture.depth_peak },
+            { position: 65_536, value: gesture.depth_end },
+          ],
+          rate: [
+            { position: 0, value: gesture.rate_start },
+            { position: 65_536, value: gesture.rate_end },
+          ],
+        };
+        for (const event of selected) event.setVibrato(vibrato);
+        vibratoWrites += selected.length;
+      } else if (gesture.type === "pitch_scoop") {
+        const normalized = Math.round((gesture.depth_cents / 100 / gesture.pitch_bend_sensitivity) * 8192);
+        const depth = Math.min(8191, normalized);
+        const sign = gesture.direction === "up_into" || gesture.direction === "fall_away" ? -1 : 1;
+        const pitchPoints: Array<{ tick: number; value: number; role: string }> = [];
+        const sensitivityPoints: Array<{ tick: number; value: number; role: string }> = [];
+        for (const event of selected) {
+          if (event.duration < 2) throw new Error(`Pitch gesture ${gesture.id} needs event ${event.id} to last at least 2 ticks`);
+          const end = event.tick + event.duration;
+          const audibleEnd = end - 1;
+          const span = Math.max(1, Math.round(event.duration * gesture.duration_percent / 100));
+          sensitivityPoints.push({
+            tick: event.tick,
+            value: gesture.pitch_bend_sensitivity,
+            role: `${event.id}-sensitivity`,
+          });
+          if (gesture.direction === "up_into" || gesture.direction === "down_into") {
+            pitchPoints.push(
+              { tick: event.tick, value: sign * depth, role: `${event.id}-start` },
+              { tick: Math.min(audibleEnd, event.tick + span), value: 0, role: `${event.id}-settle` },
+            );
+          } else {
+            pitchPoints.push(
+              { tick: Math.max(event.tick, end - span), value: 0, role: `${event.id}-depart` },
+              { tick: audibleEnd, value: sign * depth, role: `${event.id}-end` },
+            );
+            if (end < partEnd) pitchPoints.push({ tick: end, value: 0, role: `${event.id}-reset` });
+          }
+        }
+        upsertCurvePoints("PBS", gesture.id, sensitivityPoints);
+        upsertCurvePoints("PIT", gesture.id, pitchPoints);
+        curves.push("PBS", "PIT");
+      } else {
+        const curveName: CurveName = gesture.type === "dynamics_arc" ? "DYN" : gesture.curve;
+        const firstTick = selected[0]!.tick;
+        const finalTick = Math.max(...selected.map((event) => event.tick + event.duration - 1));
+        const peakTick = Math.round(firstTick + (finalTick - firstTick) * gesture.peak_position);
+        upsertCurvePoints(curveName, gesture.id, [
+          { tick: firstTick, value: gesture.start_value, role: "start" },
+          { tick: peakTick, value: gesture.peak_value, role: "peak" },
+          { tick: finalTick, value: gesture.end_value, role: "end" },
+        ]);
+        curves.push(curveName);
+      }
+      compiled.push({
+        gesture_id: gesture.id,
+        type: gesture.type,
+        event_ids: selected.map((event) => event.id),
+        curves,
+      });
+    }
+    part.tuning_gestures = [...(part.tuning_gestures ?? []), ...gestures];
+  });
+  return {
+    ...result,
+    applied: {
+      gestures: gestures.length,
+      affected_event_references: affectedEvents,
+      style_writes: styleWrites,
+      velocity_writes: velocityWrites,
+      vibrato_writes: vibratoWrites,
+      curve_point_writes: curvePointWrites,
+      compiled,
+    },
+  };
 }
 
 export async function upsertSongManifestArrangementTrack(
