@@ -4,6 +4,52 @@ This is the stable index for implementation problems discovered through real
 composition and listening. Detailed evidence belongs in a dated note; this file
 records the durable problem, scope, decision, and current status.
 
+## 2026-07-19 — Original-IA swordsmen cold-start validation
+
+Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
+
+- **Fresh-agent composition transfer succeeded, but orchestration is still bespoke**
+  - Scope: a new `gpt-5.6-sol`/`xhigh` session independently authored and
+    delivered `風は名を呼ばない` with original IA and no access to the local
+    corpus, prior song artifacts, or existing compose scripts.
+  - Decision: retain the reproducible runner and 23-entry creative record, but
+    treat its transport/revision/recovery boilerplate as framework work rather
+    than the desired long-term composition API.
+  - Status: song complete; reusable resumable session scaffold remains open.
+
+- **Long Editor calls, dead leases, and Save As filename state remain coupled failure modes**
+  - Scope: a 60-second client timeout killed an otherwise valid Editor render,
+    left a dead-owner lease, and a later Save As attempt observed an empty
+    filename despite a valid destination parent.
+  - Decision: use progress-aware long deadlines, verify dead owner PID before
+    reclaiming the exact lease, retry a fresh Save dialog, and require final
+    digest/non-silence evidence.
+  - Status: current renders succeeded; default timeout, lease reclamation, and
+    Save As recovery should be hardened in the framework.
+
+- **Phrase-entry homogeneity currently ignores leading rests**
+  - Scope: the analyzer reported all lead/harmony phrases at one entry even
+    though authored rest cells create downbeat, delayed, pickup, and offbeat
+    starts.
+  - Decision: do not change correct music to satisfy the warning. Future
+    analysis must derive audible entry from the first non-rest cell.
+  - Status: open analyzer bug; warning explicitly dispositioned in this song.
+
+- **Endpoint-only intent trends cannot describe a rise-then-release delivery arc**
+  - Scope: the hilt phrase rises to one local DYN/BRI/opening crest and cools
+    immediately, but a monotonic `increase` target compares only start/end.
+  - Decision: correct the whole-passage declaration without changing music;
+    add local arch/peak-position targets in a future intent schema.
+  - Status: song declaration corrected; schema improvement remains open.
+
+- **Native-control verification succeeded after correcting the XML query**
+  - Scope: an initial grep used the wrong tag names and falsely reported no
+    controls.
+  - Evidence: final VSQX contains PIT/PBS/DYN/BRI/GEN/CLE, 433 note-style
+    blocks, locked phonemes, and one non-zero focus vibrato.
+  - Status: no materialization regression in this song; retain schema-aware
+    verification rather than ad-hoc tag guesses.
+
 ## 2026-07-19 — Distant-lights cold-start follow-up
 
 Detailed note: `notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md`

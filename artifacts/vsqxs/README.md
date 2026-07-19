@@ -15,6 +15,7 @@ local-only, ignored in its entirety, and must not be published with the repo.
 | `hibana-kouro-ia-rocks-j-rock-final.vsqx` | 19 | `40a34c0310e57e7280ab5d37c7f35d14b33d89e7f44bb4eebf1bbcacd86458c6` | `e3edbac8b4752b74c577c20aeb7c7e3d8b021166d218f74c41335d51d0f80c9d` | 204,646 |
 | `natsu-no-yoru-ia-rocks-dream-pop-final.vsqx` | 19 | `6c4e9cff8f3d37d6e23fae300416356ed775d3c7893194637bd594422305115b` | `7d08bd7761b98dde8b887ed83a2ee59a9427eb61d19bd575fbb1164ef4e7466e` | 193,720 |
 | `tooi-hi-aoi-yoru-ia-20260719-a-r50-final.vsqx` | 28 | `83fd91723bb94fa19f366865fa0614075910ced9f10660fa9c6634809db2d385` | `ae80710813a0c0cdc2f1e172c027d79375e1f0057edb27c082073712dc18270f` | 154,916 |
+| `kaze-wa-na-o-yobanai-ia-final.vsqx` | 75 | `b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355` | `fbb8a03909c5922bf24e75da4d697530d74a5dfa46600e92084ff25d867f0a49` | 206,514 |
 
 Intent-first creative auditions may use a `-demo.vsqx` suffix because they are
 published for human listening before a hash-bound keep/reject/revise decision.
