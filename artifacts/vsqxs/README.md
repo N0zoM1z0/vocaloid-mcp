@@ -15,6 +15,14 @@ local-only, ignored in its entirety, and must not be published with the repo.
 | `hibana-kouro-ia-rocks-j-rock-final.vsqx` | 19 | `40a34c0310e57e7280ab5d37c7f35d14b33d89e7f44bb4eebf1bbcacd86458c6` | `e3edbac8b4752b74c577c20aeb7c7e3d8b021166d218f74c41335d51d0f80c9d` | 204,646 |
 | `natsu-no-yoru-ia-rocks-dream-pop-final.vsqx` | 19 | `6c4e9cff8f3d37d6e23fae300416356ed775d3c7893194637bd594422305115b` | `7d08bd7761b98dde8b887ed83a2ee59a9427eb61d19bd575fbb1164ef4e7466e` | 193,720 |
 
+Intent-first creative auditions may use a `-demo.vsqx` suffix because they are
+published for human listening before a hash-bound keep/reject/revise decision.
+They are not evidence that the creative gate has passed.
+
+| Intent demo project | Manifest source revision | Composition SHA-256 | VSQX SHA-256 | Bytes |
+| --- | ---: | --- | --- | ---: |
+| `asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-demo.vsqx` | 16 | `fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9` | `ad5be8fefdf84d0bc27e4a2d4051a38b95f0d83b743f71433babf4ed028d21a7` | 19,789 |
+
 These VSQX files preserve the current vocal composition, IA_ROCKS binding,
 native tuning, vocal mixer state, and the backing WAV reference used at build
 time. VSQX does not embed referenced audio. On this workstation the backing
