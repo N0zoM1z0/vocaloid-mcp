@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">雨と蝉のあいだ arrangement map and listening verdict</title>
+  <desc id="desc">A 48-bar, 190 BPM arrangement map showing five form sections, two IA ROCKS vocal tracks, five accompaniment roles, technical readiness, and the final human listening limitations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="rain" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0ea5e9" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="cicada" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#fde047" stop-opacity="0.5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <circle cx="1430" cy="110" r="150" fill="#38bdf8" opacity="0.05"/>
+  <circle cx="1360" cy="130" r="85" fill="#fbbf24" opacity="0.05"/>
+
+  <text x="70" y="76" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="40" font-weight="700">AME / SEMI NO AIDA — 雨と蝉のあいだ</text>
+  <text x="70" y="116" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="21">48 bars · 190 BPM · IA_ROCKS · 64.4 s · D Dorian / minor field</text>
+
+  <g transform="translate(70 158)" filter="url(#shadow)">
+    <rect width="1460" height="538" rx="24" fill="#0f172a" stroke="#334155"/>
+
+    <text x="20" y="44" fill="#cbd5e1" font-family="Inter,Segoe UI,sans-serif" font-size="17" font-weight="600">FORM</text>
+    <g transform="translate(180 16)" font-family="Inter,Segoe UI,sans-serif">
+      <rect x="0" y="0" width="107" height="52" rx="8" fill="#075985"/>
+      <rect x="107" y="0" width="217" height="52" rx="8" fill="#0369a1"/>
+      <rect x="324" y="0" width="217" height="52" rx="8" fill="#0e7490"/>
+      <rect x="541" y="0" width="542" height="52" rx="8" fill="#a16207"/>
+      <rect x="1083" y="0" width="217" height="52" rx="8" fill="#334155"/>
+      <g fill="#f8fafc" font-size="14" text-anchor="middle">
+        <text x="53" y="22">Dense Rain</text><text x="53" y="41" fill="#bae6fd">0–4</text>
+        <text x="215" y="22">Under the Eaves</text><text x="215" y="41" fill="#bae6fd">4–12</text>
+        <text x="432" y="22">Pulse Through Water</text><text x="432" y="41" fill="#a5f3fc">12–20</text>
+        <text x="812" y="22">Two Living Forces</text><text x="812" y="41" fill="#fde68a">20–40</text>
+        <text x="1191" y="22">Shared Night</text><text x="1191" y="41" fill="#cbd5e1">40–48</text>
+      </g>
+    </g>
+
+    <g transform="translate(0 100)" font-family="Inter,Segoe UI,sans-serif">
+      <g stroke="#334155" stroke-width="1">
+        <line x1="180" y1="0" x2="1480" y2="0"/>
+        <line x1="180" y1="56" x2="1480" y2="56"/>
+        <line x1="180" y1="112" x2="1480" y2="112"/>
+        <line x1="180" y1="168" x2="1480" y2="168"/>
+        <line x1="180" y1="224" x2="1480" y2="224"/>
+        <line x1="180" y1="280" x2="1480" y2="280"/>
+        <line x1="180" y1="336" x2="1480" y2="336"/>
+        <line x1="180" y1="392" x2="1480" y2="392"/>
+        <line x1="287" y1="0" x2="287" y2="392"/>
+        <line x1="504" y1="0" x2="504" y2="392"/>
+        <line x1="721" y1="0" x2="721" y2="392"/>
+        <line x1="1263" y1="0" x2="1263" y2="392"/>
+      </g>
+
+      <g fill="#cbd5e1" font-size="16" text-anchor="end">
+        <text x="160" y="34">IA lead · 241 notes</text>
+        <text x="160" y="90">IA harmony · 46</text>
+        <text x="160" y="146">rock drums</text>
+        <text x="160" y="202">bass · 166 notes</text>
+        <text x="160" y="258">rhythm guitar</text>
+        <text x="160" y="314">rain guitar · 134</text>
+        <text x="160" y="370">cicada pulse · 102</text>
+      </g>
+
+      <rect x="287" y="12" width="976" height="30" rx="7" fill="#f472b6" opacity="0.92"/>
+      <rect x="721" y="68" width="542" height="30" rx="7" fill="#c084fc" opacity="0.88"/>
+      <rect x="234" y="124" width="1246" height="30" rx="7" fill="#ef4444" opacity="0.78"/>
+      <rect x="180" y="180" width="1300" height="30" rx="7" fill="#fb7185" opacity="0.72"/>
+      <rect x="180" y="236" width="1300" height="30" rx="7" fill="#f97316" opacity="0.72"/>
+      <rect x="180" y="292" width="1300" height="30" rx="7" fill="#38bdf8" opacity="0.72"/>
+      <rect x="504" y="348" width="976" height="30" rx="7" fill="#fbbf24" opacity="0.78"/>
+
+      <g fill="#64748b" font-size="12" text-anchor="middle">
+        <text x="180" y="416">0</text><text x="287" y="416">4</text><text x="504" y="416">12</text>
+        <text x="721" y="416">20</text><text x="1263" y="416">40</text><text x="1480" y="416">48 bars</text>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(70 730)" font-family="Inter,Segoe UI,sans-serif">
+    <rect width="430" height="112" rx="18" fill="#052e16" stroke="#22c55e" stroke-opacity="0.7"/>
+    <text x="24" y="38" fill="#86efac" font-size="18" font-weight="700">ENGINEERING GATE: PASSED</text>
+    <text x="24" y="69" fill="#dcfce7" font-size="16">valid VSQX · real Editor render · no clipping</text>
+    <text x="24" y="93" fill="#bbf7d0" font-size="15">24 decisions · hashes current · delivery ready</text>
+
+    <text x="535" y="59" fill="#94a3b8" font-size="34">≠</text>
+
+    <rect x="610" width="850" height="112" rx="18" fill="#450a0a" stroke="#fb7185" stroke-opacity="0.8"/>
+    <text x="634" y="38" fill="#fda4af" font-size="18" font-weight="700">HUMAN LISTENING: THE GAP IS STILL MUSICAL</text>
+    <text x="634" y="69" fill="#ffe4e6" font-size="16">IA is masked by the accompaniment; the result feels comparatively flat.</text>
+    <text x="634" y="93" fill="#fecdd3" font-size="15">High BPM + “rock” instruments did not automatically create convincing rock.</text>
+  </g>
+</svg>

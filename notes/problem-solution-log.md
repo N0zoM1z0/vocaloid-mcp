@@ -14,9 +14,26 @@ Detailed note: `notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md`
     180–200 BPM range, 190 preferred BPM, and a 50–70 second duration target.
   - Evidence: it independently delivered `雨と蝉のあいだ`, 48 bars and
     64.399683 seconds, at 190 BPM with the requested exact voice component.
-  - Status: transfer succeeded; the intent range/preference fields are enforced
-    by schema and the creative record retains the tempo decision. Human intent
-    and vocal-balance listening remains pending.
+  - Status: transfer and high-BPM engineering stability succeeded; the intent
+    range/preference fields are enforced by schema and the creative record
+    retains the tempo decision. Final human listening found that the band masks
+    IA and that the arrangement remains flat rather than convincingly rock.
+    No song revision was requested, so these findings are preserved as an
+    explicit musical limitation rather than converted into a local auto-fix.
+
+- **Delivery metrics did not establish vocal foreground or genre success**
+  - Scope: the final artifact was current, non-silent, unclipped, within its
+    loudness/true-peak policy, and passed every engineering readiness gate.
+    Human listening still found IA buried and the rock feel unconvincing.
+  - Decision: keep engineering readiness and artistic acceptance separate. A
+    future diagnostic may observe section-aware vocal-to-band balance,
+    consonant-band masking, and vocal-muted deltas, but must present bounded
+    listening choices instead of applying an automatic vocal boost. Rock feel
+    requires performance, articulation, groove, and renderer evidence; a genre
+    label, high BPM, guitars, and drums are not sufficient evidence.
+  - Status: open product/music limitation, intentionally not repaired in this
+    song. The final listener disposition is recorded in the dated evaluation
+    note without mutating the published creative-record chain.
 
 - **Run code guessed raw edit-response nesting and failed after successful writes**
   - Scope: two resumable interruptions followed valid canonical mutations

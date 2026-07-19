@@ -7,7 +7,8 @@ Date: 2026-07-19 (Asia/Singapore)
 - Creative authority: `intents/2026-07-19-summer-night-rain-cicadas-ia-rocks.intent.json` only.
 - Runtime corpus, prior song artifacts, reference audio, and prior per-song compose scripts were not read or searched.
 - Framework contracts/resources and the unordered phrase-grammar vocabulary are process authority only.
-- Human listening disposition remains pending.
+- The composition package was published before final human listening. The later
+  listening result is recorded below; no song or package revision was requested.
 
 ## Readiness evidence
 
@@ -87,5 +88,21 @@ No framework defect observed at initialization.
 - Post-fix analyzer disposition: the 17 false modal-subtonic warnings are gone. Fifteen register-density warnings are symbolic simultaneous-register windows retained with two-note power chords, pan/EQ/high-pass separation, and bounded raw gain; one drum/rhythm-guitar onset collision is the intentional rock momentum layer; one motif-repetition info finding reflects return identity while phrase-grammar comparison still reports zero findings. These are disclosed, non-blocking, and do not carry a human acceptance claim.
 - Creative record: 24 append-only decisions, 100% current core coverage, chain head `dfdf038538bbe9179f366f94e3359a25542dd535950a94fd6c16bd561fb10627`; human listening status `pending`.
 - Mastering transparency review was not required: peak reshaping was 1.3 dB, loudness-range change was 0.0 LU, and true-peak correction was 0.0 dB.
+
+### Post-delivery human listening disposition
+
+- The accompaniment masks IA in the final mix.
+- The arrangement remains comparatively flat and does not deliver a convincing
+  rock feel despite the 190 BPM tempo, rock-oriented roles, and valid delivery.
+- These are musical/production findings, not artifact-integrity failures. The
+  readiness gates remain accurate about what they measure, but they do not imply
+  vocal foreground ownership or genre success.
+- Per the user's instruction, the song was not revised. The revision-78 creative
+  package therefore retains the pre-listening `pending` value as historical
+  publication state; this dated note is the authoritative later disposition.
+- Future work should observe section-aware vocal-to-band foreground balance and
+  articulation/groove interaction, then present bounded listening choices. It
+  must not apply a song-specific automatic gain boost or alter unrelated theory,
+  form, tuning, or delivery behavior.
 
 Composition choices and rejected alternatives are in the creative journal. Every retry or partial failure observed in this run is recorded above. Framework corrections were applied only after the fresh session had finished, then validated against this unchanged revision-78 song and the full test suite.
