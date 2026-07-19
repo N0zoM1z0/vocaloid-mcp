@@ -237,6 +237,34 @@ function addVocalIssues(
   let vocalEvents = 0;
   for (const track of manifest.vocal_tracks) {
     for (const part of track.parts) {
+      const declaredGestureIds = new Set((part.tuning_gestures ?? []).map((gesture) => gesture.id));
+      const materializedGestureIds = new Set(part.materialized_tuning_gesture_ids ?? []);
+      const missingMaterialization = [...declaredGestureIds]
+        .filter((gestureId) => !materializedGestureIds.has(gestureId));
+      if (missingMaterialization.length > 0) {
+        issues.push(issue(
+          "TUNING_GESTURE_NOT_MATERIALIZED",
+          "error",
+          "performance",
+          `Vocal part ${part.id} declares ${missingMaterialization.length} tuning gesture(s) without compiler provenance: ${missingMaterialization.join(", ")}.`,
+          [track.id, part.id, ...missingMaterialization],
+          "Call vocaloid_edit_song apply_tuning with the exact declared gestures and materialize_existing=true, then rebuild and verify native VSQX controls plus a non-silent Editor render.",
+          part.start,
+        ));
+      }
+      const orphanedMaterialization = [...materializedGestureIds]
+        .filter((gestureId) => !declaredGestureIds.has(gestureId));
+      if (orphanedMaterialization.length > 0) {
+        issues.push(issue(
+          "TUNING_MATERIALIZATION_ORPHANED",
+          "error",
+          "performance",
+          `Vocal part ${part.id} has compiler provenance for undeclared gesture(s): ${orphanedMaterialization.join(", ")}.`,
+          [track.id, part.id, ...orphanedMaterialization],
+          "Replace the whole vocal part intentionally, then reapply every desired tuning gesture through apply_tuning.",
+          part.start,
+        ));
+      }
       for (const note of part.notes) {
         if (!note.phoneme_locked) {
           issues.push(issue(
@@ -832,7 +860,8 @@ export async function preflightSongManifest(
   const scoreCodes = [
     "PART_OVERLAP", "VOCAL_EVENT_OVERLAP", "ARRANGEMENT_EVENT_PAST_SONG_END",
     "PATTERN_EVENT_OUT_OF_BOUNDS", "PLACEMENT_PAST_SONG_END", "NO_VOCAL_TRACK",
-    "NO_PITCHED_ARRANGEMENT_TRACK",
+    "NO_PITCHED_ARRANGEMENT_TRACK", "TUNING_GESTURE_NOT_MATERIALIZED",
+    "TUNING_MATERIALIZATION_ORPHANED",
   ];
   const theoryScoreCodes = theory.issues
     .filter((entry) => theoryFindingBlocks(entry, "score"))

@@ -16,6 +16,7 @@ const PRODUCTION_TOOLS = [
   "vocaloid_analyze_wav",
   "vocaloid_build_song_manifest",
   "vocaloid_create_song_manifest",
+  "vocaloid_creative_journal",
   "vocaloid_edit_song",
   "vocaloid_get_song_section",
   "vocaloid_host_readiness",
@@ -58,6 +59,9 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   assert.match(JSON.stringify(editTool?.inputSchema), /upsert_theory_exception/u);
   assert.match(JSON.stringify(editTool?.inputSchema), /edit-song-contract/u);
   assert.match(JSON.stringify(editTool?.inputSchema), /payload/u);
+  const creativeJournalTool = tools.tools.find((tool) => tool.name === "vocaloid_creative_journal");
+  assert.match(JSON.stringify(creativeJournalTool?.inputSchema), /creative-journal-contract/u);
+  assert.match(JSON.stringify(creativeJournalTool?.outputSchema), /publish/u);
   const audioReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_audio");
   assert.match(JSON.stringify(audioReviewTool?.inputSchema), /anchor_preview/u);
   assert.match(JSON.stringify(audioReviewTool?.inputSchema), /compare_anchor_ab/u);
@@ -101,6 +105,17 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   });
   const exceptionActionEntry = exceptionActionContract.contents[0];
   assert.match(exceptionActionEntry && "text" in exceptionActionEntry ? exceptionActionEntry.text : "", /target_fingerprint/u);
+  const journalPolicy = await client.readResource({ uri: "vocaloid://creative-decision-journal" });
+  const journalPolicyEntry = journalPolicy.contents[0];
+  assert.match(journalPolicyEntry && "text" in journalPolicyEntry ? journalPolicyEntry.text : "", /declared.*materialized.*rendered.*heard/su);
+  const journalContract = await client.readResource({ uri: "vocaloid://creative-journal-contract" });
+  const journalContractEntry = journalContract.contents[0];
+  assert.match(journalContractEntry && "text" in journalContractEntry ? journalContractEntry.text : "", /publish/u);
+  const recordJournalContract = await client.readResource({
+    uri: "vocaloid://creative-journal-contract/record",
+  });
+  const recordJournalEntry = recordJournalContract.contents[0];
+  assert.match(recordJournalEntry && "text" in recordJournalEntry ? recordJournalEntry.text : "", /expected_audible_effect/u);
   const invalidIntentEdit = await client.callTool({
     name: "vocaloid_edit_song",
     arguments: { action: "set_composition_intent", payload: {}, response_format: "json" },
@@ -189,6 +204,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_create_project",
       "vocaloid_create_song",
       "vocaloid_create_song_manifest",
+      "vocaloid_creative_journal",
       "vocaloid_edit_song",
       "vocaloid_get_song_section",
       "vocaloid_host_readiness",
@@ -362,6 +378,52 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   assert.equal(
     (manifestCreated.structuredContent as { data?: { revision?: number } }).data?.revision,
     1,
+  );
+
+  const journalDryRun = await client.callTool({
+    name: "vocaloid_creative_journal",
+    arguments: {
+      action: "record",
+      payload: {
+        manifest_path: manifestPath,
+        expected_revision: 1,
+        dry_run: true,
+        decision: {
+          id: "decision-smoke-intent",
+          phase: "intent",
+          kind: "framing",
+          title: "Frame the smoke-test phrase",
+          objective: "Verify the strict journal action through stdio.",
+          decision: "Bind this dry-run decision to the verse object.",
+          rationale: "A stable-object binding proves runtime parsing without mutating the journal.",
+          expected_audible_effect: "No audible change is expected from a dry run.",
+          affected_object_ids: ["verse"],
+          evidence: { observations: ["The verse exists at manifest revision 1."] },
+          outcome: "planned",
+          author: { type: "agent", name: "mcp-smoke" },
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(journalDryRun.isError, true);
+  assert.equal(
+    (journalDryRun.structuredContent as { data?: { entry?: { id?: string }; dryRun?: boolean } })
+      .data?.entry?.id,
+    "decision-smoke-intent",
+  );
+  const emptyJournal = await client.callTool({
+    name: "vocaloid_creative_journal",
+    arguments: {
+      action: "list",
+      payload: { manifest_path: manifestPath, offset: 0, limit: 20 },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(emptyJournal.isError, true);
+  assert.equal(
+    (emptyJournal.structuredContent as { data?: { total?: number } }).data?.total,
+    0,
   );
 
   const vocalUpsert = await client.callTool({

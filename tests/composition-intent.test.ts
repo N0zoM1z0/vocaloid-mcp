@@ -204,6 +204,7 @@ test("an optional intent changes content/history and intent hash without staling
     "composition-intent/song",
     "direction-chorus-hook",
     "intent-section-chorus",
+    "question-chorus-hook",
   ]);
   assert.equal(diff.to.intentHash, result.summary.intentHash);
 

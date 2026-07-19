@@ -17,6 +17,16 @@ import {
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { FROM_ZERO_AGENT_EXAMPLE } from "./agent-examples.js";
 import {
+  CreativeDecisionCurrentnessSchema,
+  CreativeDecisionInputSchema,
+  CreativeDecisionPhaseSchema,
+  CreativeJournalDeliverableInputSchema,
+  listCreativeDecisions,
+  publishCreativeRecordPackage,
+  recordCreativeDecision,
+  writeCreativeJournalReport,
+} from "./creative-journal.js";
+import {
   masterSongManifestDelivery,
   renderSongManifestMaster,
 } from "./delivery.js";
@@ -145,6 +155,7 @@ const PRODUCTION_TOOL_NAMES = new Set([
   "vocaloid_review_audio",
   "vocaloid_review_song",
   "vocaloid_manifest_history",
+  "vocaloid_creative_journal",
   "vocaloid_analyze_wav",
 ] as const);
 
@@ -183,7 +194,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, and vocaloid://music-theory-policy first; read vocaloid://edit-song-contract before the first vocaloid_edit_song call. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, vocaloid://music-theory-policy, and vocaloid://creative-decision-journal first; read the on-demand action contract before each compact envelope tool. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Append concise evidence-bound decisions with vocaloid_creative_journal after each stage; do not store raw hidden chain-of-thought. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; native gesture materialization and an actual non-silent Editor render are separate evidence. Publish a hash-bound creative-record package with the final song and VSQX. VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
@@ -280,6 +291,50 @@ server.registerResource(
 );
 
 server.registerResource(
+  "vocaloid-creative-journal-contract",
+  "vocaloid://creative-journal-contract",
+  {
+    title: "Strict creative decision journal action contract",
+    description: "On-demand action-specific JSON Schema for recording, reading, reporting, and publishing creative decisions.",
+    mimeType: "application/json",
+  },
+  async (uri) => ({
+    contents: [{
+      uri: uri.href,
+      mimeType: "application/json",
+      text: JSON.stringify({
+        schema: "vocaloid-creative-journal-contract/v1",
+        invocation: {
+          action: "Select one action from the schema discriminator",
+          payload: "Place every action-specific field except action/response_format here",
+          response_format: "markdown or json",
+        },
+        actions: CREATIVE_JOURNAL_ACTION_NAMES.map((action) => ({
+          action,
+          schema_uri: `vocaloid://creative-journal-contract/${action}`,
+        })),
+      }, null, 2),
+    }],
+  }),
+);
+
+server.registerResource(
+  "vocaloid-creative-decision-journal",
+  "vocaloid://creative-decision-journal",
+  {
+    title: "Creative decision journal policy",
+    description: "The auditable intent → theory → note allocation → IA delivery → arrangement record, freshness, and publication policy.",
+    mimeType: "text/markdown; charset=utf-8",
+  },
+  async (uri) => {
+    const path = await resolveReadablePath("notes/creative-decision-journal.md");
+    return {
+      contents: [{ uri: uri.href, mimeType: "text/markdown; charset=utf-8", text: await readFile(path, "utf8") }],
+    };
+  },
+);
+
+server.registerResource(
   "hanairo-biyori-lyrics",
   "vocaloid://lyrics/hanairo-biyori",
   {
@@ -319,6 +374,7 @@ server.registerResource(
           "Check host readiness and cached IA_ROCKS availability",
           "Create or import a canonical manifest",
           "Declare song/section intent plus 1-3 anchor phrase purposes, semantic focuses, transitions, delivery arcs, and single listening questions",
+          "Append a concise hash-bound journal decision after intent, each theory stage, note allocation, IA delivery, and arrangement",
           "Establish form, meter/tempo, key/harmony/bass, lead melody, and Japanese note allocation without corpus/style input",
           "Align explicit Japanese readings; preserve original lyric provenance",
           "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
@@ -331,12 +387,14 @@ server.registerResource(
           "Run one-question loudness-matched A/B and attach an explicit digest-bound keep/reject/revise review",
           "Optionally inspect an aggregate style palette only after the symbolic composition and anchor question are established",
           "Master only after the separate releasePolicy is ready; verify loudness, true peak, clipping, channels, hashes, and dependencies",
+          "Publish the complete journal/report/manifest package bound to the final song and VSQX artifacts",
         ],
         examples: ["vocaloid://examples/from-zero"],
         contracts: {
           edit_song: "vocaloid://edit-song-contract",
           composition_intent: "vocaloid://composition-intent-contract",
           music_theory: "vocaloid://music-theory-policy",
+          creative_journal: "vocaloid://creative-journal-contract",
         },
         agent_contract: {
           canonical_source: "*.song.json manifest",
@@ -345,6 +403,7 @@ server.registerResource(
           provenance: "composition_hash, mix_hash, file SHA-256, dependency hashes, Editor/helper fingerprints",
           lyrics: "original surface text, explicit kana reading, alignment, and V3 phonemes remain distinct evidence",
           creative_judgement: "symbolic/audio metrics locate evidence; only an explicit listening author records keep/reject/revise",
+          creative_record: "append-only hash chain with stable-object/artifact/hash bindings; stale decisions remain visible and final packages require complete current core coverage",
           proposals: "read-only revision/hash-bound A/B/C hypotheses; no corpus/profile access, no direct write, mandatory edit dry-run and listening check",
           release_policy: "optional/backward-compatible; required warnings need exact current exceptions, required intent review blocks only final delivery",
           style_boundary: "optional post-composition observation; never writes intent or supplies melody/chord continuation",
@@ -889,6 +948,105 @@ const ImportVsqxDataOutputSchema = z.object({
   sourceArtifact: ArtifactOutputSchema,
 }).passthrough();
 
+const CreativeJournalActionSchema = z.enum(["record", "list", "report", "publish"]);
+
+const CreativeJournalDataOutputSchema = z.object({
+  action: CreativeJournalActionSchema,
+}).passthrough();
+
+const CreativeJournalActionRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("record"),
+    manifest_path: PathSchema,
+    expected_revision: z.number().int().min(1),
+    decision: CreativeDecisionInputSchema,
+    dry_run: z.boolean().default(false),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
+    action: z.literal("list"),
+    manifest_path: PathSchema,
+    phases: z.array(CreativeDecisionPhaseSchema).min(1).max(15).optional(),
+    currentness: CreativeDecisionCurrentnessSchema.optional(),
+    offset: z.number().int().min(0).default(0),
+    limit: z.number().int().min(1).max(100).default(20),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
+    action: z.literal("report"),
+    manifest_path: PathSchema,
+    output_path: PathSchema.optional(),
+    overwrite: z.boolean().default(false),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
+    action: z.literal("publish"),
+    manifest_path: PathSchema,
+    expected_revision: z.number().int().min(1),
+    output_directory: PathSchema,
+    deliverables: z.array(CreativeJournalDeliverableInputSchema).min(2).max(32),
+    overwrite: z.boolean().default(false),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+]);
+
+const CreativeJournalInputSchema = z.object({
+  action: CreativeJournalActionSchema,
+  payload: z.record(z.string(), z.unknown()).superRefine((payload, context) => {
+    for (const reserved of ["action", "response_format"]) {
+      if (Object.hasOwn(payload, reserved)) {
+        context.addIssue({ code: "custom", path: [reserved], message: `${reserved} belongs in the tool envelope` });
+      }
+    }
+  }).describe("Payload schema: vocaloid://creative-journal-contract/{action}"),
+  response_format: ResponseFormatSchema,
+}).strict();
+
+const CREATIVE_JOURNAL_ACTION_NAMES = CreativeJournalActionSchema.options;
+
+server.registerResource(
+  "vocaloid-creative-journal-action-contract",
+  new ResourceTemplate("vocaloid://creative-journal-contract/{action}", {
+    list: undefined,
+    complete: { action: () => [...CREATIVE_JOURNAL_ACTION_NAMES] },
+  }),
+  {
+    title: "One vocaloid_creative_journal action payload schema",
+    description: "Strict on-demand JSON Schema for one compact journal payload.",
+    mimeType: "application/json",
+  },
+  async (uri, variables) => {
+    const requested = variables.action;
+    const action = Array.isArray(requested) ? requested[0] : requested;
+    if (!action || !CREATIVE_JOURNAL_ACTION_NAMES.includes(
+      action as (typeof CREATIVE_JOURNAL_ACTION_NAMES)[number],
+    )) {
+      throw new Error(`Unknown vocaloid_creative_journal contract action ${String(action)}`);
+    }
+    const option = CreativeJournalActionRequestSchema.options.find(
+      (candidate) => candidate.shape.action.value === action,
+    );
+    if (!option) throw new Error(`Missing vocaloid_creative_journal contract for ${action}`);
+    const payloadSchema = structuredClone(z.toJSONSchema(option, { target: "draft-7", io: "input" })) as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+      [key: string]: unknown;
+    };
+    if (payloadSchema.properties) {
+      delete payloadSchema.properties.action;
+      delete payloadSchema.properties.response_format;
+    }
+    if (payloadSchema.required) {
+      payloadSchema.required = payloadSchema.required.filter(
+        (field) => field !== "action" && field !== "response_format",
+      );
+    }
+    return {
+      contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(payloadSchema, null, 2) }],
+    };
+  },
+);
+
 const EditMutationActionSchema = z.enum([
   "set_composition_intent",
   "set_composition_guidance",
@@ -1324,6 +1482,8 @@ const EditSongActionRequestSchema = z.discriminatedUnion("action", [
     vocal_track_id: ManifestIdSchema,
     vocal_part_id: ManifestIdSchema,
     gestures: z.array(ManifestTuningGestureSchema).min(1).max(256),
+    materialize_existing: z.boolean().default(false)
+      .describe("Compile matching declarations that exist but lack compiler provenance; never replaces already materialized gestures"),
   }).strict(),
   ManifestMutationPathSchema.extend({ action: z.literal("upsert_arrangement"), track: ManifestArrangementTrackSchema }).strict(),
   ManifestMutationPathSchema.extend({ action: z.literal("apply_groove"), groove: ManifestGrooveSchema }).strict(),
@@ -3186,8 +3346,14 @@ server.registerTool(
       }
       if (params.action === "apply_tuning") {
         const gestures = params.gestures!;
-        if (params.dry_run) return preview((path) => applySongManifestTuningGestures(path, path, expectedRevision, params.vocal_track_id!, params.vocal_part_id!, gestures, true));
-        const result = await applySongManifestTuningGestures(inputPath, outputPath, expectedRevision, params.vocal_track_id!, params.vocal_part_id!, gestures, params.overwrite);
+        if (params.dry_run) return preview((path) => applySongManifestTuningGestures(
+          path, path, expectedRevision, params.vocal_track_id!, params.vocal_part_id!, gestures, true,
+          params.materialize_existing,
+        ));
+        const result = await applySongManifestTuningGestures(
+          inputPath, outputPath, expectedRevision, params.vocal_track_id!, params.vocal_part_id!, gestures,
+          params.overwrite, params.materialize_existing,
+        );
         const data = await normalizedAppliedEdit(params.action, inputPath, result, {
           changedCount: result.applied.affected_event_references,
           objectIds: gestures.flatMap((gesture) => [gesture.id, ...gesture.event_ids]),
@@ -3241,6 +3407,84 @@ server.registerTool(
       return workflowResult(data, params.response_format, `Applied ${params.action} to ${result.removed} object(s)`);
     } catch (error) {
       return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
+  "vocaloid_creative_journal",
+  {
+    title: "Record and Publish Creative Decisions",
+    description: "Append, query, report, or publish the hash-bound creative journal.",
+    inputSchema: CreativeJournalInputSchema,
+    outputSchema: typedToolOutputSchema(CreativeJournalDataOutputSchema),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (envelope) => {
+    try {
+      const params = CreativeJournalActionRequestSchema.parse({
+        ...envelope.payload,
+        action: envelope.action,
+        response_format: envelope.response_format,
+      });
+      if (params.action === "record") {
+        const result = await recordCreativeDecision({
+          manifestPath: params.manifest_path,
+          expectedRevision: params.expected_revision,
+          decision: params.decision,
+          dryRun: params.dry_run,
+        });
+        return textResult(
+          result,
+          params.response_format,
+          `${params.dry_run ? "Validated" : "Recorded"} creative decision ${result.entry.id}`,
+        );
+      }
+      if (params.action === "list") {
+        const result = await listCreativeDecisions({
+          manifestPath: params.manifest_path,
+          ...(params.phases ? { phases: params.phases } : {}),
+          ...(params.currentness ? { currentness: params.currentness } : {}),
+          offset: params.offset,
+          limit: params.limit,
+        });
+        return textResult(
+          result,
+          params.response_format,
+          `Read ${result.count} of ${result.total} creative decisions`,
+        );
+      }
+      if (params.action === "report") {
+        const result = await writeCreativeJournalReport({
+          manifestPath: params.manifest_path,
+          ...(params.output_path ? { outputPath: params.output_path } : {}),
+          overwrite: params.overwrite,
+        });
+        return textResult(
+          result,
+          params.response_format,
+          `Wrote ${result.entryCount}-decision creative report`,
+        );
+      }
+      const result = await publishCreativeRecordPackage({
+        manifestPath: params.manifest_path,
+        expectedRevision: params.expected_revision,
+        outputDirectory: params.output_directory,
+        deliverables: params.deliverables,
+        overwrite: params.overwrite,
+      });
+      return textResult(
+        result,
+        params.response_format,
+        `Published complete ${result.entryCount}-decision creative record package`,
+      );
+    } catch (error) {
+      return errorResult(error);
     }
   },
 );

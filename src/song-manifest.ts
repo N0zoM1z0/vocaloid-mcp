@@ -336,6 +336,7 @@ export const ManifestVocalPartSchema = z
     phrases: z.array(ManifestVocalPhraseSchema).max(512).default([]),
     control_curves: z.array(ManifestCurveSchema).max(8).default([]),
     tuning_gestures: z.array(ManifestTuningGestureSchema).max(256).optional(),
+    materialized_tuning_gesture_ids: z.array(GestureIdSchema).max(256).optional(),
   })
   .strict()
   .refine((part) => part.notes.length > 0 || part.phrases.length > 0, {
@@ -1830,6 +1831,10 @@ export async function upsertSongManifestVocalPart(
   const voice = ManifestVoiceSchema.parse(voiceInput);
   const track = ManifestVocalTrackMetadataSchema.parse(trackInput);
   const part = ManifestVocalPartSchema.parse(partInput);
+  // This generated provenance may only be asserted by the gesture compiler.
+  // A whole-part upsert can declare gestures for later compilation, but cannot
+  // claim that their native note/curve expression has already materialized.
+  part.materialized_tuning_gesture_ids = [];
   if (track.voice_id !== voice.id) {
     throw new Error(`Track ${track.id} voice_id ${track.voice_id} does not match supplied voice ${voice.id}`);
   }
@@ -1902,6 +1907,7 @@ export async function applySongManifestTuningGestures(
   vocalPartId: string,
   gestureInputs: z.input<typeof ManifestTuningGestureSchema>[],
   overwrite: boolean,
+  materializeExisting = false,
 ) {
   const trackId = IdSchema.parse(vocalTrackId);
   const partId = IdSchema.parse(vocalPartId);
@@ -1924,11 +1930,25 @@ export async function applySongManifestTuningGestures(
     const part = track.parts.find((candidate) => candidate.id === partId);
     if (!part) throw new Error(`Vocal track ${trackId} has no part ${partId}`);
     const existingGestureIds = new Set((part.tuning_gestures ?? []).map((gesture) => gesture.id));
+    const materializedGestureIds = new Set(part.materialized_tuning_gesture_ids ?? []);
     for (const gesture of gestures) {
       if (existingGestureIds.has(gesture.id)) {
-        throw new Error(
-          `Tuning gesture ${gesture.id} already exists in ${partId}; use a new gesture ID or replace the whole vocal part intentionally`,
-        );
+        if (!materializeExisting) {
+          throw new Error(
+            `Tuning gesture ${gesture.id} already exists in ${partId}; set materialize_existing=true only to compile a declared but unmaterialized gesture`,
+          );
+        }
+        if (materializedGestureIds.has(gesture.id)) {
+          throw new Error(
+            `Tuning gesture ${gesture.id} is already materialized in ${partId}; use a new gesture ID or replace the whole vocal part intentionally`,
+          );
+        }
+        const declared = part.tuning_gestures?.find((candidate) => candidate.id === gesture.id);
+        if (JSON.stringify(declared) !== JSON.stringify(gesture)) {
+          throw new Error(
+            `Tuning gesture ${gesture.id} differs from its existing declaration; replace the whole vocal part intentionally before compiling a changed gesture`,
+          );
+        }
       }
     }
     const partStart = positionTick(draft, part.start);
@@ -2114,7 +2134,13 @@ export async function applySongManifestTuningGestures(
         curves,
       });
     }
-    part.tuning_gestures = [...(part.tuning_gestures ?? []), ...gestures];
+    part.tuning_gestures = [
+      ...(part.tuning_gestures ?? []),
+      ...gestures.filter((gesture) => !existingGestureIds.has(gesture.id)),
+    ];
+    part.materialized_tuning_gesture_ids = [
+      ...new Set([...(part.materialized_tuning_gesture_ids ?? []), ...gestures.map((gesture) => gesture.id)]),
+    ];
   });
   return {
     ...result,

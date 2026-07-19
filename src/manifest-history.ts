@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
@@ -73,7 +74,7 @@ export async function listManifestHistory(manifestPath: string) {
   };
 }
 
-type DiffDomain =
+export type DiffDomain =
   | "timeline"
   | "sections"
   | "harmony"
@@ -86,12 +87,12 @@ type DiffDomain =
   | "artifacts"
   | "review_notes";
 
-interface Entity {
+export interface ManifestEntity {
   id: string;
   value: unknown;
 }
 
-function entities(manifest: SongManifest): Record<DiffDomain, Entity[]> {
+export function manifestEntities(manifest: SongManifest): Record<DiffDomain, ManifestEntity[]> {
   return {
     timeline: [
       { id: "time-signatures", value: manifest.time_signatures },
@@ -151,7 +152,10 @@ function entities(manifest: SongManifest): Record<DiffDomain, Entity[]> {
       ? [
           { id: "composition-intent/song", value: manifest.composition_intent.song },
           ...manifest.composition_intent.sections.map((entry) => ({ id: entry.id, value: entry })),
-          ...manifest.composition_intent.phrase_directions.map((entry) => ({ id: entry.id, value: entry })),
+          ...manifest.composition_intent.phrase_directions.flatMap((entry) => [
+            { id: entry.id, value: { ...entry, listening_question: undefined } },
+            { id: entry.listening_question.id, value: entry.listening_question },
+          ]),
         ]
       : [],
     guidance: manifest.composition_guidance
@@ -162,21 +166,37 @@ function entities(manifest: SongManifest): Record<DiffDomain, Entity[]> {
   };
 }
 
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+export function manifestObjectFingerprints(manifest: SongManifest): Map<string, string> {
+  const fingerprints = new Map<string, string>();
+  for (const entries of Object.values(manifestEntities(manifest))) {
+    for (const entry of entries) {
+      if (fingerprints.has(entry.id)) {
+        throw new Error(`Duplicate manifest history entity ID ${entry.id}`);
+      }
+      fingerprints.set(
+        entry.id,
+        createHash("sha256").update(canonicalManifestValue(entry.value)).digest("hex"),
+      );
+    }
+  }
+  return fingerprints;
+}
+
+export function canonicalManifestValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalManifestValue).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
       .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`)
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalManifestValue(entry)}`)
       .join(",")}}`;
   }
   return JSON.stringify(value);
 }
 
-function compareDomain(from: Entity[], to: Entity[]) {
-  const left = new Map(from.map((entry) => [entry.id, canonical(entry.value)]));
-  const right = new Map(to.map((entry) => [entry.id, canonical(entry.value)]));
+function compareDomain(from: ManifestEntity[], to: ManifestEntity[]) {
+  const left = new Map(from.map((entry) => [entry.id, canonicalManifestValue(entry.value)]));
+  const right = new Map(to.map((entry) => [entry.id, canonicalManifestValue(entry.value)]));
   const added = [...right.keys()].filter((id) => !left.has(id)).sort();
   const removed = [...left.keys()].filter((id) => !right.has(id)).sort();
   const modified = [...right.keys()].filter((id) => left.has(id) && left.get(id) !== right.get(id)).sort();
@@ -188,8 +208,8 @@ export async function diffManifestSnapshots(fromPath: string, toPath: string) {
   if (from.manifest.song_id !== to.manifest.song_id) {
     throw new Error(`Cannot diff different songs ${from.manifest.song_id} and ${to.manifest.song_id}`);
   }
-  const left = entities(from.manifest);
-  const right = entities(to.manifest);
+  const left = manifestEntities(from.manifest);
+  const right = manifestEntities(to.manifest);
   const domains = Object.fromEntries(
     (Object.keys(left) as DiffDomain[]).map((domain) => [domain, compareDomain(left[domain], right[domain])]),
   ) as Record<DiffDomain, ReturnType<typeof compareDomain>>;

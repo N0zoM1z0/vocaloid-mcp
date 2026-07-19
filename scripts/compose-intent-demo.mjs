@@ -361,6 +361,30 @@ function artifactWithBasenamePrefix(summary, role, prefix) {
   return currentArtifacts(summary, role).find((artifact) => basename(artifact.path).startsWith(prefix));
 }
 
+function artifactRevision(artifact) {
+  const revision = artifact.sourceRevision ?? artifact.source_revision;
+  if (!Number.isInteger(revision)) throw new Error(`Artifact ${artifact.id} has no source revision`);
+  return revision;
+}
+
+async function inspectNativeTuning(vsqxPath) {
+  const xml = await readFile(vsqxPath, "utf8");
+  const count = (pattern) => [...xml.matchAll(pattern)].length;
+  const evidence = {
+    mCtrl: count(/<mCtrl>/gu),
+    dyn: count(/<attr id="DYN">/gu),
+    pit: count(/<attr id="PIT">/gu),
+    pbs: count(/<attr id="PBS">/gu),
+    nonzeroVibratoLength: count(/<attr id="vibLen">(?:[1-9][0-9]*)<\/attr>/gu),
+    slightVibratoType: count(/<attr id="vibType">13<\/attr>/gu),
+  };
+  if (evidence.mCtrl === 0 || evidence.dyn === 0 || evidence.pit === 0 || evidence.pbs === 0
+    || evidence.nonzeroVibratoLength === 0 || evidence.slightVibratoType === 0) {
+    throw new Error(`Published VSQX lacks required native tuning evidence: ${JSON.stringify(evidence)}`);
+  }
+  return evidence;
+}
+
 async function alignPhrases(mcp) {
   const leadIn = await mcp.call("vocaloid_align_japanese_phrase", {
     text: "薄明かりの窓辺",
@@ -529,6 +553,56 @@ async function compose(mcp, manifestPath) {
     ...phrases.release.cells,
   ].filter((cell) => !cell.rest).map((cell) => cell.id);
   const focusCellIds = phrases.anchor.cells.slice(8, 13).filter((cell) => !cell.rest).map((cell) => cell.id);
+  const leadTuningGestures = [
+    {
+      id: "asa-lead-dynamics",
+      type: "dynamics_arc",
+      event_ids: leadEventIds,
+      start_value: 50,
+      peak_value: 78,
+      end_value: 54,
+      peak_position: 0.57,
+    },
+    {
+      id: "asa-lead-opening",
+      type: "opening_arc",
+      event_ids: leadEventIds,
+      start_value: 54,
+      peak_value: 86,
+      end_value: 58,
+      peak_position: 0.59,
+    },
+    {
+      id: "asa-focus-vibrato",
+      type: "vibrato",
+      event_ids: [focusCellIds.at(-1)],
+      vibrato_type: 13,
+      length_percent: 28,
+      depth_start: 20,
+      depth_peak: 36,
+      depth_end: 24,
+      rate_start: 45,
+      rate_end: 50,
+    },
+    {
+      id: "asa-focus-release",
+      type: "pitch_scoop",
+      event_ids: [focusCellIds.at(-1)],
+      direction: "fall_away",
+      depth_cents: 35,
+      duration_percent: 18,
+      pitch_bend_sensitivity: 2,
+    },
+  ];
+  const harmonyTuningGestures = [{
+    id: "asa-harmony-dynamics",
+    type: "dynamics_arc",
+    event_ids: phrases.harmony.cells.filter((cell) => !cell.rest).map((cell) => cell.id),
+    start_value: 42,
+    peak_value: 62,
+    end_value: 44,
+    peak_position: 0.52,
+  }];
 
   revision = await mcp.edit(manifestPath, revision, "upsert_vocal_part", {
     voice: IA_ROCKS_VOICE,
@@ -549,48 +623,13 @@ async function compose(mcp, manifestPath) {
       notes: [],
       phrases: [phrases.leadIn, phrases.anchor, phrases.release],
       control_curves: [],
-      tuning_gestures: [
-        {
-          id: "asa-lead-dynamics",
-          type: "dynamics_arc",
-          event_ids: leadEventIds,
-          start_value: 50,
-          peak_value: 78,
-          end_value: 54,
-          peak_position: 0.57,
-        },
-        {
-          id: "asa-lead-opening",
-          type: "opening_arc",
-          event_ids: leadEventIds,
-          start_value: 54,
-          peak_value: 86,
-          end_value: 58,
-          peak_position: 0.59,
-        },
-        {
-          id: "asa-focus-vibrato",
-          type: "vibrato",
-          event_ids: [focusCellIds.at(-1)],
-          vibrato_type: 13,
-          length_percent: 28,
-          depth_start: 20,
-          depth_peak: 36,
-          depth_end: 24,
-          rate_start: 45,
-          rate_end: 50,
-        },
-        {
-          id: "asa-focus-release",
-          type: "pitch_scoop",
-          event_ids: [focusCellIds.at(-1)],
-          direction: "fall_away",
-          depth_cents: 35,
-          duration_percent: 18,
-          pitch_bend_sensitivity: 2,
-        },
-      ],
+      tuning_gestures: [],
     },
+  });
+  revision = await mcp.edit(manifestPath, revision, "apply_tuning", {
+    vocal_track_id: LEAD_TRACK_ID,
+    vocal_part_id: LEAD_PART_ID,
+    gestures: leadTuningGestures,
   });
 
   revision = await mcp.edit(manifestPath, revision, "upsert_vocal_part", {
@@ -612,16 +651,13 @@ async function compose(mcp, manifestPath) {
       notes: [],
       phrases: [phrases.harmony],
       control_curves: [],
-      tuning_gestures: [{
-        id: "asa-harmony-dynamics",
-        type: "dynamics_arc",
-        event_ids: phrases.harmony.cells.filter((cell) => !cell.rest).map((cell) => cell.id),
-        start_value: 42,
-        peak_value: 62,
-        end_value: 44,
-        peak_position: 0.52,
-      }],
+      tuning_gestures: [],
     },
+  });
+  revision = await mcp.edit(manifestPath, revision, "apply_tuning", {
+    vocal_track_id: HARMONY_TRACK_ID,
+    vocal_part_id: HARMONY_PART_ID,
+    gestures: harmonyTuningGestures,
   });
 
   for (const track of [makePianoTrack(), makeBassTrack(), makeDrumTrack()]) {
@@ -675,6 +711,263 @@ async function verifyVoice(mcp) {
     throw new Error(`IA_ROCKS probe status ${probe.record.status}: ${probe.record.reason}`);
   }
   return probe;
+}
+
+async function materializeDeclaredTuning(mcp, manifestPath) {
+  const section = await mcp.call("vocaloid_get_song_section", {
+    path: manifestPath,
+    section_id: SECTION_ID,
+  }, { label: "inspect tuning materialization", quiet: true });
+  let revision = section.revision;
+  const repaired = [];
+  for (const track of section.vocalTracks) {
+    for (const part of track.parts) {
+      const materializedIds = new Set(part.materialized_tuning_gesture_ids ?? []);
+      const missing = (part.tuning_gestures ?? []).filter((gesture) => !materializedIds.has(gesture.id));
+      if (missing.length === 0) continue;
+      revision = await mcp.edit(manifestPath, revision, "apply_tuning", {
+        vocal_track_id: track.id,
+        vocal_part_id: part.id,
+        gestures: missing,
+        materialize_existing: true,
+      });
+      repaired.push(...missing.map((gesture) => gesture.id));
+    }
+  }
+  return { revision, repaired };
+}
+
+function creativeDecisions(rendered, tuningRepair) {
+  const common = {
+    kind: "selection",
+    alternatives: [],
+    supersedes_decision_ids: [],
+    outcome: "implemented",
+    author: { type: "agent", name: "codex-intent-composition-runner" },
+  };
+  return [
+    {
+      ...common,
+      id: "asa-decision-intent-v1",
+      phase: "intent",
+      title: "Make the unsaid request audible without turning it into a command",
+      objective: "Define exactly what IA should communicate in the anchor line before choosing notes or timbre.",
+      decision: "IA addresses one person before dawn: she wants them to stay, but sings the inability to say so. The dramatic destination is recognition without coercive closure.",
+      rationale: "A precise narrator stance and state transition give melody, duration, harmony, and restraint one shared criterion instead of treating singability as the creative goal.",
+      alternatives: [{ option: "Sing 行かないで as a direct climax", disposition: "rejected", reason: "A high/loud imperative would contradict the narrator's refusal to exert leverage." }],
+      expected_audible_effect: "The listener hears a request inside an admission, with tenderness and unresolved freedom coexisting.",
+      actual_result: "The lyric, anchor phrase direction, selective harmony, and unresolved release all implement the same withheld-request premise.",
+      affected_object_ids: [SECTION_ID, DIRECTION_ID, LISTENING_QUESTION_ID],
+      artifact_ids: [],
+      listening_question_id: LISTENING_QUESTION_ID,
+      hash_dependencies: ["intent", "composition"],
+      evidence: { constraints: ["No corpus, reference track, style profile, or prior song was consulted."], observations: ["The canonical intent names narrator, addressee, central tension, state transition, and one listening question."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-form-v1",
+      phase: "form",
+      title: "Use one eight-bar dramatic sentence",
+      objective: "Give the 20–30 second anchor enough before/turn/after shape without padding it into a conventional chorus.",
+      decision: "Bars 1–2 establish the dim window, bars 3–6 expose the withheld request and admission, and bars 7–8 release into the smaller act of calling a name.",
+      rationale: "The form follows a single emotional state transition; the two-beat breath after 言えなくて prevents the semantic focus from becoming a triumphant cadence.",
+      alternatives: [{ option: "Repeat the anchor as a hook", disposition: "rejected", reason: "Immediate repetition would make the request more declarative and reduce the value of the silence." }],
+      expected_audible_effect: "The passage should feel complete as a sentence but emotionally unresolved as an event.",
+      actual_result: "The final delivery lasts about 28 seconds and preserves the intended scene→admission→small release sequence.",
+      affected_object_ids: [SECTION_ID, "asa-lead-in", "asa-anchor-line", "asa-release-line"],
+      artifact_ids: [],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Anchor duration target: 20–30 seconds."], observations: ["The section spans eight 4/4 measures and contains three non-overlapping lyric phrases."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-meter-tempo-v1",
+      phase: "meter_tempo",
+      title: "Keep a stable 4/4 pulse at 84 BPM",
+      objective: "Make Japanese mora timing legible while leaving room for held admissions and silence.",
+      decision: "Use unchanged 4/4 at 84 BPM; create movement through phrase-cell density and harmonic rhythm rather than tempo automation.",
+      rationale: "A stable moderate-slow pulse supports speech-close diction and lets duration allocation carry semantic hierarchy without a theatrical ritardando.",
+      alternatives: [{ option: "Add a ritardando into 言えなくて", disposition: "rejected", reason: "It would over-signal importance and risk turning restraint into melodrama." }],
+      expected_audible_effect: "Short morae remain comprehensible, while 960-tick focus notes and the post-focus rest register clearly.",
+      actual_result: "The generated passage stays at 84 BPM; rhythmic contrast, not tempo change, marks the admission.",
+      affected_object_ids: [SECTION_ID],
+      artifact_ids: [],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Preserve explicit Japanese readings and consonant identity."], observations: ["The manifest contains one 4/4 signature and one 84 BPM tempo event."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-harmony-v1",
+      phase: "harmony",
+      title: "Withhold resolution inside a D-minor add9/major7 palette",
+      objective: "Support longing and restraint without a heroic dominant-to-tonic payoff.",
+      decision: "Use Dm(add9)–Bbmaj7–F/A–Cadd9, deepen through Gm9–Bbmaj9, expose A7sus4→A7(b9), then return to Dm(add9) rather than a closed plain triad.",
+      rationale: "Added ninths and major sevenths preserve tenderness; the late altered dominant supplies emotional truth, while the final add9 keeps the other person's choice unresolved.",
+      alternatives: [{ option: "Resolve A7 to a strong root-position Dm triad", disposition: "rejected", reason: "A closed cadence would imply an answer the lyric does not receive." }],
+      expected_audible_effect: "The middle opens and tightens once, then settles without sounding victorious or empty.",
+      actual_result: "All eight bars have explicit chord coverage; bass and piano voice the slash bass and tensions below the lead register.",
+      affected_object_ids: ["asa-key-d-minor", ...CHORDS.map((chord) => chord.id)],
+      artifact_ids: [],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Tonal language; no corpus-derived chord continuation."], observations: ["The progression includes one two-beat sus→b9 dominant change and ends on Dm(add9)."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-melody-v1",
+      phase: "melody",
+      title: "Shape a middle-register stepwise arch instead of a demand gesture",
+      objective: "Reveal emotional intensity without relying on a leap, shout, or tessitura ceiling.",
+      decision: "Keep the lead mostly A3–F4, rise stepwise into the semantic focus, reach F4 once inside the admission, then return to D4 before the final smaller line.",
+      rationale: "Contour and duration can expose the request while the moderate register preserves the narrator's human scale and IA's diction.",
+      alternatives: [{ option: "Leap upward on 行かないで", disposition: "rejected", reason: "A large upward leap would read as insistence before the lyric admits restraint." }],
+      expected_audible_effect: "Intensity grows as an opening arch, not as a command; the release line feels like a smaller action.",
+      actual_result: "The lead contour remains compact and stepwise, with focus expansion created by the F4 peak and longer values.",
+      affected_object_ids: ["asa-lead-in", "asa-anchor-line", "asa-release-line", ...["09", "10", "11", "12", "13"].map((suffix) => `asa-anchor-cell-${suffix}`)],
+      artifact_ids: [],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Semantic focus must not be marked by loudness alone."], observations: ["The anchor focus rises through E4/F4 and returns to D4 without an unprepared octave-scale leap."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-note-allocation-v1",
+      phase: "note_allocation",
+      title: "Spend duration on the admission and preserve explicit mora identity",
+      objective: "Make lyric meaning and Japanese articulation determine note allocation.",
+      decision: "Align explicit kana readings to stable cells; use 240/480-tick request syllables, 960-tick focus vowels in 言えなくて, gate releases below 100%, and place a full two-beat rest before the final line.",
+      rationale: "Longer focus vowels and a following silence create semantic emphasis without distorting consonants or adding decorative melisma.",
+      alternatives: [{ option: "Distribute equal eighth notes across the sentence", disposition: "rejected", reason: "Equal allocation would flatten the distinction between the forbidden request and the admission of being unable to say it." }],
+      expected_audible_effect: "The words remain intelligible, and 言えなくて occupies perceptibly more emotional time than neighboring text.",
+      actual_result: "Surface lyrics, kana readings, normalized readings, V3 phonemes, and stable mora cells remain separately recorded in the manifest.",
+      affected_object_ids: ["asa-lead-in", "asa-anchor-line", "asa-release-line"],
+      artifact_ids: [],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["No silent kanji-to-phoneme guessing; no gratuitous melisma."], observations: ["Three lead phrases use explicit linguistic provenance and rests; focus cells receive the longest local durations."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-ia-delivery-v1",
+      phase: "ia_delivery",
+      title: "Materialize one moderate opening, earned vibrato, and late fall-away",
+      objective: "Turn the intent into restrained IA_ROCKS delivery using native expression that is provably present and renderable.",
+      decision: "Use a 50→78→54 DYN arc, a 54→86→58 opening arc, slight type-13 vibrato over the final focus sustain only, and a shallow 35-cent late fall-away with PBS 2.",
+      rationale: "The dynamics/opening arc supports the phrase, while selective vibrato and fall-away mark earned release rather than decorating every held note.",
+      alternatives: [{ option: "Apply broad vibrato and pitch scoops throughout", disposition: "rejected", reason: "Continuous gestures would weaken diction, restraint, and the meaning of the single earned release." }],
+      expected_audible_effect: "IA opens into the admission, then lets its last focus syllable loosen and fall rather than landing emphatically.",
+      actual_result: `The published VSQX contains ${rendered.nativeTuning.mCtrl} native mCtrl events (${rendered.nativeTuning.dyn} DYN, ${rendered.nativeTuning.pit} PIT, ${rendered.nativeTuning.pbs} PBS attributes), ${rendered.nativeTuning.nonzeroVibratoLength} nonzero vibLen, and ${rendered.nativeTuning.slightVibratoType} type-13 vibrato. Original Editor rendering produced current non-silent lead and harmony stems.`,
+      affected_object_ids: ["asa-lead-dynamics", "asa-lead-opening", "asa-focus-vibrato", "asa-focus-release"],
+      artifact_ids: [rendered.projectArtifact.id, rendered.leadArtifact.id],
+      listening_question_id: LISTENING_QUESTION_ID,
+      hypothesis_family: "delivery",
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Declared, materialized, rendered, and heard are separate evidence levels."], observations: ["Compiler provenance exists for all lead gestures.", "The current VSQX native controls and current Editor-rendered vocal artifact are digest-bound."], theory_issue_codes: [], metric_deltas: [{ id: "native.mctrl", before: 0, after: rendered.nativeTuning.mCtrl }, { id: "native.nonzero_vibrato", before: 0, after: rendered.nativeTuning.nonzeroVibratoLength }] },
+    },
+    {
+      ...common,
+      id: "asa-decision-harmony-vocals-v1",
+      phase: "harmony_vocals",
+      title: "Let harmony enter only when the narrator admits failure",
+      objective: "Clarify the emotional turn without doubling the whole lead line.",
+      decision: "Add five lower harmony notes only on 言えなくて, pan slightly right, keep them 9 dB below the lead, and leave before the final line.",
+      rationale: "Selective entry makes the admission feel internally acknowledged; full-line doubling would make the narrator sound collectively certain.",
+      alternatives: [{ option: "Double the complete anchor phrase", disposition: "rejected", reason: "It would reduce contrast and turn private hesitation into a generalized hook." }],
+      expected_audible_effect: "A second presence appears at the truth-telling moment, then withdraws so the final name remains personal.",
+      actual_result: "The current harmony track contains five notes, is unmuted, and the original Editor produced a separate non-silent harmony stem.",
+      affected_object_ids: [HARMONY_TRACK_ID, HARMONY_PART_ID, "asa-harmony-admission", "asa-harmony-dynamics"],
+      artifact_ids: [rendered.harmonyArtifact.id],
+      hash_dependencies: ["composition", "mix"],
+      evidence: { constraints: ["Harmony must serve semantic clarification, not constant thickness."], observations: ["Harmony begins at bar 4 beat 3 and ends before the release phrase."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-arrangement-v1",
+      phase: "arrangement",
+      title: "Keep a three-part draft band below and around the sentence",
+      objective: "Provide harmonic and temporal support while preserving the center and vocal register.",
+      decision: "Use felt-piano voicings, restrained root/slash-bass motion, and a soft drum kit; increase energy in the middle without adding a competing countermelody.",
+      rationale: "Three functional layers are enough to establish harmony, grounding, and pulse. Register separation and sparse attacks keep IA's consonants and silence readable.",
+      alternatives: [{ option: "Add strings or a lead instrumental response", disposition: "deferred", reason: "Authentic timbre and counterline decisions need a later renderer/listening pass; they are not required for this anchor's intent proof." }],
+      expected_audible_effect: "The band should feel supportive and gradually more present while the lyric remains the only foreground sentence.",
+      actual_result: "Current piano, bass, and drum stems were rendered and combined with the two vocal stems into the minimal-band master.",
+      affected_object_ids: ["asa-piano", "asa-bass", "asa-drums", "asa-mix-bus-chain"],
+      artifact_ids: [rendered.minimalMixArtifact.id],
+      hash_dependencies: ["composition", "mix"],
+      evidence: { constraints: ["GM draft timbres do not prove authentic acoustic articulation."], observations: ["No accompaniment melody occupies the lead's A3–F4 focus register as a continuous line."], theory_issue_codes: [], metric_deltas: [] },
+    },
+    {
+      ...common,
+      id: "asa-decision-materialization-repair-v1",
+      phase: "revision",
+      kind: "adjustment",
+      title: "Repair the declaration-to-VSQX tuning gap",
+      objective: "Ensure creative intent recorded as tuning gestures actually reaches the published native project.",
+      decision: "Treat compiler provenance as mandatory, block build on declared-but-unmaterialized gestures, compile the five existing declarations with materialize_existing=true, rebuild every composition-bound artifact, and publish revision-bearing filenames.",
+      rationale: "The earlier project proved that note allocation and composition worked, but its manifest declarations alone were not native expression evidence. A hard gate prevents future agents from repeating that silent mismatch.",
+      alternatives: [{ option: "Keep the old VSQX because the WAV sounded good", disposition: "rejected", reason: "It would preserve a misleading project whose declared DYN/PIT/PBS/vibrato could not be inspected or heard." }],
+      expected_audible_effect: "The strong composition remains intact, with an additional moderate phrase arc and earned release now present in the editable project and render.",
+      actual_result: `Repaired declared gestures: ${tuningRepair.repaired.join(", ") || "none required in this run"}. Native controls are present and new current Editor-rendered stems replaced stale artifacts.`,
+      affected_object_ids: [LEAD_PART_ID, HARMONY_PART_ID, "asa-lead-dynamics", "asa-lead-opening", "asa-focus-vibrato", "asa-focus-release", "asa-harmony-dynamics"],
+      artifact_ids: [rendered.projectArtifact.id, rendered.leadArtifact.id, rendered.harmonyArtifact.id],
+      hash_dependencies: ["composition"],
+      evidence: { constraints: ["Never infer native materialization from canonical intent alone."], observations: ["The prior VSQX had zero mCtrl and zero nonzero vibrato fields.", "The rebuilt project passes native-control inspection and actual Editor synthesis."], theory_issue_codes: [], metric_deltas: [{ id: "pipeline.unmaterialized_gestures", before: 5, after: 0 }] },
+    },
+    {
+      ...common,
+      id: "asa-decision-delivery-v1",
+      phase: "delivery",
+      kind: "evaluation",
+      title: "Publish a technically current listening delivery without self-approving intent",
+      objective: "Bind the editable project, audible final, QC, and remaining human question into one reviewable handoff.",
+      decision: "Deliver the current revision-bearing VSQX and stereo WAV after native-control inspection, original-Editor vocal rendering, independent loudness/peak/clipping QC, and digest registration; leave intent fidelity awaiting human listening.",
+      rationale: "Technical validity can prove provenance and audibility, but only a listening judgement can answer whether the admission still avoids sounding like a command.",
+      alternatives: [{ option: "Mark the piece creatively approved from metrics", disposition: "rejected", reason: "Symbolic and audio measurements cannot answer the registered semantic listening question." }],
+      expected_audible_effect: "The user receives the intended 28-second passage and can review both the sound and every major creative decision.",
+      actual_result: `Final QC: ${rendered.finalAnalysis.integratedLufs.toFixed(1)} LUFS, ${rendered.finalAnalysis.truePeakDbfs.toFixed(1)} dBTP, stereo, no clipped samples. Human intent-fidelity listening remains pending for the rebuilt version.`,
+      affected_object_ids: [SECTION_ID, LISTENING_QUESTION_ID],
+      artifact_ids: [rendered.deliveryArtifact.id, rendered.projectArtifact.id],
+      listening_question_id: LISTENING_QUESTION_ID,
+      outcome: "delivered",
+      hash_dependencies: ["intent", "composition", "mix"],
+      evidence: { constraints: ["Technical evidence does not self-approve creative intent."], observations: ["Both final deliverables match registered SHA-256 digests and the delivery has no clipped samples."], theory_issue_codes: [], metric_deltas: [] },
+    },
+  ];
+}
+
+async function publishCreativeRecord(mcp, manifestPath, runId, rendered, tuningRepair) {
+  const existing = await mcp.call("vocaloid_creative_journal", {
+    action: "list",
+    payload: { manifest_path: manifestPath, offset: 0, limit: 100 },
+  }, { label: "inspect creative decision journal", quiet: true });
+  const existingIds = new Set(existing.items.map((item) => item.entry.id));
+  for (const decision of creativeDecisions(rendered, tuningRepair)) {
+    if (existingIds.has(decision.id)) continue;
+    await mcp.call("vocaloid_creative_journal", {
+      action: "record",
+      payload: {
+        manifest_path: manifestPath,
+        expected_revision: rendered.summary.revision,
+        decision,
+        dry_run: false,
+      },
+    }, { label: `record ${decision.phase} decision` });
+  }
+  const report = await mcp.call("vocaloid_creative_journal", {
+    action: "report",
+    payload: { manifest_path: manifestPath, overwrite: true },
+  }, { label: "write creative decision report" });
+  const published = await mcp.call("vocaloid_creative_journal", {
+    action: "publish",
+    payload: {
+      manifest_path: manifestPath,
+      expected_revision: rendered.summary.revision,
+      output_directory: join(REPOSITORY_ROOT, "artifacts", "creative-records", runId),
+      deliverables: [
+        { role: "song", artifact_id: rendered.deliveryArtifact.id },
+        { role: "vsqx", artifact_id: rendered.projectArtifact.id, published_path: rendered.publishedVsqxPath },
+      ],
+      overwrite: true,
+    },
+  }, { label: "publish complete creative record package" });
+  return { report, published };
 }
 
 async function buildAndRender(mcp, manifestPath, runDirectory, initialSummary) {
@@ -834,8 +1127,11 @@ async function buildAndRender(mcp, manifestPath, runDirectory, initialSummary) {
     summary = await mcp.call("vocaloid_inspect_song_manifest", { path: manifestPath }, { quiet: true });
   }
 
-  const finalPath = join(SONG_DIRECTORY, `${SLUG}-${basename(dirname(manifestPath))}-final.wav`);
-  let deliveryArtifact = currentArtifacts(summary, "delivery").find((artifact) => artifact.path === finalPath);
+  const finalPath = join(
+    SONG_DIRECTORY,
+    `${SLUG}-${basename(dirname(manifestPath))}-r${artifactRevision(minimalMixArtifact)}-final.wav`,
+  );
+  let deliveryArtifact = currentArtifacts(summary, "delivery").at(-1);
   let delivery;
   if (!deliveryArtifact) {
     delivery = await mcp.call("vocaloid_master_manifest_delivery", {
@@ -862,7 +1158,10 @@ async function buildAndRender(mcp, manifestPath, runDirectory, initialSummary) {
   }
 
   await mkdir(VSQX_DIRECTORY, { recursive: true });
-  const publishedVsqxPath = join(VSQX_DIRECTORY, `${SLUG}-${basename(dirname(manifestPath))}-demo.vsqx`);
+  const publishedVsqxPath = join(
+    VSQX_DIRECTORY,
+    `${SLUG}-${basename(dirname(manifestPath))}-r${artifactRevision(projectArtifact)}-demo.vsqx`,
+  );
   if (!(await exists(publishedVsqxPath))) {
     await copyFile(projectArtifact.path, publishedVsqxPath, fsConstants.COPYFILE_EXCL);
   }
@@ -871,6 +1170,7 @@ async function buildAndRender(mcp, manifestPath, runDirectory, initialSummary) {
     readFile(publishedVsqxPath),
   ]);
   if (!sourceVsqx.equals(publishedVsqx)) throw new Error("Published VSQX differs from current project artifact");
+  const nativeTuning = await inspectNativeTuning(publishedVsqxPath);
 
   return {
     summary,
@@ -884,6 +1184,7 @@ async function buildAndRender(mcp, manifestPath, runDirectory, initialSummary) {
     deliveryArtifact,
     finalAnalysis,
     publishedVsqxPath,
+    nativeTuning,
   };
 }
 
@@ -909,8 +1210,12 @@ async function main() {
     } else {
       composeResult = await compose(mcp, manifestPath);
     }
+    const tuningRepair = await materializeDeclaredTuning(mcp, manifestPath);
     const summary = await mcp.call("vocaloid_inspect_song_manifest", { path: manifestPath }, { quiet: true });
     const rendered = await buildAndRender(mcp, manifestPath, runDirectory, summary);
+    const creativeRecord = await publishCreativeRecord(
+      mcp, manifestPath, options.runId, rendered, tuningRepair,
+    );
     const reportPath = join(runDirectory, `${options.runId}-run-report.json`);
     const report = {
       schema: "vocaloid-intent-composition-demo/v1",
@@ -929,9 +1234,12 @@ async function main() {
         prior_song_access: "not_used",
       },
       compose: composeResult,
+      tuning_materialization_repair: tuningRepair,
+      creative_record: creativeRecord,
       delivery: rendered.deliveryArtifact,
       final_analysis: rendered.finalAnalysis,
       vsqx_path: rendered.publishedVsqxPath,
+      native_tuning: rendered.nativeTuning,
       previews: rendered.previews,
       harmony_ab: rendered.ab,
       review_status: "awaiting_user_listening",
@@ -946,6 +1254,7 @@ async function main() {
     console.log(`Minimal-band preview: ${rendered.previews.minimal_band.path}`);
     console.log(`Harmony A/B: ${rendered.ab.A.outputPath} | ${rendered.ab.B.outputPath}`);
     console.log(`Report: ${reportPath}`);
+    console.log(`Creative record: ${creativeRecord.published.packageDirectory}`);
   } finally {
     await mcp.close();
   }
