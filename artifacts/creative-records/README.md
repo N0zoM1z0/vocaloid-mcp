@@ -17,3 +17,6 @@ Current cold-start records include:
 - `kaze-wa-na-o-yobanai-ia-20260719/`: original-IA swordsmen-on-the-cliff
   transfer test, with phrase-grammar/corpus isolation and 23 hash-chained
   decisions.
+- `natsu-ame-semi-ia-rocks-20260719/`: 190 BPM IA_ROCKS summer-rain
+  cold-start test, with 24 hash-chained decisions and a pending human listening
+  disposition.
