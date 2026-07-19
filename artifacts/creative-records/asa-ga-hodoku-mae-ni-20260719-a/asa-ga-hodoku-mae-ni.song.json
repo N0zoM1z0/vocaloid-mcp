@@ -1,0 +1,3802 @@
+{
+  "schema": "vocaloid-song-manifest/v1",
+  "revision": 41,
+  "composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+  "mix_hash": "6b8fca0efa64447b2f8e1252fadb018fd0e2ad7d5ca01c15db413ac50df1ebf7",
+  "content_hash": "3760b24dd353de741e1b0721821204bf7932ed55c27a3f8ec2f74ad0237b89cc",
+  "parent_hash": "341bdc4855f58a47adff4f37add4eee0300689f3d2076b5d7b58e83e1bbc54a0",
+  "song_id": "asa-ga-hodoku-mae-ni",
+  "slug": "asa-ga-hodoku-mae-ni",
+  "title": "朝がほどく前に",
+  "format": "vsq3",
+  "pre_measure": 1,
+  "created_at": "2026-07-19T01:46:27.833Z",
+  "updated_at": "2026-07-19T03:39:42.064Z",
+  "time_signatures": [
+    {
+      "measure": 0,
+      "numerator": 4,
+      "denominator": 4
+    }
+  ],
+  "tempos": [
+    {
+      "position": {
+        "measure": 0,
+        "beat": 0,
+        "tick": 0
+      },
+      "bpm": 84
+    }
+  ],
+  "sections": [
+    {
+      "id": "anchor-passage",
+      "name": "Anchor Passage",
+      "kind": "chorus",
+      "start": {
+        "measure": 0,
+        "beat": 0,
+        "tick": 0
+      },
+      "end": {
+        "measure": 8,
+        "beat": 0,
+        "tick": 0
+      },
+      "energy": 0.58,
+      "description": "A contained admission opens once, then releases without turning into a command."
+    }
+  ],
+  "harmony": {
+    "key_changes": [
+      {
+        "id": "asa-key-d-minor",
+        "position": {
+          "measure": 0,
+          "beat": 0,
+          "tick": 0
+        },
+        "tonic": "D",
+        "mode": "minor"
+      }
+    ],
+    "chord_changes": [
+      {
+        "id": "asa-chord-00-dmadd9",
+        "position": {
+          "measure": 0,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Dm(add9)",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-01-bbmaj7",
+        "position": {
+          "measure": 1,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Bbmaj7",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-02-f-over-a",
+        "position": {
+          "measure": 2,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "F/A",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-03-cadd9",
+        "position": {
+          "measure": 3,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Cadd9",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-04-gm9",
+        "position": {
+          "measure": 4,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Gm9",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-05-bbmaj9",
+        "position": {
+          "measure": 5,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Bbmaj9",
+        "duration_ticks": 1920
+      },
+      {
+        "id": "asa-chord-06-a7sus4",
+        "position": {
+          "measure": 6,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "A7sus4",
+        "duration_ticks": 960
+      },
+      {
+        "id": "asa-chord-06-a7b9",
+        "position": {
+          "measure": 6,
+          "beat": 2,
+          "tick": 0
+        },
+        "symbol": "A7(b9)",
+        "duration_ticks": 960
+      },
+      {
+        "id": "asa-chord-07-dmadd9",
+        "position": {
+          "measure": 7,
+          "beat": 0,
+          "tick": 0
+        },
+        "symbol": "Dm(add9)",
+        "duration_ticks": 1920
+      }
+    ]
+  },
+  "voices": [
+    {
+      "id": "voice-ia-rocks",
+      "name": "IA_ROCKS",
+      "component_id": "BDREB7P2KTWKYDC5",
+      "bank_select": 0,
+      "program_change": 0,
+      "parameters": {}
+    }
+  ],
+  "vocal_tracks": [
+    {
+      "id": "asa-lead",
+      "name": "IA_ROCKS Lead — 朝がほどく前に",
+      "comment": "Primary intent-bearing performance; all surface lyrics retain explicit kana provenance.",
+      "voice_id": "voice-ia-rocks",
+      "mixer": {
+        "volume": 0,
+        "pan": 64,
+        "mute": false,
+        "solo": false,
+        "send_level": -898,
+        "send_enabled": false
+      },
+      "parts": [
+        {
+          "id": "asa-lead-part",
+          "section_id": "anchor-passage",
+          "name": "朝がほどく前に Lead",
+          "comment": "New theory-first composition; no corpus, style profile, reference track, or prior song was consulted.",
+          "start": {
+            "measure": 0,
+            "beat": 0,
+            "tick": 0
+          },
+          "end": {
+            "measure": 8,
+            "beat": 0,
+            "tick": 0
+          },
+          "notes": [],
+          "phrases": [
+            {
+              "id": "asa-lead-in",
+              "start": {
+                "measure": 0,
+                "beat": 0,
+                "tick": 0
+              },
+              "allocation": "sequential",
+              "lyrics": [
+                {
+                  "id": "asa-lead-in-mora-0001",
+                  "lyric": "う",
+                  "phonemes": "M",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0002",
+                  "lyric": "す",
+                  "phonemes": "s M",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0003",
+                  "lyric": "あ",
+                  "phonemes": "a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0004",
+                  "lyric": "か",
+                  "phonemes": "k a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0005",
+                  "lyric": "り",
+                  "phonemes": "4' i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0006",
+                  "lyric": "の",
+                  "phonemes": "n o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0007",
+                  "lyric": "ま",
+                  "phonemes": "m a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0008",
+                  "lyric": "ど",
+                  "phonemes": "d o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-lead-in-mora-0009",
+                  "lyric": "べ",
+                  "phonemes": "b e",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "asa-lead-in-cell-01",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 54
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-02",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 55
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-03",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 56
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-04",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 57
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-05",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 59
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-06",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 61
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-07",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 63
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-08",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 64
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-09",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 66
+                  }
+                },
+                {
+                  "id": "asa-lead-in-cell-10",
+                  "duration": 240,
+                  "rest": true,
+                  "gate_percent": 100,
+                  "velocity": 64,
+                  "style": {}
+                }
+              ],
+              "linguistic_source": {
+                "language": "ja",
+                "text": "薄明かりの窓辺",
+                "reading": "うすあかりのまどべ",
+                "normalized_reading": "うすあかりのまどべ",
+                "affricate_mode": "position",
+                "g_mode": "plosive",
+                "sokuon_strategy": "not_needed"
+              }
+            },
+            {
+              "id": "asa-anchor-line",
+              "start": {
+                "measure": 2,
+                "beat": 0,
+                "tick": 0
+              },
+              "allocation": "sequential",
+              "lyrics": [
+                {
+                  "id": "asa-anchor-line-mora-0001",
+                  "lyric": "ま",
+                  "phonemes": "m a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0002",
+                  "lyric": "だ",
+                  "phonemes": "d a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0003",
+                  "lyric": "い",
+                  "phonemes": "i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0004",
+                  "lyric": "か",
+                  "phonemes": "k a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0005",
+                  "lyric": "な",
+                  "phonemes": "n a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0006",
+                  "lyric": "い",
+                  "phonemes": "i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0007",
+                  "lyric": "で",
+                  "phonemes": "d e",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0008",
+                  "lyric": "と",
+                  "phonemes": "t o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0009",
+                  "lyric": "い",
+                  "phonemes": "i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0010",
+                  "lyric": "え",
+                  "phonemes": "e",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0011",
+                  "lyric": "な",
+                  "phonemes": "n a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0012",
+                  "lyric": "く",
+                  "phonemes": "k M",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-anchor-line-mora-0013",
+                  "lyric": "て",
+                  "phonemes": "t e",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "asa-anchor-cell-01",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 68
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-02",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 69
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-03",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 70
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-04",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 71
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-05",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 72
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-06",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 73
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-07",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 75
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-08",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 76
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-09",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 64,
+                  "gate_percent": 88,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 58,
+                    "opening": 78
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-10",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 65,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 80
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-11",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 64,
+                  "gate_percent": 88,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 58,
+                    "opening": 83
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-12",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 85
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-13",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 83
+                  },
+                  "vibrato": {
+                    "type": 13,
+                    "length": 28,
+                    "depth": [
+                      {
+                        "position": 0,
+                        "value": 20
+                      },
+                      {
+                        "position": 32768,
+                        "value": 36
+                      },
+                      {
+                        "position": 65536,
+                        "value": 24
+                      }
+                    ],
+                    "rate": [
+                      {
+                        "position": 0,
+                        "value": 45
+                      },
+                      {
+                        "position": 65536,
+                        "value": 50
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "asa-anchor-cell-14",
+                  "duration": 960,
+                  "rest": true,
+                  "gate_percent": 100,
+                  "velocity": 64,
+                  "style": {}
+                }
+              ],
+              "linguistic_source": {
+                "language": "ja",
+                "text": "まだ行かないでと言えなくて",
+                "reading": "まだいかないでといえなくて",
+                "normalized_reading": "まだいかないでといえなくて",
+                "affricate_mode": "position",
+                "g_mode": "plosive",
+                "sokuon_strategy": "not_needed"
+              }
+            },
+            {
+              "id": "asa-release-line",
+              "start": {
+                "measure": 6,
+                "beat": 0,
+                "tick": 0
+              },
+              "allocation": "sequential",
+              "lyrics": [
+                {
+                  "id": "asa-release-line-mora-0001",
+                  "lyric": "た",
+                  "phonemes": "t a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0002",
+                  "lyric": "だ",
+                  "phonemes": "d a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0003",
+                  "lyric": "な",
+                  "phonemes": "n a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0004",
+                  "lyric": "ま",
+                  "phonemes": "m a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0005",
+                  "lyric": "え",
+                  "phonemes": "e",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0006",
+                  "lyric": "を",
+                  "phonemes": "o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0007",
+                  "lyric": "よ",
+                  "phonemes": "j o",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0008",
+                  "lyric": "ん",
+                  "phonemes": "N\\",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-release-line-mora-0009",
+                  "lyric": "だ",
+                  "phonemes": "d a",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "asa-release-cell-01",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 74
+                  }
+                },
+                {
+                  "id": "asa-release-cell-02",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 57,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 73
+                  }
+                },
+                {
+                  "id": "asa-release-cell-03",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 72
+                  }
+                },
+                {
+                  "id": "asa-release-cell-04",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 61,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 70
+                  }
+                },
+                {
+                  "id": "asa-release-cell-05",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 64,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 68
+                  }
+                },
+                {
+                  "id": "asa-release-cell-06",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 65
+                  }
+                },
+                {
+                  "id": "asa-release-cell-07",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 65,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 63
+                  }
+                },
+                {
+                  "id": "asa-release-cell-08",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 64,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 61
+                  }
+                },
+                {
+                  "id": "asa-release-cell-09",
+                  "duration": 240,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 88,
+                  "velocity": 64,
+                  "style": {
+                    "accent": 42,
+                    "decay": 58,
+                    "opening": 59
+                  }
+                },
+                {
+                  "id": "asa-release-cell-10",
+                  "duration": 240,
+                  "rest": true,
+                  "gate_percent": 100,
+                  "velocity": 64,
+                  "style": {}
+                }
+              ],
+              "linguistic_source": {
+                "language": "ja",
+                "text": "ただ名前を呼んだ",
+                "reading": "ただなまえをよんだ",
+                "normalized_reading": "ただなまえをよんだ",
+                "affricate_mode": "position",
+                "g_mode": "plosive",
+                "sokuon_strategy": "not_needed"
+              }
+            }
+          ],
+          "control_curves": [
+            {
+              "id": "asa-lead-dynamics-dyn-curve",
+              "curve": "DYN",
+              "points": [
+                {
+                  "id": "asa-lead-dynamics-dyn-3b34fc582f",
+                  "position": {
+                    "measure": 0,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 50
+                },
+                {
+                  "id": "asa-lead-dynamics-dyn-a737d7e9ac",
+                  "position": {
+                    "measure": 4,
+                    "beat": 1,
+                    "tick": 441
+                  },
+                  "value": 78
+                },
+                {
+                  "id": "asa-lead-dynamics-dyn-3773d9bfbf",
+                  "position": {
+                    "measure": 7,
+                    "beat": 3,
+                    "tick": 210
+                  },
+                  "value": 54
+                }
+              ]
+            },
+            {
+              "id": "asa-focus-release-pbs-curve",
+              "curve": "PBS",
+              "points": [
+                {
+                  "id": "asa-focus-release-pbs-dee3214885",
+                  "position": {
+                    "measure": 5,
+                    "beat": 0,
+                    "tick": 0
+                  },
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "asa-focus-release-pit-curve",
+              "curve": "PIT",
+              "points": [
+                {
+                  "id": "asa-focus-release-pit-0aa6ecdfa8",
+                  "position": {
+                    "measure": 5,
+                    "beat": 1,
+                    "tick": 275
+                  },
+                  "value": 0
+                },
+                {
+                  "id": "asa-focus-release-pit-af0b9a6657",
+                  "position": {
+                    "measure": 5,
+                    "beat": 1,
+                    "tick": 440
+                  },
+                  "value": -1434
+                },
+                {
+                  "id": "asa-focus-release-pit-fa99515d7f",
+                  "position": {
+                    "measure": 5,
+                    "beat": 1,
+                    "tick": 441
+                  },
+                  "value": 0
+                }
+              ]
+            }
+          ],
+          "tuning_gestures": [
+            {
+              "id": "asa-lead-dynamics",
+              "type": "dynamics_arc",
+              "event_ids": [
+                "asa-lead-in-cell-01",
+                "asa-lead-in-cell-02",
+                "asa-lead-in-cell-03",
+                "asa-lead-in-cell-04",
+                "asa-lead-in-cell-05",
+                "asa-lead-in-cell-06",
+                "asa-lead-in-cell-07",
+                "asa-lead-in-cell-08",
+                "asa-lead-in-cell-09",
+                "asa-anchor-cell-01",
+                "asa-anchor-cell-02",
+                "asa-anchor-cell-03",
+                "asa-anchor-cell-04",
+                "asa-anchor-cell-05",
+                "asa-anchor-cell-06",
+                "asa-anchor-cell-07",
+                "asa-anchor-cell-08",
+                "asa-anchor-cell-09",
+                "asa-anchor-cell-10",
+                "asa-anchor-cell-11",
+                "asa-anchor-cell-12",
+                "asa-anchor-cell-13",
+                "asa-release-cell-01",
+                "asa-release-cell-02",
+                "asa-release-cell-03",
+                "asa-release-cell-04",
+                "asa-release-cell-05",
+                "asa-release-cell-06",
+                "asa-release-cell-07",
+                "asa-release-cell-08",
+                "asa-release-cell-09"
+              ],
+              "start_value": 50,
+              "peak_value": 78,
+              "end_value": 54,
+              "peak_position": 0.57
+            },
+            {
+              "id": "asa-lead-opening",
+              "type": "opening_arc",
+              "event_ids": [
+                "asa-lead-in-cell-01",
+                "asa-lead-in-cell-02",
+                "asa-lead-in-cell-03",
+                "asa-lead-in-cell-04",
+                "asa-lead-in-cell-05",
+                "asa-lead-in-cell-06",
+                "asa-lead-in-cell-07",
+                "asa-lead-in-cell-08",
+                "asa-lead-in-cell-09",
+                "asa-anchor-cell-01",
+                "asa-anchor-cell-02",
+                "asa-anchor-cell-03",
+                "asa-anchor-cell-04",
+                "asa-anchor-cell-05",
+                "asa-anchor-cell-06",
+                "asa-anchor-cell-07",
+                "asa-anchor-cell-08",
+                "asa-anchor-cell-09",
+                "asa-anchor-cell-10",
+                "asa-anchor-cell-11",
+                "asa-anchor-cell-12",
+                "asa-anchor-cell-13",
+                "asa-release-cell-01",
+                "asa-release-cell-02",
+                "asa-release-cell-03",
+                "asa-release-cell-04",
+                "asa-release-cell-05",
+                "asa-release-cell-06",
+                "asa-release-cell-07",
+                "asa-release-cell-08",
+                "asa-release-cell-09"
+              ],
+              "start_value": 54,
+              "peak_value": 86,
+              "end_value": 58,
+              "peak_position": 0.59
+            },
+            {
+              "id": "asa-focus-vibrato",
+              "type": "vibrato",
+              "event_ids": [
+                "asa-anchor-cell-13"
+              ],
+              "vibrato_type": 13,
+              "length_percent": 28,
+              "depth_start": 20,
+              "depth_peak": 36,
+              "depth_end": 24,
+              "rate_start": 45,
+              "rate_end": 50
+            },
+            {
+              "id": "asa-focus-release",
+              "type": "pitch_scoop",
+              "event_ids": [
+                "asa-anchor-cell-13"
+              ],
+              "direction": "fall_away",
+              "depth_cents": 35,
+              "duration_percent": 18,
+              "pitch_bend_sensitivity": 2
+            }
+          ],
+          "materialized_tuning_gesture_ids": [
+            "asa-lead-dynamics",
+            "asa-lead-opening",
+            "asa-focus-vibrato",
+            "asa-focus-release"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "asa-harmony",
+      "name": "IA_ROCKS Selective Harmony — 朝がほどく前に",
+      "comment": "A lower harmony enters only on the admission; it is not a full-line double.",
+      "voice_id": "voice-ia-rocks",
+      "mixer": {
+        "volume": -90,
+        "pan": 76,
+        "mute": false,
+        "solo": false,
+        "send_level": -898,
+        "send_enabled": false
+      },
+      "parts": [
+        {
+          "id": "asa-harmony-part",
+          "section_id": "anchor-passage",
+          "name": "朝がほどく前に Admission Harmony",
+          "comment": "Lower diatonic support on 言えなくて only; exits before the release line.",
+          "start": {
+            "measure": 3,
+            "beat": 2,
+            "tick": 0
+          },
+          "end": {
+            "measure": 6,
+            "beat": 0,
+            "tick": 0
+          },
+          "notes": [],
+          "phrases": [
+            {
+              "id": "asa-harmony-admission",
+              "start": {
+                "measure": 3,
+                "beat": 2,
+                "tick": 0
+              },
+              "allocation": "sequential",
+              "lyrics": [
+                {
+                  "id": "asa-harmony-admission-mora-0001",
+                  "lyric": "い",
+                  "phonemes": "i",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-harmony-admission-mora-0002",
+                  "lyric": "え",
+                  "phonemes": "e",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-harmony-admission-mora-0003",
+                  "lyric": "な",
+                  "phonemes": "n a",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-harmony-admission-mora-0004",
+                  "lyric": "く",
+                  "phonemes": "k M",
+                  "phoneme_locked": true
+                },
+                {
+                  "id": "asa-harmony-admission-mora-0005",
+                  "lyric": "て",
+                  "phonemes": "t e",
+                  "phoneme_locked": true
+                }
+              ],
+              "cells": [
+                {
+                  "id": "asa-harmony-cell-01",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 58,
+                    "opening": 74
+                  }
+                },
+                {
+                  "id": "asa-harmony-cell-02",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 62,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 74
+                  }
+                },
+                {
+                  "id": "asa-harmony-cell-03",
+                  "duration": 480,
+                  "rest": false,
+                  "note_number": 60,
+                  "gate_percent": 88,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 58,
+                    "opening": 74
+                  }
+                },
+                {
+                  "id": "asa-harmony-cell-04",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 74
+                  }
+                },
+                {
+                  "id": "asa-harmony-cell-05",
+                  "duration": 960,
+                  "rest": false,
+                  "note_number": 58,
+                  "gate_percent": 96,
+                  "velocity": 58,
+                  "style": {
+                    "accent": 52,
+                    "decay": 46,
+                    "opening": 74
+                  }
+                }
+              ],
+              "linguistic_source": {
+                "language": "ja",
+                "text": "言えなくて",
+                "reading": "いえなくて",
+                "normalized_reading": "いえなくて",
+                "affricate_mode": "position",
+                "g_mode": "plosive",
+                "sokuon_strategy": "not_needed"
+              }
+            }
+          ],
+          "control_curves": [
+            {
+              "id": "asa-harmony-dynamics-dyn-curve",
+              "curve": "DYN",
+              "points": [
+                {
+                  "id": "asa-harmony-dynamics-dyn-e12419fee6",
+                  "position": {
+                    "measure": 3,
+                    "beat": 2,
+                    "tick": 0
+                  },
+                  "value": 42
+                },
+                {
+                  "id": "asa-harmony-dynamics-dyn-0761bc1551",
+                  "position": {
+                    "measure": 4,
+                    "beat": 2,
+                    "tick": 56
+                  },
+                  "value": 62
+                },
+                {
+                  "id": "asa-harmony-dynamics-dyn-917832619d",
+                  "position": {
+                    "measure": 5,
+                    "beat": 1,
+                    "tick": 440
+                  },
+                  "value": 44
+                }
+              ]
+            }
+          ],
+          "tuning_gestures": [
+            {
+              "id": "asa-harmony-dynamics",
+              "type": "dynamics_arc",
+              "event_ids": [
+                "asa-harmony-cell-01",
+                "asa-harmony-cell-02",
+                "asa-harmony-cell-03",
+                "asa-harmony-cell-04",
+                "asa-harmony-cell-05"
+              ],
+              "start_value": 42,
+              "peak_value": 62,
+              "end_value": 44,
+              "peak_position": 0.52
+            }
+          ],
+          "materialized_tuning_gesture_ids": [
+            "asa-harmony-dynamics"
+          ]
+        }
+      ]
+    }
+  ],
+  "accompaniment": {
+    "sample_rate": 44100,
+    "gain": 0.2,
+    "reverb": true,
+    "chorus": true,
+    "tracks": [
+      {
+        "kind": "pitched",
+        "id": "asa-piano",
+        "name": "Felt Piano — harmonic breath",
+        "bank_msb": 0,
+        "bank_lsb": 0,
+        "program": 0,
+        "volume": 88,
+        "pan": 54,
+        "notes": [
+          {
+            "id": "asa-piano-m0-b0-v1",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 50,
+            "velocity": 44
+          },
+          {
+            "id": "asa-piano-m0-b0-v2",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 47
+          },
+          {
+            "id": "asa-piano-m0-b0-v3",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 64,
+            "velocity": 50
+          },
+          {
+            "id": "asa-piano-m0-b0-v4",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 65,
+            "velocity": 53
+          },
+          {
+            "id": "asa-piano-m1-b0-v1",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 46,
+            "velocity": 44
+          },
+          {
+            "id": "asa-piano-m1-b0-v2",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 53,
+            "velocity": 47
+          },
+          {
+            "id": "asa-piano-m1-b0-v3",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 50
+          },
+          {
+            "id": "asa-piano-m1-b0-v4",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 62,
+            "velocity": 53
+          },
+          {
+            "id": "asa-piano-m2-b0-v1",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 45,
+            "velocity": 44
+          },
+          {
+            "id": "asa-piano-m2-b0-v2",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 53,
+            "velocity": 47
+          },
+          {
+            "id": "asa-piano-m2-b0-v3",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 50
+          },
+          {
+            "id": "asa-piano-m2-b0-v4",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 60,
+            "velocity": 53
+          },
+          {
+            "id": "asa-piano-m3-b0-v1",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 48,
+            "velocity": 44
+          },
+          {
+            "id": "asa-piano-m3-b0-v2",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 55,
+            "velocity": 47
+          },
+          {
+            "id": "asa-piano-m3-b0-v3",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 62,
+            "velocity": 50
+          },
+          {
+            "id": "asa-piano-m3-b0-v4",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 64,
+            "velocity": 53
+          },
+          {
+            "id": "asa-piano-m4-b0-v1",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 43,
+            "velocity": 49
+          },
+          {
+            "id": "asa-piano-m4-b0-v2",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 50,
+            "velocity": 52
+          },
+          {
+            "id": "asa-piano-m4-b0-v3",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 53,
+            "velocity": 55
+          },
+          {
+            "id": "asa-piano-m4-b0-v4",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 58
+          },
+          {
+            "id": "asa-piano-m4-b0-v5",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 58,
+            "velocity": 61
+          },
+          {
+            "id": "asa-piano-m5-b0-v1",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 46,
+            "velocity": 49
+          },
+          {
+            "id": "asa-piano-m5-b0-v2",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 53,
+            "velocity": 52
+          },
+          {
+            "id": "asa-piano-m5-b0-v3",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 55
+          },
+          {
+            "id": "asa-piano-m5-b0-v4",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 60,
+            "velocity": 58
+          },
+          {
+            "id": "asa-piano-m5-b0-v5",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 62,
+            "velocity": 61
+          },
+          {
+            "id": "asa-piano-m6-b0-v1",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 45,
+            "velocity": 49
+          },
+          {
+            "id": "asa-piano-m6-b0-v2",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 50,
+            "velocity": 52
+          },
+          {
+            "id": "asa-piano-m6-b0-v3",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 52,
+            "velocity": 55
+          },
+          {
+            "id": "asa-piano-m6-b0-v4",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 55,
+            "velocity": 58
+          },
+          {
+            "id": "asa-piano-m6-b2-v1",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 45,
+            "velocity": 49
+          },
+          {
+            "id": "asa-piano-m6-b2-v2",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 49,
+            "velocity": 52
+          },
+          {
+            "id": "asa-piano-m6-b2-v3",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 52,
+            "velocity": 55
+          },
+          {
+            "id": "asa-piano-m6-b2-v4",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 55,
+            "velocity": 58
+          },
+          {
+            "id": "asa-piano-m6-b2-v5",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 58,
+            "velocity": 61
+          },
+          {
+            "id": "asa-piano-m7-b0-v1",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 50,
+            "velocity": 44
+          },
+          {
+            "id": "asa-piano-m7-b0-v2",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 57,
+            "velocity": 47
+          },
+          {
+            "id": "asa-piano-m7-b0-v3",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 64,
+            "velocity": 50
+          },
+          {
+            "id": "asa-piano-m7-b0-v4",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1800,
+            "note_number": 65,
+            "velocity": 53
+          }
+        ],
+        "patterns": [],
+        "placements": []
+      },
+      {
+        "kind": "pitched",
+        "id": "asa-bass",
+        "name": "Finger Bass — restrained root motion",
+        "bank_msb": 0,
+        "bank_lsb": 0,
+        "program": 33,
+        "volume": 90,
+        "pan": 64,
+        "notes": [
+          {
+            "id": "asa-bass-m0-root",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 38,
+            "velocity": 48
+          },
+          {
+            "id": "asa-bass-m1-root",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 34,
+            "velocity": 48
+          },
+          {
+            "id": "asa-bass-m2-root",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 33,
+            "velocity": 58
+          },
+          {
+            "id": "asa-bass-m3-root",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 36,
+            "velocity": 58
+          },
+          {
+            "id": "asa-bass-m4-root",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 31,
+            "velocity": 58
+          },
+          {
+            "id": "asa-bass-m5-root",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 34,
+            "velocity": 58
+          },
+          {
+            "id": "asa-bass-m6-root",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 33,
+            "velocity": 62
+          },
+          {
+            "id": "asa-bass-m6-dominant",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "duration": 900,
+            "note_number": 33,
+            "velocity": 64
+          },
+          {
+            "id": "asa-bass-m7-root",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "duration": 1320,
+            "note_number": 38,
+            "velocity": 62
+          },
+          {
+            "id": "asa-bass-m7-fifth",
+            "position": {
+              "measure": 7,
+              "beat": 3,
+              "tick": 0
+            },
+            "duration": 360,
+            "note_number": 33,
+            "velocity": 45
+          }
+        ],
+        "patterns": [],
+        "placements": []
+      },
+      {
+        "kind": "drums",
+        "id": "asa-drums",
+        "name": "Soft Kit — pulse, not pressure",
+        "hits": [
+          {
+            "id": "asa-drum-m0-kick-0-0",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 46,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m0-side-2-0",
+            "position": {
+              "measure": 0,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 40,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m0-hat1-0-240",
+            "position": {
+              "measure": 0,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m0-hat3-1-240",
+            "position": {
+              "measure": 0,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m0-hat5-2-240",
+            "position": {
+              "measure": 0,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m0-hat7-3-240",
+            "position": {
+              "measure": 0,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-kick-0-0",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 46,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-side-2-0",
+            "position": {
+              "measure": 1,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 40,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-hat1-0-240",
+            "position": {
+              "measure": 1,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-hat3-1-240",
+            "position": {
+              "measure": 1,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-hat5-2-240",
+            "position": {
+              "measure": 1,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m1-hat7-3-240",
+            "position": {
+              "measure": 1,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-kick-0-0",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 62,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-side-2-0",
+            "position": {
+              "measure": 2,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 56,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat0-0-0",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat1-0-240",
+            "position": {
+              "measure": 2,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat2-1-0",
+            "position": {
+              "measure": 2,
+              "beat": 1,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat3-1-240",
+            "position": {
+              "measure": 2,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat4-2-0",
+            "position": {
+              "measure": 2,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat5-2-240",
+            "position": {
+              "measure": 2,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat6-3-0",
+            "position": {
+              "measure": 2,
+              "beat": 3,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m2-hat7-3-240",
+            "position": {
+              "measure": 2,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-kick-0-0",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 62,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-side-2-0",
+            "position": {
+              "measure": 3,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 56,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat0-0-0",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat1-0-240",
+            "position": {
+              "measure": 3,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat2-1-0",
+            "position": {
+              "measure": 3,
+              "beat": 1,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat3-1-240",
+            "position": {
+              "measure": 3,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat4-2-0",
+            "position": {
+              "measure": 3,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat5-2-240",
+            "position": {
+              "measure": 3,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat6-3-0",
+            "position": {
+              "measure": 3,
+              "beat": 3,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m3-hat7-3-240",
+            "position": {
+              "measure": 3,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-kick-0-0",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 62,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-side-2-0",
+            "position": {
+              "measure": 4,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 56,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat0-0-0",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat1-0-240",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat2-1-0",
+            "position": {
+              "measure": 4,
+              "beat": 1,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat3-1-240",
+            "position": {
+              "measure": 4,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat4-2-0",
+            "position": {
+              "measure": 4,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat5-2-240",
+            "position": {
+              "measure": 4,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat6-3-0",
+            "position": {
+              "measure": 4,
+              "beat": 3,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-hat7-3-240",
+            "position": {
+              "measure": 4,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-kick-0-0",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 62,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-side-2-0",
+            "position": {
+              "measure": 5,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 56,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat0-0-0",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat1-0-240",
+            "position": {
+              "measure": 5,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat2-1-0",
+            "position": {
+              "measure": 5,
+              "beat": 1,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat3-1-240",
+            "position": {
+              "measure": 5,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat4-2-0",
+            "position": {
+              "measure": 5,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat5-2-240",
+            "position": {
+              "measure": 5,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat6-3-0",
+            "position": {
+              "measure": 5,
+              "beat": 3,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m5-hat7-3-240",
+            "position": {
+              "measure": 5,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-kick-0-0",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 62,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-side-2-0",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 56,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat0-0-0",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat1-0-240",
+            "position": {
+              "measure": 6,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat2-1-0",
+            "position": {
+              "measure": 6,
+              "beat": 1,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat3-1-240",
+            "position": {
+              "measure": 6,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat4-2-0",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat5-2-240",
+            "position": {
+              "measure": 6,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat6-3-0",
+            "position": {
+              "measure": 6,
+              "beat": 3,
+              "tick": 0
+            },
+            "note_number": 42,
+            "velocity": 38,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-hat7-3-240",
+            "position": {
+              "measure": 6,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 43,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-kick-0-0",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 36,
+            "velocity": 46,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-side-2-0",
+            "position": {
+              "measure": 7,
+              "beat": 2,
+              "tick": 0
+            },
+            "note_number": 37,
+            "velocity": 40,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-hat1-0-240",
+            "position": {
+              "measure": 7,
+              "beat": 0,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-hat3-1-240",
+            "position": {
+              "measure": 7,
+              "beat": 1,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-hat5-2-240",
+            "position": {
+              "measure": 7,
+              "beat": 2,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m7-hat7-3-240",
+            "position": {
+              "measure": 7,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 42,
+            "velocity": 31,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m4-quiet-crash-0-0",
+            "position": {
+              "measure": 4,
+              "beat": 0,
+              "tick": 0
+            },
+            "note_number": 49,
+            "velocity": 49,
+            "duration": 60
+          },
+          {
+            "id": "asa-drum-m6-open-hat-3-240",
+            "position": {
+              "measure": 6,
+              "beat": 3,
+              "tick": 240
+            },
+            "note_number": 46,
+            "velocity": 42,
+            "duration": 60
+          }
+        ],
+        "patterns": [],
+        "placements": []
+      }
+    ]
+  },
+  "mix": {
+    "effect_chains": [
+      {
+        "id": "asa-lead-chain",
+        "target_id": "asa-lead",
+        "effects": [
+          {
+            "id": "asa-lead-trim",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": -2
+            }
+          },
+          {
+            "id": "asa-lead-hpf",
+            "type": "highpass",
+            "enabled": true,
+            "parameters": {
+              "frequency_hz": 82,
+              "q": 0.707,
+              "poles": 2
+            }
+          },
+          {
+            "id": "asa-lead-comp",
+            "type": "compressor",
+            "enabled": true,
+            "parameters": {
+              "threshold_db": -20,
+              "ratio": 2.1,
+              "attack_ms": 24,
+              "release_ms": 170,
+              "makeup_db": 1,
+              "knee": 3,
+              "detection": "rms",
+              "mix": 0.72
+            }
+          },
+          {
+            "id": "asa-lead-deess",
+            "type": "deesser",
+            "enabled": true,
+            "parameters": {
+              "intensity": 0.18,
+              "max_deessing": 0.3,
+              "frequency_focus": 0.58
+            }
+          },
+          {
+            "id": "asa-lead-room",
+            "type": "reverb",
+            "enabled": true,
+            "parameters": {
+              "in_gain": 0.82,
+              "out_gain": 0.76,
+              "delay_ms": 74,
+              "decay": 0.18
+            }
+          }
+        ]
+      },
+      {
+        "id": "asa-harmony-chain",
+        "target_id": "asa-harmony",
+        "effects": [
+          {
+            "id": "asa-harmony-trim",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": -6
+            }
+          },
+          {
+            "id": "asa-harmony-hpf",
+            "type": "highpass",
+            "enabled": true,
+            "parameters": {
+              "frequency_hz": 110,
+              "q": 0.707,
+              "poles": 2
+            }
+          },
+          {
+            "id": "asa-harmony-comp",
+            "type": "compressor",
+            "enabled": true,
+            "parameters": {
+              "threshold_db": -22,
+              "ratio": 2.5,
+              "attack_ms": 18,
+              "release_ms": 210,
+              "makeup_db": 0,
+              "knee": 3,
+              "detection": "rms",
+              "mix": 0.78
+            }
+          },
+          {
+            "id": "asa-harmony-room",
+            "type": "reverb",
+            "enabled": true,
+            "parameters": {
+              "in_gain": 0.78,
+              "out_gain": 0.72,
+              "delay_ms": 105,
+              "decay": 0.24
+            }
+          }
+        ]
+      },
+      {
+        "id": "asa-piano-chain",
+        "target_id": "asa-piano",
+        "effects": [
+          {
+            "id": "asa-piano-gain",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": 8
+            }
+          }
+        ]
+      },
+      {
+        "id": "asa-bass-chain",
+        "target_id": "asa-bass",
+        "effects": [
+          {
+            "id": "asa-bass-gain",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": 10
+            }
+          }
+        ]
+      },
+      {
+        "id": "asa-drums-chain",
+        "target_id": "asa-drums",
+        "effects": [
+          {
+            "id": "asa-drums-gain",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": 8
+            }
+          }
+        ]
+      },
+      {
+        "id": "asa-mix-bus-chain",
+        "target_id": "mix-bus",
+        "effects": [
+          {
+            "id": "asa-bus-trim",
+            "type": "gain",
+            "enabled": true,
+            "parameters": {
+              "gain_db": -2
+            }
+          },
+          {
+            "id": "asa-bus-comp",
+            "type": "compressor",
+            "enabled": true,
+            "parameters": {
+              "threshold_db": -14,
+              "ratio": 1.5,
+              "attack_ms": 32,
+              "release_ms": 240,
+              "makeup_db": 0,
+              "knee": 3.5,
+              "detection": "rms",
+              "mix": 0.48
+            }
+          },
+          {
+            "id": "asa-bus-limit",
+            "type": "limiter",
+            "enabled": true,
+            "parameters": {
+              "limit_db": -1.8,
+              "attack_ms": 5,
+              "release_ms": 90
+            }
+          }
+        ]
+      }
+    ],
+    "section_dynamics": []
+  },
+  "composition_intent": {
+    "schema": "vocaloid-composition-intent/v1",
+    "song": {
+      "premise": "At a dim window before dawn, the narrator wants one person to stay but can only call their name.",
+      "narrator_stance": "Close, honest, and unwilling to turn longing into leverage.",
+      "addressee": "One person who may leave when morning arrives.",
+      "central_tension": "The wish to say 'do not go' must become audible without being delivered as an order.",
+      "state_at_start": "The narrator hides inside the room and the light.",
+      "intended_destination": "The unsaid request is understood, yet the other person remains free to leave.",
+      "listener_after": "The listener should hear both the request and the restraint that stops it becoming a command.",
+      "creative_invariants": [
+        "Restraint must not become emotional flatness.",
+        "The semantic focus must be shaped by duration, contour, timbre, and release rather than loudness alone.",
+        "Harmony enters only when it clarifies the admission; accompaniment never competes for the sentence."
+      ]
+    },
+    "sections": [
+      {
+        "id": "intent-anchor-passage",
+        "section_id": "anchor-passage",
+        "dramatic_function": "Move from indirect scene-setting into one withheld request, then show the narrator choosing a smaller action.",
+        "state_before": "The desire is hidden in an image of the window before dawn.",
+        "intended_transition": "Let the inability to say the request expose the request itself.",
+        "state_after": "The narrator only calls the addressee's name; the departure is not resolved.",
+        "inherited_delivery": "Begin speech-close, open over the admission, then fall back into a human-sized ending."
+      }
+    ],
+    "phrase_directions": [
+      {
+        "id": "anchor-unspoken-request",
+        "section_id": "anchor-passage",
+        "importance": "anchor",
+        "lyric_anchor": {
+          "text": "まだ行かないでと言えなくて"
+        },
+        "purpose": "Make the desire to ask them to stay unmistakable while preserving the narrator's refusal to command them.",
+        "addressed_to": "The person at the window before dawn.",
+        "semantic_focus": "言えなくて — admitting the inability to say the request.",
+        "subtext": "The request is present because the narrator cannot bring themselves to impose it.",
+        "state_before": "Longing is disguised as observation.",
+        "intended_transition": "Expose the request once through an admission, not through force.",
+        "state_after": "The addressee understands, but is not musically trapped by a triumphant cadence.",
+        "delivery_arc": "Keep まだ行かないで narrow and speech-close; lengthen and brighten 言えなくて into a small arch, then decrescendo into a two-beat breath.",
+        "realization_hypothesis": {
+          "summary": "A stepwise rising arch and longer semantic-focus notes can reveal the request without using a shout or a top-note climax.",
+          "melody": "Mostly stepwise A3-F4, with no leap used as a demand gesture.",
+          "rhythm": "Shorter syllables carry the forbidden request; 言えなくて receives roughly twice the local duration budget and is followed by silence.",
+          "harmony": "Selective lower harmony enters only on 言えなくて, then releases before the final line.",
+          "register": "The focus stays in the middle of IA_ROCKS rather than at the tessitura ceiling.",
+          "dynamics": "One moderate opening across the focus, followed by a decrease rather than a victorious landing.",
+          "tuning": "A shallow late fall on the final focus syllable and slight vibrato only on earned sustains.",
+          "arrangement_space": "Piano, bass, and soft kit support the harmonic sentence; the center remains clear for diction.",
+          "expected_evidence": [
+            "Semantic-focus note durations exceed the local non-focus median.",
+            "The lead contour forms an arch without a large unbalanced leap.",
+            "Harmony is absent before the admission and accompaniment register stays below the lead."
+          ],
+          "symbolic_targets": {
+            "melody_contour": "arch",
+            "melody_range": "expand",
+            "rhythm_density": "decrease",
+            "note_duration": "lengthen",
+            "harmonic_tension": "withhold",
+            "delivery_dynamics": "decrease",
+            "arrangement_density": "increase",
+            "semantic_focus_duration_ratio_min": 1.5
+          }
+        },
+        "listening_question": {
+          "id": "question-request-without-command",
+          "question": "Can I hear that IA wants this person to stay while the line still sounds like an admission rather than a command?"
+        },
+        "realization_links": {
+          "vocal_phrase_ids": [
+            "asa-anchor-line"
+          ],
+          "event_ids": [
+            "asa-anchor-cell-01",
+            "asa-anchor-cell-02",
+            "asa-anchor-cell-03",
+            "asa-anchor-cell-04",
+            "asa-anchor-cell-05",
+            "asa-anchor-cell-06",
+            "asa-anchor-cell-07",
+            "asa-anchor-cell-08",
+            "asa-anchor-cell-09",
+            "asa-anchor-cell-10",
+            "asa-anchor-cell-11",
+            "asa-anchor-cell-12",
+            "asa-anchor-cell-13"
+          ],
+          "semantic_focus_object_ids": [
+            "asa-anchor-cell-09",
+            "asa-anchor-cell-10",
+            "asa-anchor-cell-11",
+            "asa-anchor-cell-12",
+            "asa-anchor-cell-13"
+          ],
+          "tuning_gesture_ids": [
+            "asa-lead-dynamics",
+            "asa-lead-opening",
+            "asa-focus-vibrato",
+            "asa-focus-release"
+          ],
+          "chord_ids": [
+            "asa-chord-02-f-over-a",
+            "asa-chord-03-cadd9",
+            "asa-chord-04-gm9",
+            "asa-chord-05-bbmaj9"
+          ],
+          "track_ids": [
+            "asa-lead",
+            "asa-harmony",
+            "asa-piano",
+            "asa-bass",
+            "asa-drums"
+          ]
+        }
+      }
+    ]
+  },
+  "composition_guidance": {
+    "theory_ruleset_id": "core/v1",
+    "strictness": "balanced",
+    "harmonic_language": "tonal",
+    "required_review_severities": [],
+    "intent_review_policy": {
+      "mode": "advisory",
+      "require_song_intent": true,
+      "require_section_intent": true,
+      "minimum_anchor_phrases": 1,
+      "require_current_audition_review": false
+    },
+    "exceptions": []
+  },
+  "artifacts": [
+    {
+      "id": "backing-r16",
+      "role": "backing",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-backing-r16.wav",
+      "sha256": "9991ea075b7ff46453f40b52351c8dd18e668ae63bc1a7842841e10ab7be0d40",
+      "bytes": 4448300,
+      "source_revision": 16,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [],
+      "metadata": {
+        "renderer": "fluidsynth",
+        "sample_rate": 44100,
+        "reverb": true,
+        "chorus": true
+      },
+      "created_at": "2026-07-19T01:46:32.415Z"
+    },
+    {
+      "id": "vsqx-r16",
+      "role": "vsqx",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-project-r16.vsqx",
+      "sha256": "ad5be8fefdf84d0bc27e4a2d4051a38b95f0d83b743f71433babf4ed028d21a7",
+      "bytes": 19789,
+      "source_revision": 16,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "backing-r16"
+      ],
+      "metadata": {
+        "format": "vsq3"
+      },
+      "created_at": "2026-07-19T01:46:32.415Z"
+    },
+    {
+      "id": "instrument-stem-asa-piano-r17",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-piano-r17-mixpan-fx.wav",
+      "sha256": "c350590143990284f517ff84446e26efe38393a9a4d3937f157329ffa2d268d3",
+      "bytes": 4424492,
+      "source_revision": 17,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "asa-piano"
+      ],
+      "metadata": {
+        "track_id": "asa-piano",
+        "track_name": "Felt Piano — harmonic breath",
+        "track_kind": "pitched",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T01:46:34.937Z"
+    },
+    {
+      "id": "instrument-stem-asa-bass-r17",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-bass-r17-mixpan-fx.wav",
+      "sha256": "2dcbbf192922c45d942ba34683518685a2cf090b0c188a903ec5d49bac0167e3",
+      "bytes": 4389164,
+      "source_revision": 17,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "asa-bass"
+      ],
+      "metadata": {
+        "track_id": "asa-bass",
+        "track_name": "Finger Bass — restrained root motion",
+        "track_kind": "pitched",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T01:46:35.200Z"
+    },
+    {
+      "id": "instrument-stem-asa-drums-r17",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-drums-r17-mixpan-fx.wav",
+      "sha256": "3833bb6e32d17a0c0aad8b56573d2a2e189cf9cf03aeb76e2391a4ac0ea717e4",
+      "bytes": 4448300,
+      "source_revision": 17,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "asa-drums"
+      ],
+      "metadata": {
+        "track_id": "asa-drums",
+        "track_name": "Soft Kit — pulse, not pressure",
+        "track_kind": "drums",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T01:46:35.508Z"
+    },
+    {
+      "id": "vocal-stem-asa-lead-r18",
+      "role": "vocal_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-vocal-asa-lead-r18-mixpan-dry.wav",
+      "sha256": "96c51aa86b12dbb0ed0b06e8ad3604591b5bf95852b5e2920ada46e492dc234a",
+      "bytes": 4538412,
+      "source_revision": 18,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vsqx-r16",
+        "asa-lead"
+      ],
+      "metadata": {
+        "track_id": "asa-lead",
+        "track_name": "IA_ROCKS Lead — 朝がほどく前に",
+        "track_number": 0,
+        "source_project_artifact": "vsqx-r16",
+        "center_pan": false,
+        "dry": true,
+        "allow_pre_send_adjustment": true,
+        "event_verification_seen": false,
+        "pre_send_adjusted": false,
+        "timeline_origin": "project_start"
+      },
+      "created_at": "2026-07-19T01:46:58.413Z"
+    },
+    {
+      "id": "vocal-stem-asa-harmony-r19",
+      "role": "vocal_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-vocal-asa-harmony-r19-mixpan-dry.wav",
+      "sha256": "0dfcaad847ea066fd506d8acf6994b5890c94c8fe4615e72e5eb0d82b996c375",
+      "bytes": 4538412,
+      "source_revision": 19,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vsqx-r16",
+        "asa-harmony"
+      ],
+      "metadata": {
+        "track_id": "asa-harmony",
+        "track_name": "IA_ROCKS Selective Harmony — 朝がほどく前に",
+        "track_number": 1,
+        "source_project_artifact": "vsqx-r16",
+        "center_pan": false,
+        "dry": true,
+        "allow_pre_send_adjustment": true,
+        "event_verification_seen": false,
+        "pre_send_adjusted": false,
+        "timeline_origin": "project_start"
+      },
+      "created_at": "2026-07-19T02:39:54.194Z"
+    },
+    {
+      "id": "stem-mix-r20",
+      "role": "mix",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead-harmony-r20.wav",
+      "sha256": "ed4b89fb378bc0dddc802b75ea4127ec9ea00336d69224922b0f180f13497ab6",
+      "bytes": 6852606,
+      "source_revision": 20,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vocal-stem-asa-lead-r18",
+        "vocal-stem-asa-harmony-r19"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-filter-complex",
+        "source_mix_hash": "d7eaf68105ce7ddd123c82e4d327cacb626592776d5e135b6cbe1ad78d66ee53",
+        "sample_rate": 44100,
+        "bit_depth": 24,
+        "input_stems": 2,
+        "reference_lufs": -16,
+        "reference_true_peak_dbfs": -1.5
+      },
+      "created_at": "2026-07-19T02:39:57.342Z"
+    },
+    {
+      "id": "stem-mix-r21",
+      "role": "mix",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-minimal-band-r21.wav",
+      "sha256": "7f384e9d59c57a3debade2f56752f507dd8721f49efabd7ba03405f6cb4b07b8",
+      "bytes": 7428444,
+      "source_revision": 21,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vocal-stem-asa-lead-r18",
+        "vocal-stem-asa-harmony-r19",
+        "instrument-stem-asa-piano-r17",
+        "instrument-stem-asa-bass-r17",
+        "instrument-stem-asa-drums-r17"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-filter-complex",
+        "source_mix_hash": "d7eaf68105ce7ddd123c82e4d327cacb626592776d5e135b6cbe1ad78d66ee53",
+        "sample_rate": 44100,
+        "bit_depth": 24,
+        "input_stems": 5,
+        "reference_lufs": -16,
+        "reference_true_peak_dbfs": -1.5
+      },
+      "created_at": "2026-07-19T02:39:58.836Z"
+    },
+    {
+      "id": "anchor-lead_solo-vocal-stem-asa-lead-r18-anchor-passage-r22",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead_solo-preview-r22.wav",
+      "sha256": "001cf5c1b252fb7cfef2d26ac868fde39b48352ad1931a53708960a20efaefb9",
+      "bytes": 4032078,
+      "source_revision": 22,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vocal-stem-asa-lead-r18",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "vocal-stem-asa-lead-r18",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_solo",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -24.1,
+        "true_peak_dbfs": -13.6
+      },
+      "created_at": "2026-07-19T02:39:59.509Z"
+    },
+    {
+      "id": "anchor-lead_harmony-stem-mix-r20-anchor-passage-r23",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead_harmony-preview-r23.wav",
+      "sha256": "465844df5257f1622bc948bdb6983a13d7f668f73da6eea7f064aa3bc16b178d",
+      "bytes": 4032078,
+      "source_revision": 23,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "stem-mix-r20",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "stem-mix-r20",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -31.4,
+        "true_peak_dbfs": -20.4
+      },
+      "created_at": "2026-07-19T02:40:00.213Z"
+    },
+    {
+      "id": "anchor-minimal_band-stem-mix-r21-anchor-passage-r24",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-minimal_band-preview-r24.wav",
+      "sha256": "9a1fb38d6c1b15b2443b6890724a745fdda6e651891466ee46678ae2fc5fcb83",
+      "bytes": 4032078,
+      "source_revision": 24,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "stem-mix-r21",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "stem-mix-r21",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "minimal_band",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -30.8,
+        "true_peak_dbfs": -17.3
+      },
+      "created_at": "2026-07-19T02:40:00.850Z"
+    },
+    {
+      "id": "anchor-ab-a-vocal-stem-asa-lead-r18-anchor-passage-r25",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-harmony-ab-a-r25.wav",
+      "sha256": "f868be766d37baa9e565e3e4060d4ce2eded5f4514d84da20a435c392afc1870",
+      "bytes": 4032078,
+      "source_revision": 25,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "vocal-stem-asa-lead-r18",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-loudness-match",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "comparison_kind": "single_question_ab",
+        "hypothesis_family": "harmony",
+        "pair_id": "vocal-stem-asa-lead-r18:stem-mix-r20:anchor-unspoken-request:harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857143,
+        "target_lufs": -18,
+        "side": "A",
+        "gain_db": 6.100000000000001,
+        "source_artifact": "vocal-stem-asa-lead-r18"
+      },
+      "created_at": "2026-07-19T02:40:02.439Z"
+    },
+    {
+      "id": "anchor-ab-b-stem-mix-r20-anchor-passage-r25",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-harmony-ab-b-r25.wav",
+      "sha256": "8c354c5d789ebda39b306ae8c73c8b3e9c647d7946877e3900f6fbfe6ddb8805",
+      "bytes": 4032078,
+      "source_revision": 25,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "stem-mix-r20",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-loudness-match",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "comparison_kind": "single_question_ab",
+        "hypothesis_family": "harmony",
+        "pair_id": "vocal-stem-asa-lead-r18:stem-mix-r20:anchor-unspoken-request:harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857143,
+        "target_lufs": -18,
+        "side": "B",
+        "gain_db": 13.399999999999999,
+        "source_artifact": "stem-mix-r20"
+      },
+      "created_at": "2026-07-19T02:40:02.439Z"
+    },
+    {
+      "id": "delivery-r26",
+      "role": "delivery",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-final.wav",
+      "sha256": "b1712373c464baa2bba12bda32c21824c3339336f7aa224c3aa14cbf97e92ce3",
+      "bytes": 4952306,
+      "source_revision": 26,
+      "source_composition_hash": "fd2b71d56b57b819f3e54a2bc47bd525b2554a9e7825a0b90435fd7907557ec9",
+      "dependencies": [
+        "stem-mix-r21"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-loudnorm-two-pass",
+        "timeline_origin": "project_start",
+        "source_role": "mix",
+        "source_mix_hash": "d7eaf68105ce7ddd123c82e4d327cacb626592776d5e135b6cbe1ad78d66ee53",
+        "target_lufs": -16,
+        "target_true_peak_dbfs": -1.5,
+        "target_lra_lu": 8,
+        "integrated_lufs": -15.7,
+        "loudness_range_lu": 5.9,
+        "true_peak_dbfs": -2.7,
+        "true_peak_correction_db": 0,
+        "sample_clipping": false,
+        "source_clipping_accepted": false,
+        "stereo_balance_db": -0.043596956205963266,
+        "release_policy_enabled": true,
+        "release_policy_ready": true,
+        "theory_ruleset_id": "core/v1",
+        "intent_review_policy": "advisory"
+      },
+      "created_at": "2026-07-19T02:40:05.848Z"
+    },
+    {
+      "id": "backing-r29",
+      "role": "backing",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-backing-r29.wav",
+      "sha256": "9991ea075b7ff46453f40b52351c8dd18e668ae63bc1a7842841e10ab7be0d40",
+      "bytes": 4448300,
+      "source_revision": 29,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [],
+      "metadata": {
+        "renderer": "fluidsynth",
+        "sample_rate": 44100,
+        "reverb": true,
+        "chorus": true
+      },
+      "created_at": "2026-07-19T03:37:06.417Z"
+    },
+    {
+      "id": "vsqx-r29",
+      "role": "vsqx",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-project-r29.vsqx",
+      "sha256": "b7e8cc12e8e1e22c87dc2dc1024ffd6c7bbfc063d8a5d78c36a0244fbc2850e7",
+      "bytes": 20704,
+      "source_revision": 29,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "backing-r29"
+      ],
+      "metadata": {
+        "format": "vsq3"
+      },
+      "created_at": "2026-07-19T03:37:06.417Z"
+    },
+    {
+      "id": "instrument-stem-asa-piano-r30",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-piano-r30-mixpan-fx.wav",
+      "sha256": "c350590143990284f517ff84446e26efe38393a9a4d3937f157329ffa2d268d3",
+      "bytes": 4424492,
+      "source_revision": 30,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "asa-piano"
+      ],
+      "metadata": {
+        "track_id": "asa-piano",
+        "track_name": "Felt Piano — harmonic breath",
+        "track_kind": "pitched",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T03:37:32.694Z"
+    },
+    {
+      "id": "instrument-stem-asa-bass-r30",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-bass-r30-mixpan-fx.wav",
+      "sha256": "2dcbbf192922c45d942ba34683518685a2cf090b0c188a903ec5d49bac0167e3",
+      "bytes": 4389164,
+      "source_revision": 30,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "asa-bass"
+      ],
+      "metadata": {
+        "track_id": "asa-bass",
+        "track_name": "Finger Bass — restrained root motion",
+        "track_kind": "pitched",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T03:37:32.968Z"
+    },
+    {
+      "id": "instrument-stem-asa-drums-r30",
+      "role": "instrument_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-instrument-asa-drums-r30-mixpan-fx.wav",
+      "sha256": "3833bb6e32d17a0c0aad8b56573d2a2e189cf9cf03aeb76e2391a4ac0ea717e4",
+      "bytes": 4448300,
+      "source_revision": 30,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "asa-drums"
+      ],
+      "metadata": {
+        "track_id": "asa-drums",
+        "track_name": "Soft Kit — pulse, not pressure",
+        "track_kind": "drums",
+        "preserve_pan": true,
+        "renderer_effects": true,
+        "renderer": "fluidsynth",
+        "timeline_origin": "song_start"
+      },
+      "created_at": "2026-07-19T03:37:33.293Z"
+    },
+    {
+      "id": "vocal-stem-asa-lead-r31",
+      "role": "vocal_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-vocal-asa-lead-r31-mixpan-dry.wav",
+      "sha256": "505a1333455bfdaa63b920a360cb0694028ea911e573135ce2d059ed9a5e22d8",
+      "bytes": 4538412,
+      "source_revision": 31,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vsqx-r29",
+        "asa-lead"
+      ],
+      "metadata": {
+        "track_id": "asa-lead",
+        "track_name": "IA_ROCKS Lead — 朝がほどく前に",
+        "track_number": 0,
+        "source_project_artifact": "vsqx-r29",
+        "center_pan": false,
+        "dry": true,
+        "allow_pre_send_adjustment": true,
+        "event_verification_seen": false,
+        "pre_send_adjusted": false,
+        "timeline_origin": "project_start"
+      },
+      "created_at": "2026-07-19T03:37:59.218Z"
+    },
+    {
+      "id": "vocal-stem-asa-harmony-r32",
+      "role": "vocal_stem",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/stems/asa-ga-hodoku-mae-ni-vocal-asa-harmony-r32-mixpan-dry.wav",
+      "sha256": "c2c338654eeae2fd9c87afe27a25b997f1f415783f126ef8048fdc1bcd350634",
+      "bytes": 4538412,
+      "source_revision": 32,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vsqx-r29",
+        "asa-harmony"
+      ],
+      "metadata": {
+        "track_id": "asa-harmony",
+        "track_name": "IA_ROCKS Selective Harmony — 朝がほどく前に",
+        "track_number": 1,
+        "source_project_artifact": "vsqx-r29",
+        "center_pan": false,
+        "dry": true,
+        "allow_pre_send_adjustment": true,
+        "event_verification_seen": false,
+        "pre_send_adjusted": false,
+        "timeline_origin": "project_start"
+      },
+      "created_at": "2026-07-19T03:38:24.401Z"
+    },
+    {
+      "id": "stem-mix-r33",
+      "role": "mix",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead-harmony-r33.wav",
+      "sha256": "ac9cda1ff8eaf14b6e5c83b811f2357e0e841d4415208a4a6f648c405e590ce4",
+      "bytes": 6852606,
+      "source_revision": 33,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vocal-stem-asa-lead-r31",
+        "vocal-stem-asa-harmony-r32"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-filter-complex",
+        "source_mix_hash": "6b8fca0efa64447b2f8e1252fadb018fd0e2ad7d5ca01c15db413ac50df1ebf7",
+        "sample_rate": 44100,
+        "bit_depth": 24,
+        "input_stems": 2,
+        "reference_lufs": -16,
+        "reference_true_peak_dbfs": -1.5
+      },
+      "created_at": "2026-07-19T03:38:26.946Z"
+    },
+    {
+      "id": "stem-mix-r34",
+      "role": "mix",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-minimal-band-r34.wav",
+      "sha256": "fa1d186a1740460396099c2136a9d5b7339a3740a83f508a5601ea0b585e5e99",
+      "bytes": 7428444,
+      "source_revision": 34,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vocal-stem-asa-lead-r31",
+        "vocal-stem-asa-harmony-r32",
+        "instrument-stem-asa-piano-r30",
+        "instrument-stem-asa-bass-r30",
+        "instrument-stem-asa-drums-r30"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-filter-complex",
+        "source_mix_hash": "6b8fca0efa64447b2f8e1252fadb018fd0e2ad7d5ca01c15db413ac50df1ebf7",
+        "sample_rate": 44100,
+        "bit_depth": 24,
+        "input_stems": 5,
+        "reference_lufs": -16,
+        "reference_true_peak_dbfs": -1.5
+      },
+      "created_at": "2026-07-19T03:38:28.330Z"
+    },
+    {
+      "id": "anchor-lead_solo-vocal-stem-asa-lead-r31-anchor-passage-r35",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead_solo-preview-r35.wav",
+      "sha256": "4ee057ace178ea354ee2b0527e64370d65703ab81d90e20bc7c6b40dc8ee9115",
+      "bytes": 4032078,
+      "source_revision": 35,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vocal-stem-asa-lead-r31",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "vocal-stem-asa-lead-r31",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_solo",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -23.8,
+        "true_peak_dbfs": -11.2
+      },
+      "created_at": "2026-07-19T03:38:28.913Z"
+    },
+    {
+      "id": "anchor-lead_harmony-stem-mix-r33-anchor-passage-r36",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-lead_harmony-preview-r36.wav",
+      "sha256": "cc8afed59fa31765b6041692a8d81ebd66851ef48df5364d550c7450de0cc4ed",
+      "bytes": 4032078,
+      "source_revision": 36,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "stem-mix-r33",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "stem-mix-r33",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -31.2,
+        "true_peak_dbfs": -18.7
+      },
+      "created_at": "2026-07-19T03:38:29.544Z"
+    },
+    {
+      "id": "anchor-minimal_band-stem-mix-r34-anchor-passage-r37",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-minimal_band-preview-r37.wav",
+      "sha256": "29590a814942ad3bc78ad88d93bf224482bed0f658281dd82462c2b183529c11",
+      "bytes": 4032078,
+      "source_revision": 37,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "stem-mix-r34",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-preview",
+        "source_artifact": "stem-mix-r34",
+        "source_timeline_origin": "project_start",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "minimal_band",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857142857142858,
+        "integrated_lufs": -30.6,
+        "true_peak_dbfs": -16.5
+      },
+      "created_at": "2026-07-19T03:38:30.148Z"
+    },
+    {
+      "id": "anchor-ab-a-vocal-stem-asa-lead-r31-anchor-passage-r38",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-harmony-ab-a-r38.wav",
+      "sha256": "7c80d5476ca036c2996528b5545430b550faa4c88b92623a09f2d5b65ed878ec",
+      "bytes": 4032078,
+      "source_revision": 38,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "vocal-stem-asa-lead-r31",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-loudness-match",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "comparison_kind": "single_question_ab",
+        "hypothesis_family": "harmony",
+        "pair_id": "vocal-stem-asa-lead-r31:stem-mix-r33:anchor-unspoken-request:harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857143,
+        "target_lufs": -18,
+        "side": "A",
+        "gain_db": 5.800000000000001,
+        "source_artifact": "vocal-stem-asa-lead-r31"
+      },
+      "created_at": "2026-07-19T03:38:31.523Z"
+    },
+    {
+      "id": "anchor-ab-b-stem-mix-r33-anchor-passage-r38",
+      "role": "preview",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-harmony-ab-b-r38.wav",
+      "sha256": "f2a1887f31fe975efe94a85755f68d544a81411942b910c6adeec0eda086c89c",
+      "bytes": 4032078,
+      "source_revision": 38,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "stem-mix-r33",
+        "anchor-unspoken-request",
+        "anchor-passage"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-anchor-loudness-match",
+        "timeline_origin": "preview_start",
+        "audition_kind": "anchor_passage",
+        "audition_layer": "lead_harmony",
+        "comparison_kind": "single_question_ab",
+        "hypothesis_family": "harmony",
+        "pair_id": "vocal-stem-asa-lead-r31:stem-mix-r33:anchor-unspoken-request:harmony",
+        "phrase_direction_id": "anchor-unspoken-request",
+        "listening_question_id": "question-request-without-command",
+        "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d",
+        "section_id": "anchor-passage",
+        "passage_start_tick": 0,
+        "passage_end_tick": 15360,
+        "passage_duration_seconds": 22.857143,
+        "target_lufs": -18,
+        "side": "B",
+        "gain_db": 13.2,
+        "source_artifact": "stem-mix-r33"
+      },
+      "created_at": "2026-07-19T03:38:31.523Z"
+    },
+    {
+      "id": "delivery-r39",
+      "role": "delivery",
+      "path": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-r39-final.wav",
+      "sha256": "d17f9aefd49853abb345146b2bd1c8220e62d48c49bfcff44596b004145aa347",
+      "bytes": 4952306,
+      "source_revision": 39,
+      "source_composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+      "dependencies": [
+        "stem-mix-r34"
+      ],
+      "metadata": {
+        "renderer": "ffmpeg-loudnorm-two-pass",
+        "timeline_origin": "project_start",
+        "source_role": "mix",
+        "source_mix_hash": "6b8fca0efa64447b2f8e1252fadb018fd0e2ad7d5ca01c15db413ac50df1ebf7",
+        "target_lufs": -16,
+        "target_true_peak_dbfs": -1.5,
+        "target_lra_lu": 8,
+        "integrated_lufs": -15.5,
+        "loudness_range_lu": 8.3,
+        "true_peak_dbfs": -2.2,
+        "true_peak_correction_db": 0,
+        "sample_clipping": false,
+        "source_clipping_accepted": false,
+        "stereo_balance_db": -0.057444982064534855,
+        "release_policy_enabled": true,
+        "release_policy_ready": true,
+        "theory_ruleset_id": "core/v1",
+        "intent_review_policy": "advisory"
+      },
+      "created_at": "2026-07-19T03:38:34.758Z"
+    }
+  ],
+  "review_notes": []
+}
