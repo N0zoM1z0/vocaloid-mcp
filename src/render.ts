@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import {
   access,
   copyFile,
+  mkdir,
   rename,
   unlink,
   writeFile,
@@ -287,13 +288,18 @@ export async function renderProjectToWav(
   const host = await inspectRenderHost(runtime.allowUnknownEditor);
   const windowsEditor = await windowsPath(host.editorPath);
 
-  const temporary = join(
-    dirname(outputPath),
-    `.${basename(outputPath)}.render-${process.pid}-${Date.now()}.wav`,
-  );
+  const renderToken = `${process.pid}-${randomUUID()}`;
+  const temporary = join(dirname(outputPath), `.vocaloid-render-${renderToken}.wav`);
+  const stagedSource = join(dirname(outputPath), `.vocaloid-render-${renderToken}.vsqx`);
+  /* Keep helper coordination paths independent of the requested output name.
+     VOCALOID3 uses legacy Win32 common dialogs, and their sidecar files can
+     otherwise exceed MAX_PATH when a descriptive stem basename is appended
+     to an already-deep output directory. */
+  const runtimeDirectory = join(PROJECT_ROOT, "build", "runtime");
+  await mkdir(runtimeDirectory, { recursive: true });
   const cancelPath = join(
-    dirname(outputPath),
-    `.${basename(outputPath)}.cancel-${process.pid}-${Date.now()}-${randomUUID()}`,
+    runtimeDirectory,
+    `.vocaloid-export-${process.pid}-${randomUUID()}.cancel`,
   );
   const requestId = runtime.requestId ?? `render-${process.pid}-${randomUUID()}`;
   await report("waiting_for_editor", 3, "Acquiring the host-wide VOCALOID Editor render lease");
@@ -309,10 +315,14 @@ export async function renderProjectToWav(
   let nativeResult: NativeExportResult;
   try {
     if (cancelled) throw abortError();
+    /* VOCALOID3's legacy Save dialog opens in the loaded VSQX directory.  A
+       disposable adjacent project lets the helper type only a short basename
+       instead of asking the dialog to interpret a \\wsl UNC output path. */
+    await copyFile(source, stagedSource);
     const [windowsHelper, windowsSource, windowsTemporary, windowsRunner, windowsCancel] =
       await Promise.all([
         windowsPath(host.helperPath),
-        windowsPath(source),
+        windowsPath(stagedSource),
         windowsPath(temporary),
         windowsPath(runner),
         windowsPath(cancelPath),
@@ -396,6 +406,7 @@ export async function renderProjectToWav(
     throw error;
   } finally {
     runtime.signal?.removeEventListener("abort", requestCancel);
+    await unlink(stagedSource).catch(() => undefined);
     await unlink(cancelPath).catch(() => undefined);
     await ownedLease?.release();
     try {
