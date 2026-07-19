@@ -17,8 +17,10 @@ Detailed note: `notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md`
   - Decision: do not globally change IA_ROCKS, note gates, EQ, or arrangement.
     Add mastering transparency metrics and require equal-loudness source versus
     delivery A/B when peak/LRA reshaping is material.
-  - Status: diagnostic A/B rendered; framework diagnostic implemented; human
-    A/B result pending before publishing a replacement final.
+  - Status: diagnostic A/B rendered and heard. The user found B slightly noisier
+    than A only under direct comparison, while overall quality and the
+    arrangement/verse controls were acceptable. Keep the current delivery;
+    no global mastering, voice, EQ, gate, or arrangement change is justified.
 
 - **Formulaic rise/fall phrase construction**
   - Scope: 20 downbeat-starting, fixed-grid phrases; 97.9% of comparable motion

@@ -62,6 +62,23 @@ are equally loud. The second control asks whether full arrangement B introduces
 anything absent from vocal-only A. No final is replaced until that listening
 answer exists.
 
+## Human equal-loudness listening result
+
+The user completed the three comparisons on 2026-07-19:
+
+1. mastering B contains slightly more of the noise-like/sharp-separated texture
+   than premaster A, but much less than the original report; without direct A/B
+   comparison it is difficult to notice and the overall result remains good;
+2. the vocal-only versus full-arrangement control revealed no material problem;
+3. both verse/pre mastering variants were acceptable.
+
+Disposition: **keep the current delivery and defer mastering changes**. The
+mastering transformation is a real but low-severity contributor, not a release
+blocker. Do not change IA/IA_ROCKS selection, note gates, global EQ,
+arrangement, or the mastering algorithm for this song. Retain the transparency
+metrics and equal-loudness A/B requirement so a future song with a stronger
+effect can be handled from fresh evidence.
+
 ## Scoped framework fix
 
 `masterWav` now reports:
