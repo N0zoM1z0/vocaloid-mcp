@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -45,7 +47,7 @@ import {
   SectionCreativeIntentSchema,
 } from "./intent/types.js";
 import { diffManifestSnapshots, listManifestHistory } from "./manifest-history.js";
-import { resolveReadablePath } from "./paths.js";
+import { PROJECT_ROOT, resolveReadablePath } from "./paths.js";
 import { analyzeManifestPhraseGrammar } from "./phrase-grammar-analysis.js";
 import {
   PHRASE_GRAMMAR_BUNDLES,
@@ -397,21 +399,24 @@ server.registerResource(
   },
 );
 
-server.registerResource(
-  "hanairo-biyori-lyrics",
-  "vocaloid://lyrics/hanairo-biyori",
-  {
-    title: "花色日和 — authoritative supplied lyrics",
-    description: "User-supplied lyric authority for the wa-rock-hanairo evaluation; preserve verbatim and add readings/phonemes as separate provenance.",
-    mimeType: "text/plain; charset=utf-8",
-  },
-  async (uri) => {
-    const path = await resolveReadablePath("artifacts/evals/[Lyrics] Hanairo Biyori.txt");
-    return {
-      contents: [{ uri: uri.href, mimeType: "text/plain; charset=utf-8", text: await readFile(path, "utf8") }],
-    };
-  },
-);
+const optionalHanairoLyricsPath = "artifacts/evals/[Lyrics] Hanairo Biyori.txt";
+if (existsSync(resolve(PROJECT_ROOT, optionalHanairoLyricsPath))) {
+  server.registerResource(
+    "hanairo-biyori-lyrics",
+    "vocaloid://lyrics/hanairo-biyori",
+    {
+      title: "花色日和 — authoritative supplied lyrics",
+      description: "Optional user-supplied lyric authority for the local wa-rock-hanairo evaluation; preserve verbatim and add readings/phonemes as separate provenance.",
+      mimeType: "text/plain; charset=utf-8",
+    },
+    async (uri) => {
+      const path = await resolveReadablePath(optionalHanairoLyricsPath);
+      return {
+        contents: [{ uri: uri.href, mimeType: "text/plain; charset=utf-8", text: await readFile(path, "utf8") }],
+      };
+    },
+  );
+}
 
 server.registerResource(
   "vocaloid-capabilities",

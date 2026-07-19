@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -165,7 +166,7 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   const proposalPreflight = await client.callTool({
     name: "vocaloid_preflight_song",
     arguments: {
-      manifest_path: join(ROOT, "artifacts/evals/mcp-v1-agent-eval.song.json"),
+      manifest_path: join(ROOT, "tests/fixtures/mcp-v1-agent-eval.song.json"),
       artifact_check: "none",
       include_performance_warnings: true,
       check_voice_cache: false,
@@ -198,10 +199,18 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   assert.equal(proposalData.data?.releasePolicy?.enabled, false);
   assert.equal(proposalData.data?.releasePolicy?.ready, true);
 
-  const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
-  const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
-  const lyricEntry = lyricResource.contents[0];
-  assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+  const suppliedLyricsPath = join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt");
+  const resources = await client.listResources();
+  const lyricResource = resources.resources.find((resource) => resource.uri === "vocaloid://lyrics/hanairo-biyori");
+  if (existsSync(suppliedLyricsPath)) {
+    assert.ok(lyricResource, "local supplied lyrics should be exposed when present");
+    const lyricContents = await client.readResource({ uri: lyricResource.uri });
+    const suppliedLyrics = await readFile(suppliedLyricsPath, "utf8");
+    const lyricEntry = lyricContents.contents[0];
+    assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+  } else {
+    assert.equal(lyricResource, undefined, "ignored local lyrics must remain an optional resource");
+  }
 
   const exampleResource = await client.readResource({ uri: "vocaloid://examples/from-zero" });
   const exampleEntry = exampleResource.contents[0];

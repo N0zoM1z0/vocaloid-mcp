@@ -1,7 +1,8 @@
 {
   "name": "vocaloid-mcp-server",
   "version": "1.0.0",
-  "description": "Local MCP server for inspecting and safely editing VOCALOID VSQX projects",
+  "description": "Agent-native MCP for composing, tuning, rendering, mixing, and auditing native VOCALOID3/4 projects",
+  "private": true,
   "type": "module",
   "main": "dist/src/index.js",
   "bin": {

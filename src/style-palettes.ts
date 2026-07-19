@@ -76,7 +76,7 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
       delivery: { integrated_lufs: -15, true_peak_dbfs: -1, target_lra_lu: 7 },
     },
     provenance: {
-      lyrics_source_path: "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/[Lyrics] Hanairo Biyori.txt",
+      lyrics_source_path: "artifacts/evals/[Lyrics] Hanairo Biyori.txt",
       requirement: "Preserve the source text verbatim as the lyric authority. Store agent-authored kana reading, normalized reading, G2P decisions, and compiled phonemes separately; never guess or replace ambiguous readings silently.",
     },
   },

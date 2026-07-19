@@ -14,12 +14,9 @@ __pycache__/
 !.env.example
 *.log
 
-# Generated evaluation output and agent traces
-artifacts/evals/*.wav
-artifacts/evals/*.jsonl
-artifacts/evals/*.bak-*
-artifacts/evals/*-final.md
-artifacts/evals/*-style-eval*
+# Generated evaluation output and agent traces are local-only at every depth.
+# Durable, Git-safe evidence belongs in artifacts/creative-records/ instead.
+artifacts/evals/
 
 # Final listening audio is local-only and must never be tracked/published.
 artifacts/songs/

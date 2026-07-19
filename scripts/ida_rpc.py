@@ -20,7 +20,7 @@ from typing import Any
 
 
 DEFAULT_WINDOWS_PYTHON = Path(
-    "/mnt/d/Sec-Tools/Reverse/IDA Pro 9.3/python311/python.exe"
+    "/mnt/c/Program Files/IDA Professional 9.3/python/python.exe"
 )
 
 # Conservative allow-list.  IDA's upstream "unsafe" marker only covers debugger
