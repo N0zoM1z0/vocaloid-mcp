@@ -857,7 +857,7 @@ const VoiceProbeDataOutputSchema = z.object({
   cachePath: z.string(),
   record: VoiceProbeRecordOutputSchema,
   host: RenderHostOutputSchema,
-}).strict();
+}).passthrough();
 
 const HostReadinessDataOutputSchema = z.object({
   editorLease: z.object({ requestId: z.string(), ownerAlive: z.boolean() }).passthrough().nullable(),

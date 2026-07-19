@@ -39,3 +39,26 @@ Detailed note: `notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md`
     vocabulary; production agents see only the DSL.
   - Status: policy and capability contract updated; no corpus path or retrieval
     was added to MCP.
+
+## 2026-07-19 — IA visible in files but absent from Editor
+
+Detailed note: `notes/ia-voicebank-registration-2026-07-19.md`
+
+- **Metadata discovery was mistaken for singer availability**
+  - Scope: IA and IA_ROCKS VVD/DDI/DDB files and `INSTALLED=1` entries existed,
+    but IA initially had an all-zero activation-time marker and did not appear
+    in Editor.
+  - Decision: treat VVD as metadata only; inspect bounded registry marker
+    presence before an Editor probe and never expose/copy license marker values.
+  - Status: IA's marker is now non-zero and IA appears in Editor; both voices
+    pass isolated original-Editor renders. A third visible
+    `IA_Alpha_TypeC_trial` bank has active registration but remains render-
+    inconclusive because two attempts failed at Save-dialog filename automation.
+
+- **A non-silent probe could accept singer fallback**
+  - Scope: an old IA and IA_ROCKS probe pair had byte-identical WAV digests yet
+    both were cached as verified.
+  - Decision: reject exact cross-component digest collision on one host as
+    unverified identity, even if the WAV is non-silent.
+  - Status: guard implemented; current IA and IA_ROCKS forced probes are
+    non-silent and have distinct SHA-256 digests.

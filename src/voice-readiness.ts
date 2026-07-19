@@ -20,6 +20,11 @@ import {
 import { fileSha256 } from "./song-manifest.js";
 import { discoverVoices } from "./voices.js";
 import { createSong } from "./vsqx.js";
+import {
+  inspectVoiceRegistration,
+  type VoiceRegistrationInspection,
+  type VoiceRegistrationStatus,
+} from "./voice-registration.js";
 
 
 const CACHE_SCHEMA = "vocaloid-mcp/voice-readiness/v1";
@@ -41,6 +46,7 @@ export interface VoiceProbeRecord {
   editorVersion: string;
   helperSha256: string;
   reason: string;
+  registrationStatus?: VoiceRegistrationStatus;
   projectSha256?: string;
   renderSha256?: string;
   renderDurationSeconds?: number;
@@ -175,22 +181,69 @@ export interface ProbeVoiceResult {
   cachePath: string;
   record: VoiceProbeRecord;
   host: RenderHostFingerprint;
+  registration: VoiceRegistrationInspection;
+}
+
+export function findVoiceIdentityCollision(
+  records: readonly VoiceProbeRecord[],
+  componentId: string,
+  hostCacheKey: string,
+  renderSha256: string,
+): VoiceProbeRecord | undefined {
+  return records.find((record) => record.componentId !== componentId
+    && record.hostCacheKey === hostCacheKey
+    && record.status === "verified"
+    && record.renderSha256 === renderSha256);
+}
+
+async function persistProbeRecord(
+  cache: VoiceReadinessCache,
+  record: VoiceProbeRecord,
+): Promise<void> {
+  await writeCache({
+    schema: CACHE_SCHEMA,
+    updatedAt: new Date().toISOString(),
+    records: [
+      ...cache.records.filter((candidate) => !sameRecord(candidate, record.componentId, record.hostCacheKey)),
+      record,
+    ].sort((left, right) => left.componentId.localeCompare(right.componentId)
+      || left.hostCacheKey.localeCompare(right.hostCacheKey)),
+  });
 }
 
 export async function probeVoice(options: ProbeVoiceOptions): Promise<ProbeVoiceResult> {
   const componentId = options.componentId.trim();
   if (componentId.length !== 16) throw new Error("componentId must contain exactly 16 characters");
-  const [host, voices, cache] = await Promise.all([
+  const [host, voices, cache, registration] = await Promise.all([
     inspectRenderHost(options.allowUnknownEditor),
     discoverVoices(),
     readCache(),
+    inspectVoiceRegistration(componentId),
   ]);
   const voice = voices.find((candidate) => candidate.componentId === componentId);
   if (!voice) throw new Error(`No local VVD metadata for voice component ${componentId}`);
   const now = Date.now();
   const cached = cache.records.find((record) => sameRecord(record, componentId, host.cacheKey));
+  if (registration.status === "activation_incomplete" || registration.status === "not_registered") {
+    const checkedAt = new Date().toISOString();
+    const record: VoiceProbeRecord = {
+      componentId,
+      voiceName: voice.name,
+      status: "unavailable",
+      checkedAt,
+      expiresAt: new Date(Date.parse(checkedAt) + UNAVAILABLE_TTL_MS).toISOString(),
+      hostCacheKey: host.cacheKey,
+      editorSha256: host.editorSha256,
+      editorVersion: host.editorVersion,
+      helperSha256: host.helperSha256,
+      reason: registration.reason,
+      registrationStatus: registration.status,
+    };
+    await persistProbeRecord(cache, record);
+    return { cached: false, cachePath: cachePath(), record, host, registration };
+  }
   if (!options.force && cached && Date.parse(cached.expiresAt) > now) {
-    return { cached: true, cachePath: cachePath(), record: cached, host };
+    return { cached: true, cachePath: cachePath(), record: cached, host, registration };
   }
 
   const runtimeDirectory = join(PROJECT_ROOT, "build/runtime");
@@ -242,7 +295,28 @@ export async function probeVoice(options: ProbeVoiceOptions): Promise<ProbeVoice
       );
       const renderDigest = await fileSha256(outputPath);
       const checkedAt = new Date().toISOString();
-      record = {
+      const collision = findVoiceIdentityCollision(
+        cache.records,
+        componentId,
+        host.cacheKey,
+        renderDigest.sha256,
+      );
+      record = collision ? {
+        componentId,
+        voiceName: voice.name,
+        status: "error",
+        checkedAt,
+        expiresAt: new Date(Date.parse(checkedAt) + ERROR_TTL_MS).toISOString(),
+        hostCacheKey: host.cacheKey,
+        editorSha256: host.editorSha256,
+        editorVersion: host.editorVersion,
+        helperSha256: host.helperSha256,
+        reason: `Voice identity is unverified: rendered WAV exactly matches ${collision.voiceName} (${collision.componentId}); possible singer fallback.`,
+        registrationStatus: registration.status,
+        projectSha256: projectDigest.sha256,
+        renderSha256: renderDigest.sha256,
+        renderDurationSeconds: render.durationSeconds,
+      } : {
         componentId,
         voiceName: voice.name,
         status: "verified",
@@ -253,6 +327,7 @@ export async function probeVoice(options: ProbeVoiceOptions): Promise<ProbeVoice
         editorVersion: host.editorVersion,
         helperSha256: host.helperSha256,
         reason: "Original VOCALOID3 Editor rendered the generated locked-phoneme probe as verified non-silent audio.",
+        registrationStatus: registration.status,
         projectSha256: projectDigest.sha256,
         renderSha256: renderDigest.sha256,
         renderDurationSeconds: render.durationSeconds,
@@ -276,6 +351,7 @@ export async function probeVoice(options: ProbeVoiceOptions): Promise<ProbeVoice
         editorVersion: host.editorVersion,
         helperSha256: host.helperSha256,
         reason: message,
+        registrationStatus: registration.status,
         projectSha256: projectDigest.sha256,
       };
     }
@@ -283,15 +359,6 @@ export async function probeVoice(options: ProbeVoiceOptions): Promise<ProbeVoice
     await rm(temporary, { recursive: true, force: true });
   }
 
-  const next: VoiceReadinessCache = {
-    schema: CACHE_SCHEMA,
-    updatedAt: new Date().toISOString(),
-    records: [
-      ...cache.records.filter((candidate) => !sameRecord(candidate, componentId, host.cacheKey)),
-      record!,
-    ].sort((left, right) => left.componentId.localeCompare(right.componentId)
-      || left.hostCacheKey.localeCompare(right.hostCacheKey)),
-  };
-  await writeCache(next);
-  return { cached: false, cachePath: cachePath(), record: record!, host };
+  await persistProbeRecord(cache, record!);
+  return { cached: false, cachePath: cachePath(), record: record!, host, registration };
 }
