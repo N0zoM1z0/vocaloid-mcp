@@ -12,6 +12,7 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
     "compose:intent-demo": "npm run build && node scripts/compose-intent-demo.mjs",
+    "compose:distant-lights": "npm run build && node scripts/compose-distant-lights.mjs",
     "eval:styles": "node scripts/generate-style-evals.mjs",
     "eval:intent-first": "npm run build && node scripts/evaluate-intent-first-benchmark.mjs",
     "eval:intent-first:finalize-trace": "npm run build && node scripts/finalize-intent-first-trace.mjs",
