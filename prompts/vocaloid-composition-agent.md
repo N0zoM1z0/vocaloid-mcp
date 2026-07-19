@@ -26,6 +26,9 @@ Use only new run-scoped paths:
 
 Never overwrite an audio or VSQX artifact. Resume only the matching canonical
 manifest and use revision-bearing intermediate filenames.
+Leave framework files unchanged during a cold-start evaluation unless a defect
+blocks completion; document non-blocking defects in the issue note. Do not
+commit, push, or open a PR—the supervising session owns Git publication.
 
 ## Source and authorship boundary
 
