@@ -45,6 +45,11 @@ export interface MasterWavResult {
   targetLoudnessRangeLu: number;
   loudnessRangeDeltaLu: number;
   loudnessRangeTargetMet: boolean;
+  requestedLoudnessGainLu: number;
+  peakSafeGainDb: number;
+  peakReductionRequiredDb: number;
+  loudnessRangeChangeLu: number;
+  transparencyReviewRecommended: boolean;
   truePeakCorrectionDb: number;
   measuredByLoudnorm: {
     inputLufs: number;
@@ -219,6 +224,9 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
     throw new Error(`Output already exists: ${outputPath}. Set overwrite=true to replace it.`);
   }
   const source = await analyzeAudioQuality(inputPath, options.targetLufs, options.targetTruePeakDbfs);
+  const requestedLoudnessGainLu = options.targetLufs - source.integratedLufs;
+  const peakSafeGainDb = options.targetTruePeakDbfs - source.truePeakDbfs;
+  const peakReductionRequiredDb = Math.max(0, requestedLoudnessGainLu - peakSafeGainDb);
   const ffmpeg = await ffmpegPath();
   const baseFilter = [
     `I=${options.targetLufs}`,
@@ -326,6 +334,9 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
       await copyFile(outputPath, backupPath);
     }
     await rename(temporary, outputPath);
+    const loudnessRangeChangeLu = output.loudnessRangeLu - source.loudnessRangeLu;
+    const transparencyReviewRecommended = peakReductionRequiredDb > 1.5
+      || Math.abs(loudnessRangeChangeLu) > 1.5;
     return {
       inputPath,
       outputPath,
@@ -337,6 +348,11 @@ export async function masterWav(options: MasterWavOptions): Promise<MasterWavRes
       loudnessRangeDeltaLu: output.loudnessRangeLu - options.targetLoudnessRangeLu,
       loudnessRangeTargetMet:
         Math.abs(output.loudnessRangeLu - options.targetLoudnessRangeLu) <= 1.5,
+      requestedLoudnessGainLu,
+      peakSafeGainDb,
+      peakReductionRequiredDb,
+      loudnessRangeChangeLu,
+      transparencyReviewRecommended,
       truePeakCorrectionDb,
       measuredByLoudnorm: measuredValues,
     };

@@ -24,6 +24,7 @@ const PRODUCTION_TOOLS = [
   "vocaloid_inspect_song_manifest",
   "vocaloid_manifest_history",
   "vocaloid_master_manifest_delivery",
+  "vocaloid_phrase_grammar",
   "vocaloid_preflight_song",
   "vocaloid_probe_voice",
   "vocaloid_render_instrument_stems",
@@ -83,9 +84,34 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   assert.match(intentEntry && "text" in intentEntry ? intentEntry.text : "", /What is IA meant to sing out/u);
   const theoryPolicy = await client.readResource({ uri: "vocaloid://music-theory-policy" });
   const theoryEntry = theoryPolicy.contents[0];
-  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Style evidence never suppresses/u);
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /style evidence never suppresses/ui);
   assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Bounded proposal contract/u);
   assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /must not silently replace the phrase purpose/u);
+  const phraseGrammar = await client.readResource({ uri: "vocaloid://phrase-grammar" });
+  const phraseGrammarEntry = phraseGrammar.contents[0];
+  const phraseGrammarIndex = JSON.parse(phraseGrammarEntry && "text" in phraseGrammarEntry ? phraseGrammarEntry.text : "null");
+  assert.equal(phraseGrammarIndex.schema, "vocaloid-phrase-grammar/v1");
+  assert.equal(phraseGrammarIndex.boundary.runtime_corpus_access, "forbidden");
+  const phraseGrammarTool = await client.callTool({
+    name: "vocaloid_phrase_grammar",
+    arguments: {
+      action: "catalog",
+      payload: { category: "contour", limit: 5, offset: 0 },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(phraseGrammarTool.isError, true);
+  const phraseGrammarData = phraseGrammarTool.structuredContent as { data?: { count?: number; items?: Array<{ category?: string }> } };
+  assert.equal(phraseGrammarData.data?.count, 5);
+  assert.ok(phraseGrammarData.data?.items?.every((entry) => entry.category === "contour"));
+  const phraseGrammarContract = await client.readResource({
+    uri: "vocaloid://phrase-grammar-contract/validate_blueprint",
+  });
+  const phraseGrammarContractEntry = phraseGrammarContract.contents[0];
+  assert.match(
+    phraseGrammarContractEntry && "text" in phraseGrammarContractEntry ? phraseGrammarContractEntry.text : "",
+    /melody_authorship/u,
+  );
 
   const editContract = await client.readResource({ uri: "vocaloid://edit-song-contract" });
   const editContractEntry = editContract.contents[0];
@@ -220,6 +246,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_manifest_history",
       "vocaloid_master_manifest_delivery",
       "vocaloid_master_wav",
+      "vocaloid_phrase_grammar",
       "vocaloid_preflight_song",
       "vocaloid_probe_voice",
       "vocaloid_remove_song_objects",

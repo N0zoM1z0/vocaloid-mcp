@@ -11,10 +11,14 @@ The production system already knows how to make IA sing a complete timeline. Thi
 ## Three distinct domains
 
 1. `composition_intent` declares what the current work, section, and phrase are trying to do.
-2. `composition_guidance` declares theory rules, strictness, review policy, exceptions, and an optional aggregate style pin.
-3. corpus/style evidence describes broad, sanitized observations and can never author or mutate intent.
+2. `composition_guidance` declares theory rules, strictness, review policy, and exceptions.
+3. phrase grammar offers a versioned style/genre vocabulary and can never author or mutate intent.
 
-The distinction is a hard boundary. An IA profile may report a broad register or performance range. It may not choose the narrator, addressee, semantic focus, phrase transition, delivery arc, realization hypothesis, or listening question.
+The distinction is a hard boundary. A phrase-grammar bundle may offer roles,
+entries, contours, rhythms, motion, cadences, allocation, articulation, and
+space as an unordered option pool. It may not choose the narrator, addressee,
+semantic focus, phrase transition, delivery arc, realization hypothesis,
+listening question, or concrete melody.
 
 ## Hierarchy and context budget
 
@@ -124,4 +128,10 @@ One loudness-matched A/B answers one registered listening question. A musical ch
 
 Intent authoring imports no corpus, style profile, per-track feature, or nearest-reference API. Restricted corpus/style modules are contract-tested against importing the four intent mutation capabilities. Phrase realization, melody continuation, lyric allocation, and repair remain unable to reach the per-track corpus store.
 
-The local IA library can accumulate evidence about the voice and broad musical practice, but the current work's meaning remains an original decision grounded in the user's brief and lyrics.
+The local IA library is outside the production runtime. Offline, it may motivate
+human-reviewed, non-reconstructive phrase-grammar vocabulary; it may not export
+reference sequences, continuation hints, source identity, or a melody template.
+The production agent selects a bounded vocabulary and then authors pitch,
+onset, duration, lyric allocation, and development from the current intent,
+prosody, harmony, and form. The current work's meaning and final melody remain
+original decisions grounded in the user's brief and lyrics.

@@ -35,6 +35,7 @@ import {
   SectionCreativeIntentSchema,
 } from "./intent/types.js";
 import { resolveReadablePath, resolveWritablePath } from "./paths.js";
+import { PhraseGrammarBlueprintSchema } from "./phrase-grammar.js";
 import { assertTheoryExceptionApplicable } from "./theory/policy.js";
 import {
   CompositionGuidanceSchema,
@@ -202,6 +203,8 @@ export const ManifestVocalPhraseSchema = z
     allocation: z.enum(["sequential", "explicit"]).default("sequential"),
     lyrics: z.array(ManifestLyricUnitSchema).min(1).max(5000),
     cells: z.array(ManifestRhythmCellSchema).min(1).max(20_000),
+    grammar_blueprint: PhraseGrammarBlueprintSchema.optional()
+      .describe("Optional agent-selected phrase grammar plan; does not generate or rewrite notes"),
     linguistic_source: z
       .object({
         language: z.literal("ja"),

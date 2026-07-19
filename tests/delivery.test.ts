@@ -153,6 +153,14 @@ test("manifest-aware delivery verifies provenance and atomically records masteri
   const recorded = after.artifacts.find((artifact) => artifact.id === result.artifact.id);
   assert.equal(recorded?.sha256, (await fileSha256(deliveryPath)).sha256);
   assert.equal(recorded?.source_composition_hash, compositionHash);
+  assert.equal(
+    recorded?.metadata.mastering_transparency_review_recommended,
+    result.mastering.transparencyReviewRecommended,
+  );
+  assert.equal(
+    recorded?.metadata.mastering_peak_reduction_required_db,
+    result.mastering.peakReductionRequiredDb,
+  );
 
   const staleMixPath = join(temporary, "delivery-song-stale-mix-r5.wav");
   await writeFile(staleMixPath, stereoTone(3));

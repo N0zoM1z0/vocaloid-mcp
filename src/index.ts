@@ -44,6 +44,15 @@ import {
 } from "./intent/types.js";
 import { diffManifestSnapshots, listManifestHistory } from "./manifest-history.js";
 import { resolveReadablePath } from "./paths.js";
+import { analyzeManifestPhraseGrammar } from "./phrase-grammar-analysis.js";
+import {
+  PHRASE_GRAMMAR_BUNDLES,
+  PhraseGrammarBlueprintSchema,
+  PhraseGrammarCategorySchema,
+  listPhraseGrammar,
+  phraseGrammarIndex,
+  validatePhraseGrammarBlueprint,
+} from "./phrase-grammar.js";
 import { previewSongManifestMutation } from "./mutation-preview.js";
 import { compileVocalPhrase, type VocalPhraseInput } from "./vocal-phrase.js";
 import {
@@ -139,6 +148,7 @@ const PRODUCTION_TOOL_NAMES = new Set([
   "vocaloid_host_readiness",
   "vocaloid_probe_voice",
   "vocaloid_align_japanese_phrase",
+  "vocaloid_phrase_grammar",
   "vocaloid_create_song_manifest",
   "vocaloid_import_vsqx_manifest",
   "vocaloid_edit_song",
@@ -194,7 +204,7 @@ const MCP_PROFILE = resolveMcpProfile();
 const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
-    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, vocaloid://music-theory-policy, and vocaloid://creative-decision-journal first; read the on-demand action contract before each compact envelope tool. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Append concise evidence-bound decisions with vocaloid_creative_journal after each stage; do not store raw hidden chain-of-thought. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Style palettes are optional post-composition observations: they never define intent or provide the next note/chord. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; native gesture materialization and an actual non-silent Editor render are separate evidence. Publish a hash-bound creative-record package with the final song and VSQX. VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+    instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, vocaloid://music-theory-policy, vocaloid://phrase-grammar, and vocaloid://creative-decision-journal first; read the on-demand action contract before each compact envelope tool. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, an agent-selected phrase-grammar blueprint, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Phrase grammar is an unordered style/genre choice vocabulary, not automatic melody generation: never expand a bundle as a template. Compose concrete pitch, scale-degree, onset, and duration material yourself from intent, lyric prosody, harmony, and form; then validate selected components, materialize them in notes/rests/allocation, and run phrase-grammar analysis before delivery. Production agents never query the local song library; offline library work may only add human-reviewed, non-reconstructive DSL components. Append concise evidence-bound decisions with vocaloid_creative_journal after each stage; do not store raw hidden chain-of-thought. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Compare premaster and final delivery at equal loudness whenever mastering reports transparency-review risk. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; native gesture materialization and an actual non-silent Editor render are separate evidence. Publish a hash-bound creative-record package with the final song and VSQX. VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
   },
 );
 
@@ -229,6 +239,39 @@ for (const palette of STYLE_PALETTES) {
     }),
   );
 }
+
+server.registerResource(
+  "vocaloid-phrase-grammar",
+  "vocaloid://phrase-grammar",
+  {
+    title: "Deterministic vocal phrase grammar DSL",
+    description: "Versioned role, entry, contour, rhythm, motion, cadence, development, allocation, articulation, space, and IA/genre bundle vocabulary for agent-selected phrase plans.",
+    mimeType: "application/json",
+  },
+  async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(phraseGrammarIndex(), null, 2) }],
+  }),
+);
+
+server.registerResource(
+  "vocaloid-phrase-grammar-bundle",
+  new ResourceTemplate("vocaloid://phrase-grammar/bundle/{id}", {
+    list: undefined,
+    complete: { id: () => PHRASE_GRAMMAR_BUNDLES.map((bundle) => bundle.id) },
+  }),
+  {
+    title: "One vocal phrase grammar bundle",
+    description: "A bounded IA/genre/delivery component palette. Bundles offer choices and variation axes; they do not generate notes.",
+    mimeType: "application/json",
+  },
+  async (uri, variables) => {
+    const requested = variables.id;
+    const id = Array.isArray(requested) ? requested[0] : requested;
+    const bundle = PHRASE_GRAMMAR_BUNDLES.find((candidate) => candidate.id === id);
+    if (!bundle) throw new Error(`Unknown phrase-grammar bundle ${String(id)}`);
+    return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(bundle, null, 2) }] };
+  },
+);
 
 server.registerResource(
   "vocaloid-composition-intent-contract",
@@ -370,23 +413,23 @@ server.registerResource(
           "legacy-vsqx": "Low-level direct VSQX inspection and mutation for recovery or reverse-engineering",
         },
         canonical_workflow: [
-          "Read the composition-intent contract, core theory policy, and any authoritative lyric resource",
+          "Read the composition-intent contract, core theory policy, phrase-grammar DSL, and any authoritative lyric resource",
           "Check host readiness and cached IA_ROCKS availability",
           "Create or import a canonical manifest",
           "Declare song/section intent plus 1-3 anchor phrase purposes, semantic focuses, transitions, delivery arcs, and single listening questions",
           "Append a concise hash-bound journal decision after intent, each theory stage, note allocation, IA delivery, and arrangement",
-          "Establish form, meter/tempo, key/harmony/bass, lead melody, and Japanese note allocation without corpus/style input",
+          "Select and validate phrase-grammar components for each phrase role, then establish lead melody and Japanese note allocation without runtime corpus access",
           "Align explicit Japanese readings; preserve original lyric provenance",
           "Use vocaloid_edit_song dry_run=true, then apply with the returned current revision",
           "Run vocaloid_preflight_song; when repair hypotheses are useful, request 3-8 theory-only proposals and hold each group's listening question constant",
+          "Run vocaloid_phrase_grammar analyze_manifest and disposition phrase entry/motion/contour/rhythm concentration before delivery",
           "Set composition guidance when release must require exact theory-warning disposition and/or current anchor intent review",
           "Evaluate a selected proposal through vocaloid_edit_song dry_run and inspect actual theory/intent deltas before a separate write",
           "Repeat preflight until the requested readiness gate passes",
           "Build VSQX/backing and render either stems or a manifest master",
           "Render a 20-30 second lead_solo, lead_harmony, and minimal_band anchor ladder",
           "Run one-question loudness-matched A/B and attach an explicit digest-bound keep/reject/revise review",
-          "Optionally inspect an aggregate style palette only after the symbolic composition and anchor question are established",
-          "Master only after the separate releasePolicy is ready; verify loudness, true peak, clipping, channels, hashes, and dependencies",
+          "Master only after the separate releasePolicy is ready; when transparency risk is reported, compare premaster and delivery at equal loudness before publishing",
           "Publish the complete journal/report/manifest package bound to the final song and VSQX artifacts",
         ],
         examples: ["vocaloid://examples/from-zero"],
@@ -394,6 +437,7 @@ server.registerResource(
           edit_song: "vocaloid://edit-song-contract",
           composition_intent: "vocaloid://composition-intent-contract",
           music_theory: "vocaloid://music-theory-policy",
+          phrase_grammar: "vocaloid://phrase-grammar",
           creative_journal: "vocaloid://creative-journal-contract",
         },
         agent_contract: {
@@ -406,7 +450,8 @@ server.registerResource(
           creative_record: "append-only hash chain with stable-object/artifact/hash bindings; stale decisions remain visible and final packages require complete current core coverage",
           proposals: "read-only revision/hash-bound A/B/C hypotheses; no corpus/profile access, no direct write, mandatory edit dry-run and listening check",
           release_policy: "optional/backward-compatible; required warnings need exact current exceptions, required intent review blocks only final delivery",
-          style_boundary: "optional post-composition observation; never writes intent or supplies melody/chord continuation",
+          phrase_grammar: "unordered style/genre option vocabulary with melody_material=absent; the agent composes final notes from intent/prosody/harmony/form and optional blueprints are analyzed without generating notes",
+          library_boundary: "production agents cannot query the local song library; offline analysis may only curate human-reviewed, non-reconstructive DSL components",
         },
         renderer_boundaries: {
           vocal: "Original VOCALOID3 Editor with a verified IA_ROCKS voice probe",
@@ -437,8 +482,7 @@ server.registerResource(
 
 const ResponseFormatSchema = z
   .enum(["markdown", "json"])
-  .default("markdown")
-  .describe("Response representation: concise Markdown or JSON");
+  .default("markdown");
 const PathSchema = z
   .string()
   .min(1)
@@ -953,6 +997,97 @@ const CreativeJournalActionSchema = z.enum(["record", "list", "report", "publish
 const CreativeJournalDataOutputSchema = z.object({
   action: CreativeJournalActionSchema,
 }).passthrough();
+
+const PhraseGrammarDataOutputSchema = z.object({
+  action: z.enum(["catalog", "validate_blueprint", "analyze_manifest"]),
+}).passthrough();
+
+const PhraseGrammarInputSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("catalog"),
+    category: PhraseGrammarCategorySchema.optional(),
+    bundle_id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,95}$/u).optional(),
+    query: z.string().min(1).max(200).optional(),
+    offset: z.number().int().min(0).default(0),
+    limit: z.number().int().min(1).max(100).default(30),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
+    action: z.literal("validate_blueprint"),
+    blueprint: PhraseGrammarBlueprintSchema,
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
+    action: z.literal("analyze_manifest"),
+    manifest_path: PathSchema,
+    track_id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,95}$/u).optional(),
+    maximum_pair_examples: z.number().int().min(0).max(50).default(12),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+]);
+
+const PhraseGrammarActionSchema = z.enum(["catalog", "validate_blueprint", "analyze_manifest"]);
+
+// Keep tools/list compact and make each strict action contract available only
+// when it is needed. Runtime parsing still uses PhraseGrammarInputSchema.
+const PhraseGrammarToolInputSchema = z.object({
+  action: PhraseGrammarActionSchema,
+  payload: z.record(z.string(), z.unknown()).superRefine((payload, context) => {
+    for (const reserved of ["action", "response_format"]) {
+      if (Object.hasOwn(payload, reserved)) {
+        context.addIssue({ code: "custom", path: [reserved], message: `${reserved} belongs in the tool envelope` });
+      }
+    }
+  }).describe("Strict payload: vocaloid://phrase-grammar-contract/{action}"),
+  response_format: ResponseFormatSchema,
+}).strict();
+
+const PHRASE_GRAMMAR_ACTION_NAMES = PhraseGrammarActionSchema.options;
+
+server.registerResource(
+  "vocaloid-phrase-grammar-action-contract",
+  new ResourceTemplate("vocaloid://phrase-grammar-contract/{action}", {
+    list: undefined,
+    complete: { action: () => [...PHRASE_GRAMMAR_ACTION_NAMES] },
+  }),
+  {
+    title: "One vocaloid_phrase_grammar action payload schema",
+    description: "Strict on-demand JSON Schema for one phrase-grammar action.",
+    mimeType: "application/json",
+  },
+  async (uri, variables) => {
+    const requested = variables.action;
+    const action = Array.isArray(requested) ? requested[0] : requested;
+    if (!action || !PHRASE_GRAMMAR_ACTION_NAMES.includes(action as (typeof PHRASE_GRAMMAR_ACTION_NAMES)[number])) {
+      throw new Error(`Unknown vocaloid_phrase_grammar contract action ${String(action)}`);
+    }
+    const option = PhraseGrammarInputSchema.options.find(
+      (candidate) => candidate.shape.action.value === action,
+    );
+    if (!option) throw new Error(`Missing vocaloid_phrase_grammar contract for ${action}`);
+    const payloadSchema = structuredClone(z.toJSONSchema(option, { target: "draft-7", io: "input" })) as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+      [key: string]: unknown;
+    };
+    if (payloadSchema.properties) {
+      delete payloadSchema.properties.action;
+      delete payloadSchema.properties.response_format;
+    }
+    if (payloadSchema.required) {
+      payloadSchema.required = payloadSchema.required.filter(
+        (field) => field !== "action" && field !== "response_format",
+      );
+    }
+    return {
+      contents: [{
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify(payloadSchema, null, 2),
+      }],
+    };
+  },
+);
 
 const CreativeJournalActionRequestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -2476,6 +2611,65 @@ This is an audio renderer, not a MIDI deliverable: a temporary Standard MIDI Fil
 );
 
 server.registerTool(
+  "vocaloid_phrase_grammar",
+  {
+    title: "Browse, Validate, or Analyze Vocal Phrase Grammar",
+    description: "Browse phrase choices, validate a blueprint, or analyze diversity; never generates melody.",
+    inputSchema: PhraseGrammarToolInputSchema,
+    outputSchema: workflowOutputSchema(PhraseGrammarDataOutputSchema),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (envelope) => {
+    try {
+      const params = PhraseGrammarInputSchema.parse({
+        ...envelope.payload,
+        action: envelope.action,
+        response_format: envelope.response_format,
+      });
+      if (params.action === "catalog") {
+        const catalog = listPhraseGrammar({
+          ...(params.category ? { category: params.category } : {}),
+          ...(params.bundle_id ? { bundleId: params.bundle_id } : {}),
+          ...(params.query ? { query: params.query } : {}),
+          offset: params.offset,
+          limit: params.limit,
+        });
+        return workflowResult(
+          { action: "catalog" as const, ...catalog },
+          params.response_format,
+          `Returned ${catalog.count}/${catalog.total} phrase-grammar component(s)`,
+        );
+      }
+      if (params.action === "validate_blueprint") {
+        const validation = validatePhraseGrammarBlueprint(params.blueprint);
+        return workflowResult(
+          { action: "validate_blueprint" as const, ...validation },
+          params.response_format,
+          `Validated phrase-grammar blueprint ${validation.blueprint.id}`,
+        );
+      }
+      const loaded = await loadSongManifest(params.manifest_path);
+      const report = analyzeManifestPhraseGrammar(loaded.manifest, {
+        ...(params.track_id ? { trackId: params.track_id } : {}),
+        maximumPairExamples: params.maximum_pair_examples,
+      });
+      return workflowResult(
+        { action: "analyze_manifest" as const, path: loaded.path, revision: loaded.manifest.revision, ...report },
+        params.response_format,
+        `Analyzed ${report.summary.phrases} vocal phrase(s); ${report.summary.warnings} phrase-grammar warning(s)`,
+      );
+    } catch (error) {
+      return workflowError(error);
+    }
+  },
+);
+
+server.registerTool(
   "vocaloid_japanese_g2p",
   {
     title: "Convert Japanese Reading to VOCALOID3 Phonemes",
@@ -3804,7 +3998,7 @@ server.registerTool(
   "vocaloid_master_manifest_delivery",
   {
     title: "Master and Record Manifest Delivery",
-    description: "Two-pass loudness-master a current mix/master and atomically record the verified delivery dependency and provenance.",
+    description: "Two-pass loudness-master a current mix/master, report deterministic peak/LRA transparency risk for source-vs-delivery A/B, and atomically record verified provenance.",
     inputSchema: z.object({
       manifest_path: PathSchema,
       expected_revision: z.number().int().min(1),
@@ -3843,6 +4037,9 @@ server.registerTool(
           : []),
         ...(!result.mastering.loudnessRangeTargetMet
           ? [`Loudness range ${result.mastering.output.loudnessRangeLu.toFixed(1)} LU differs from the requested ${params.target_loudness_range_lu.toFixed(1)} LU; loudnorm does not invent dynamics`]
+          : []),
+        ...(result.mastering.transparencyReviewRecommended
+          ? [`Mastering needs ${result.mastering.peakReductionRequiredDb.toFixed(1)} dB of peak reshaping and changed LRA by ${result.mastering.loudnessRangeChangeLu.toFixed(1)} LU; compare this source artifact and delivery over the same passage at equal LUFS before publishing`]
           : []),
       ];
       return workflowResult(

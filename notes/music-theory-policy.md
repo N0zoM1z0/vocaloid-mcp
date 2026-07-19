@@ -9,10 +9,11 @@ The production workflow uses lexicographic priorities:
 1. preserve the user's brief, lyric meaning, and declared song/section/phrase intent;
 2. make the melody, harmony, rhythm, note allocation, IA delivery, and arrangement traceably serve that intent;
 3. make form, timeline, harmony, singability, note allocation, voice leading, and arrangement internally coherent;
-4. pass novelty and provenance gates;
-5. optionally compare the completed symbolic composition with one pinned aggregate IA profile.
+4. choose a versioned phrase-grammar blueprint where it helps make phrase roles
+   and variation explicit;
+5. preserve authorship and artifact provenance.
 
-Style evidence never suppresses a structural error and never supplies the next note, chord, lyric allocation, or repair patch.
+Phrase-grammar or style evidence never suppresses a structural error and never supplies the next note, chord, lyric allocation, or repair patch.
 
 ## Severity
 
@@ -92,6 +93,17 @@ A valid exception moves only that exact warning/info finding from `issues` to `i
 
 `composition_intent` is a separate optional creative declaration. It participates in `content_hash` and has a derived `intent_hash`, but does not enter `composition_hash` or `mix_hash`. An intent-only edit invalidates intent-fidelity listening review instead of forcing a byte-identical score/audio rebuild. See `composition-intent-contract.md`.
 
-## Style pin
+## Phrase grammar and local-library boundary
 
-A song can pin one aggregate style profile ID/version. The pin is provenance, not a recipe. Changing it requires an explicit guidance revision. Production code never receives a reference track ID, title, path, nearest neighbor, or reconstructive sequence.
+`vocaloid-phrase-grammar/v1` is an optional, versioned selection vocabulary
+between phrase intent and concrete notes. A blueprint can name role, entry,
+contour, rhythm, motion, cadence, development, allocation, articulation, space,
+and measurable limits. It neither generates notes nor certifies intent success.
+The separate phrase-grammar analyzer is read-only and does not change the core
+preflight ruleset or legacy manifest behavior.
+
+Production agents never receive local-library paths, source identities,
+per-track features, nearest examples, reference sequences, or aggregate
+comparison results. Offline library analysis may motivate a human-reviewed,
+non-reconstructive DSL component; production receives only that versioned
+component. See `phrase-grammar-dsl.md`.
