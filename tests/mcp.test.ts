@@ -53,6 +53,16 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
     assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
     assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
   }
+  const prompts = await client.listPrompts();
+  assert.deepEqual(prompts.prompts.map((prompt) => prompt.name), ["vocaloid_compose_from_intent"]);
+  const compositionPrompt = await client.getPrompt({
+    name: "vocaloid_compose_from_intent",
+    arguments: { intent_file: "intents/2026-07-19-summer-night-rain-cicadas-ia-rocks.intent.json" },
+  });
+  const compositionPromptText = compositionPrompt.messages[0]?.content;
+  assert.equal(compositionPromptText?.type, "text");
+  assert.match(compositionPromptText?.type === "text" ? compositionPromptText.text : "", /summer-night-rain-cicadas/u);
+  assert.match(compositionPromptText?.type === "text" ? compositionPromptText.text : "", /BDREB7P2KTWKYDC5/u);
   const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
   assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
   assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_intent/u);

@@ -8,6 +8,7 @@ import {
   listCreativeDecisions,
   publishCreativeRecordPackage,
   recordCreativeDecision,
+  recordCreativeDecisionIfAbsent,
   writeCreativeJournalReport,
 } from "../src/creative-journal.js";
 import {
@@ -97,41 +98,61 @@ test("creative decisions remain hash-chained, paginated, freshness-aware, and pu
     "intent", "form", "meter_tempo", "harmony", "melody",
     "note_allocation", "ia_delivery", "arrangement",
   ] as const;
+  let firstDecision: Parameters<typeof recordCreativeDecision>[0]["decision"] | undefined;
   for (const [index, phase] of phases.entries()) {
+    const decision: Parameters<typeof recordCreativeDecision>[0]["decision"] = {
+      id: `decision-${phase.replaceAll("_", "-")}`,
+      phase,
+      kind: "selection",
+      title: `${phase} decision`,
+      objective: `Make the ${phase} stage serve the restrained opening.`,
+      decision: `Use bounded ${phase} material with a clear relation to the verse.`,
+      rationale: "The stable verse object and current composition hash provide auditable evidence for this bounded choice.",
+      alternatives: [{
+        option: "Use a denser realization",
+        disposition: "rejected",
+        reason: "It would obscure the intended restraint.",
+      }],
+      expected_audible_effect: "The opening should remain clear and leave room for IA's lyric delivery.",
+      actual_result: "The implementation is present in the current test manifest evidence.",
+      affected_object_ids: ["verse"],
+      artifact_ids: index === phases.length - 1 ? ["delivery-final", "vsqx-final"] : [],
+      hash_dependencies: ["composition"],
+      supersedes_decision_ids: [],
+      evidence: {
+        constraints: ["Do not treat declaration as render proof."],
+        observations: [`The ${phase} choice is bound to the current verse fingerprint.`],
+        theory_issue_codes: [],
+        metric_deltas: [],
+      },
+      outcome: index === phases.length - 1 ? "delivered" : "implemented",
+      author: { type: "agent", name: "test-agent" },
+    };
+    if (index === 0) firstDecision = decision;
     const result = await recordCreativeDecision({
       manifestPath,
       expectedRevision: withArtifacts.revision,
-      decision: {
-        id: `decision-${phase.replaceAll("_", "-")}`,
-        phase,
-        kind: "selection",
-        title: `${phase} decision`,
-        objective: `Make the ${phase} stage serve the restrained opening.`,
-        decision: `Use bounded ${phase} material with a clear relation to the verse.`,
-        rationale: "The stable verse object and current composition hash provide auditable evidence for this bounded choice.",
-        alternatives: [{
-          option: "Use a denser realization",
-          disposition: "rejected",
-          reason: "It would obscure the intended restraint.",
-        }],
-        expected_audible_effect: "The opening should remain clear and leave room for IA's lyric delivery.",
-        actual_result: "The implementation is present in the current test manifest evidence.",
-        affected_object_ids: ["verse"],
-        artifact_ids: index === phases.length - 1 ? ["delivery-final", "vsqx-final"] : [],
-        hash_dependencies: ["composition"],
-        supersedes_decision_ids: [],
-        evidence: {
-          constraints: ["Do not treat declaration as render proof."],
-          observations: [`The ${phase} choice is bound to the current verse fingerprint.`],
-          theory_issue_codes: [],
-          metric_deltas: [],
-        },
-        outcome: index === phases.length - 1 ? "delivered" : "implemented",
-        author: { type: "agent", name: "test-agent" },
-      },
+      decision,
     });
     assert.equal(result.entry.sequence, index + 1);
   }
+
+  assert.ok(firstDecision);
+  const resumed = await recordCreativeDecisionIfAbsent({
+    manifestPath,
+    expectedRevision: withArtifacts.revision,
+    decision: firstDecision,
+  });
+  assert.equal(resumed.alreadyExisted, true);
+  assert.equal(resumed.entryCount, phases.length);
+  await assert.rejects(
+    recordCreativeDecisionIfAbsent({
+      manifestPath,
+      expectedRevision: withArtifacts.revision,
+      decision: { ...firstDecision, title: "changed intent decision" },
+    }),
+    /already exists with different content/iu,
+  );
 
   const firstPage = await listCreativeDecisions({ manifestPath, offset: 0, limit: 3 });
   assert.equal(firstPage.count, 3);

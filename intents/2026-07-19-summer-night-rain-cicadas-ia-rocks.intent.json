@@ -1,0 +1,48 @@
+{
+  "schema": "vocaloid-composition-brief/v1",
+  "id": "summer-night-rain-cicadas-ia-rocks",
+  "run_id": "natsu-ame-semi-ia-rocks-20260719",
+  "intent": {
+    "core": "夏夜，雨，蟬鳴。",
+    "scene": "A summer night is alive with rain and cicadas. The rain does not erase the insects; their pulse pushes through wet air, eaves, leaves, and reflected street light.",
+    "emotional_color": "Hot, wet, immediate, and slightly restless, with flashes of clarity. It should not become generic cheerful summer pop, pure melancholy, or a horror scene.",
+    "dramatic_motion": "Begin inside dense rain, discover the cicada pulse as resistance rather than background decoration, then end with both sounds coexisting instead of one defeating the other.",
+    "perspective": "A first-person listener standing close enough to feel rain while hearing the night answer in layers.",
+    "listener_question": "Does IA_ROCKS make rain and cicada pulse feel like two living forces sharing one summer night, rather than three unrelated keywords placed into a generic rock song?"
+  },
+  "musical_constraints": {
+    "target_duration_seconds": { "min": 50, "max": 70 },
+    "tempo_bpm": { "min": 180, "max": 200, "preferred": 190 },
+    "meter_preferences": ["4/4"],
+    "primary_genre": "rock",
+    "style_tags": ["high-BPM", "rain-textured", "cicada-pulse", "summer-night", "dynamic-contrast"],
+    "voice": {
+      "id": "voice-ia-rocks",
+      "name": "IA_ROCKS",
+      "component_id": "BDREB7P2KTWKYDC5"
+    },
+    "lyric_language": "Japanese",
+    "lyric_mode": "agent_original",
+    "arrangement_hints": [
+      "Let drums and rhythm guitar establish physical rock momentum without masking Japanese consonants.",
+      "Translate rain and cicada behavior into rhythm, register, articulation, and orchestration rather than literal sound-effect imitation.",
+      "Use density changes or half-time perception so 180–200 BPM does not become continuous subdivision clutter."
+    ],
+    "must_avoid": [
+      "Do not reuse a prior song's rise/fall phrase sequence or title-hook contour.",
+      "Do not make every vocal phrase a rapid syllabic stream merely because BPM is high.",
+      "Do not solve intensity only with mastering loudness or constant IA_ROCKS brightness."
+    ]
+  },
+  "source_boundaries": {
+    "local_ia_corpus": "forbidden",
+    "prior_song_artifacts": "forbidden",
+    "reference_tracks_or_melodies": "forbidden",
+    "phrase_grammar_usage": "selection_only"
+  },
+  "evaluation": {
+    "fresh_session": true,
+    "human_listening_disposition": "pending",
+    "record_framework_issues": true
+  }
+}

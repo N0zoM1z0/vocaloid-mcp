@@ -71,6 +71,7 @@ export const PhraseLyricAnchorSchema = z
   });
 
 const IntentTrendSchema = z.enum(["increase", "decrease", "stable"]);
+const IntentDynamicTrajectorySchema = z.enum(["increase", "decrease", "stable", "arch", "valley"]);
 
 export const PhraseSymbolicTargetsSchema = z
   .object({
@@ -79,7 +80,7 @@ export const PhraseSymbolicTargetsSchema = z
     rhythm_density: IntentTrendSchema.optional(),
     note_duration: z.enum(["lengthen", "shorten", "stable"]).optional(),
     harmonic_tension: z.enum(["increase", "decrease", "stable", "resolve", "withhold"]).optional(),
-    delivery_dynamics: IntentTrendSchema.optional(),
+    delivery_dynamics: IntentDynamicTrajectorySchema.optional(),
     arrangement_density: IntentTrendSchema.optional(),
     semantic_focus_duration_ratio_min: z.number().min(0.25).max(8).optional(),
     semantic_focus_beat_strength_min: z.number().min(0).max(1).optional(),

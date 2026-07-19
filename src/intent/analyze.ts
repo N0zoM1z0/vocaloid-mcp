@@ -63,6 +63,47 @@ function expectedRelation(expected: string, observed: string): IntentRealization
   return "contradicts";
 }
 
+function dynamicTrajectory(
+  points: readonly { tick: number; value: number }[],
+  expected: string,
+): { observed: string; peakPositionRatio: number; troughPositionRatio: number; distinctTicks: number } {
+  const byTick = new Map<number, number>();
+  for (const point of points) byTick.set(point.tick, point.value);
+  const ordered = [...byTick.entries()].sort(([left], [right]) => left - right);
+  if (ordered.length < 2) {
+    return { observed: "unmeasured", peakPositionRatio: -1, troughPositionRatio: -1, distinctTicks: ordered.length };
+  }
+  const first = ordered[0]![1];
+  const last = ordered.at(-1)![1];
+  if (expected !== "arch" && expected !== "valley") {
+    return {
+      observed: trend(first, last, 3),
+      peakPositionRatio: -1,
+      troughPositionRatio: -1,
+      distinctTicks: ordered.length,
+    };
+  }
+  if (ordered.length < 3) {
+    return { observed: "unmeasured", peakPositionRatio: -1, troughPositionRatio: -1, distinctTicks: ordered.length };
+  }
+  const startTick = ordered[0]![0];
+  const endTick = ordered.at(-1)![0];
+  const span = Math.max(1, endTick - startTick);
+  const peak = ordered.reduce((selected, candidate) => candidate[1] > selected[1] ? candidate : selected);
+  const trough = ordered.reduce((selected, candidate) => candidate[1] < selected[1] ? candidate : selected);
+  const peakPositionRatio = (peak[0] - startTick) / span;
+  const troughPositionRatio = (trough[0] - startTick) / span;
+  const threshold = Math.max(3, Math.max(Math.abs(first), Math.abs(last)) * 0.06);
+  const observed = peak[0] !== startTick && peak[0] !== endTick
+    && peak[1] >= Math.max(first, last) + threshold
+    ? "arch"
+    : trough[0] !== startTick && trough[0] !== endTick
+      && trough[1] <= Math.min(first, last) - threshold
+      ? "valley"
+      : trend(first, last, 3);
+  return { observed, peakPositionRatio, troughPositionRatio, distinctTicks: ordered.length };
+}
+
 function melodyShape(events: readonly SymbolicVocalEvent[]): string {
   if (events.length < 2) return "insufficient_events";
   const first = events[0]!.noteNumber;
@@ -320,15 +361,21 @@ function phraseEvidence(
   }
 
   const dynamics = dynamicsValues(manifest, events, direction);
-  const dynamicsObserved = dynamics.length >= 2
-    ? trend(dynamics[0]!.value, dynamics.at(-1)!.value, 3)
-    : "unmeasured";
+  const dynamicsTrajectory = dynamicTrajectory(dynamics, targets?.delivery_dynamics ?? "stable");
+  const dynamicsObserved = dynamicsTrajectory.observed;
   if (targets?.delivery_dynamics) {
     evidence.push(observationEvidence(
       "delivery", "delivery.dynamic_trajectory", targets.delivery_dynamics, dynamicsObserved,
       expectedRelation(targets.delivery_dynamics, dynamicsObserved), dynamics.map((entry) => entry.id),
-      { samples: dynamics.length, start_value: dynamics[0]?.value ?? -1, end_value: dynamics.at(-1)?.value ?? -1 },
-      dynamics.length >= 2 ? 1 : 0,
+      {
+        samples: dynamics.length,
+        distinct_ticks: dynamicsTrajectory.distinctTicks,
+        start_value: dynamics[0]?.value ?? -1,
+        end_value: dynamics.at(-1)?.value ?? -1,
+        peak_position_ratio: Number(dynamicsTrajectory.peakPositionRatio.toFixed(6)),
+        trough_position_ratio: Number(dynamicsTrajectory.troughPositionRatio.toFixed(6)),
+      },
+      dynamicsTrajectory.distinctTicks >= (targets.delivery_dynamics === "arch" || targets.delivery_dynamics === "valley" ? 3 : 2) ? 1 : 0,
     ));
   } else {
     evidence.push(observationEvidence(

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -41,4 +41,31 @@ test("Editor lease is host-wide, diagnostic, and safely releasable", async (cont
   assert.equal(await inspectEditorLease(), null);
   const second = await acquireEditorLease("second-render");
   await second.release();
+});
+
+test("Editor lease immediately reclaims a valid lock whose owner PID is dead", async (context) => {
+  const temporary = await mkdtemp(join(process.cwd(), ".test-editor-dead-lease-"));
+  const previous = process.env.VOCALOID_EDITOR_LOCK_PATH;
+  const path = join(temporary, "editor.lock");
+  process.env.VOCALOID_EDITOR_LOCK_PATH = path;
+  context.after(async () => {
+    if (previous === undefined) delete process.env.VOCALOID_EDITOR_LOCK_PATH;
+    else process.env.VOCALOID_EDITOR_LOCK_PATH = previous;
+    await rm(temporary, { recursive: true, force: true });
+  });
+
+  await writeFile(path, `${JSON.stringify({
+    leaseId: "dead-owner-lease",
+    ownerPid: 2_147_483_647,
+    requestId: "interrupted-render",
+    acquiredAt: new Date().toISOString(),
+  })}\n`);
+  const before = await inspectEditorLease();
+  assert.equal(before?.ownerAlive, false);
+  assert.ok((before?.ageMilliseconds ?? 10_000) < 60_000);
+
+  const recovered = await acquireEditorLease("recovery-render");
+  assert.equal(recovered.requestId, "recovery-render");
+  await recovered.release();
+  assert.equal(await inspectEditorLease(), null);
 });

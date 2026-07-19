@@ -159,3 +159,57 @@ test("phrase grammar analysis detects homogeneous phrase construction without mu
   assert.ok(codes.has("PHRASE_RHYTHM_FINGERPRINT_NARROW"));
   assert.ok(codes.has("GRAMMAR_LIMIT_MISMATCH"));
 });
+
+test("phrase grammar entry analysis uses the first audible cell after leading rests", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-phrase-entry-rests-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const manifestPath = join(temporary, "phrase-entry-rests.song.json");
+  await createSongManifest({
+    outputPath: manifestPath,
+    songId: "phrase-entry-rests",
+    slug: "phrase-entry-rests",
+    title: "Phrase Entry Rests",
+    format: "vsq3",
+    preMeasure: 1,
+    timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+    sections: [{ id: "verse", name: "Verse", kind: "verse", start: { measure: 0, beat: 0 }, end: { measure: 8, beat: 0 } }],
+    keyChanges: [{ id: "key-c", position: { measure: 0, beat: 0 }, tonic: "C", mode: "major" }],
+    chordChanges: [{ id: "chord-c", position: { measure: 0, beat: 0 }, symbol: "C", duration_ticks: 15_360 }],
+    sampleRate: 44_100,
+    gain: 0.2,
+    reverb: false,
+    chorus: false,
+    overwrite: false,
+  });
+  const delays = [0, 120, 240, 360, 480, 600, 720, 840];
+  await upsertSongManifestVocalPart(
+    manifestPath,
+    manifestPath,
+    1,
+    { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+    { id: "lead", name: "Lead", voice_id: "voice-ia" },
+    {
+      id: "lead-part",
+      section_id: "verse",
+      name: "Lead Part",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 8, beat: 0 },
+      notes: [],
+      phrases: delays.map((delay, index) => ({
+        id: `phrase-${index}`,
+        start: { measure: index, beat: 0, tick: 0 },
+        allocation: "sequential" as const,
+        lyrics: [{ id: `lyric-${index}`, lyric: "あ", phonemes: "a", phoneme_locked: true }],
+        cells: [
+          ...(delay > 0 ? [{ id: `rest-${index}`, duration: delay, rest: true as const }] : []),
+          { id: `note-${index}`, duration: 480, rest: false as const, note_number: 60 + index % 3, gate_percent: 100, velocity: 64, style: {} },
+        ],
+      })),
+    },
+    true,
+  );
+  const report = analyzeManifestPhraseGrammar((await loadSongManifest(manifestPath)).manifest);
+  assert.equal(report.tracks[0]?.metrics.distinct_entry_positions, delays.length);
+  assert.ok(!report.findings.some((finding) => finding.code === "PHRASE_ENTRY_HOMOGENEITY"));
+});

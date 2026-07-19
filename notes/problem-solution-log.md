@@ -15,7 +15,9 @@ Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
   - Decision: retain the reproducible runner and 23-entry creative record, but
     treat its transport/revision/recovery boilerplate as framework work rather
     than the desired long-term composition API.
-  - Status: song complete; reusable resumable session scaffold remains open.
+  - Status: fixed prompt + validated per-song intent files + MCP prompt are now
+    implemented. `scripts/lib/production-mcp.mjs` centralizes progress-aware
+    900-second calls, contract reads, dry-run/edit, and journal resume behavior.
 
 - **Long Editor calls, dead leases, and Save As filename state remain coupled failure modes**
   - Scope: a 60-second client timeout killed an otherwise valid Editor render,
@@ -24,8 +26,10 @@ Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
   - Decision: use progress-aware long deadlines, verify dead owner PID before
     reclaiming the exact lease, retry a fresh Save dialog, and require final
     digest/non-silence evidence.
-  - Status: current renders succeeded; default timeout, lease reclamation, and
-    Save As recovery should be hardened in the framework.
+  - Status: framework client defaults long calls to 900 seconds; a valid lease
+    whose recorded PID is dead is reclaimed immediately; transient Save-dialog
+    discovery/filename/submit failures get one fresh-Editor retry. Real-song
+    validation remains required because unit tests cannot emulate VOCALOID UI.
 
 - **Phrase-entry homogeneity currently ignores leading rests**
   - Scope: the analyzer reported all lead/harmony phrases at one entry even
@@ -33,14 +37,24 @@ Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
     starts.
   - Decision: do not change correct music to satisfy the warning. Future
     analysis must derive audible entry from the first non-rest cell.
-  - Status: open analyzer bug; warning explicitly dispositioned in this song.
+  - Status: fixed. Entry signatures now use the first materialized non-rest
+    event; regression coverage includes eight distinct leading-rest offsets.
 
 - **Endpoint-only intent trends cannot describe a rise-then-release delivery arc**
   - Scope: the hilt phrase rises to one local DYN/BRI/opening crest and cools
     immediately, but a monotonic `increase` target compares only start/end.
   - Decision: correct the whole-passage declaration without changing music;
     add local arch/peak-position targets in a future intent schema.
-  - Status: song declaration corrected; schema improvement remains open.
+  - Status: fixed. `delivery_dynamics` accepts `arch`/`valley`, requires at
+    least three distinct DYN ticks, and reports crest/trough position evidence.
+
+- **Creative-journal stage re-entry rejected exact retries**
+  - Scope: interrupted runners replayed completed journal stages and stopped on
+    duplicate stable IDs.
+  - Decision: add `record_if_absent`; exact semantic equality is resumable,
+    while changed content requires a new decision/supersession and still fails.
+  - Status: implemented in the journal core, compact MCP action contract, and
+    shared production client with append-only regression coverage.
 
 - **Native-control verification succeeded after correcting the XML query**
   - Scope: an initial grep used the wrong tag names and falsely reported no

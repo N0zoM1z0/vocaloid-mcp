@@ -16,6 +16,7 @@ import {
 } from "./audio-review.js";
 import { analyzeAudioQuality, masterWav } from "./audio-quality.js";
 import { FROM_ZERO_AGENT_EXAMPLE } from "./agent-examples.js";
+import { renderCompositionAgentPrompt } from "./composition-brief.js";
 import {
   CreativeDecisionCurrentnessSchema,
   CreativeDecisionInputSchema,
@@ -24,6 +25,7 @@ import {
   listCreativeDecisions,
   publishCreativeRecordPackage,
   recordCreativeDecision,
+  recordCreativeDecisionIfAbsent,
   writeCreativeJournalReport,
 } from "./creative-journal.js";
 import {
@@ -205,6 +207,24 @@ const server = new McpServer(
   { name: "vocaloid-mcp-server", version: "1.0.0" },
   {
     instructions: `Profile: ${MCP_PROFILE}. Compose from a revisioned canonical song manifest. Read vocaloid://capabilities, vocaloid://composition-intent-contract, vocaloid://music-theory-policy, vocaloid://phrase-grammar, and vocaloid://creative-decision-journal first; read the on-demand action contract before each compact envelope tool. Declare what the song, section, and 1–3 anchor phrases are trying to say; then establish form, meter/tempo, key/harmony/bass, an agent-selected phrase-grammar blueprint, melody, Japanese note allocation, isolated IA delivery, harmony, and minimal/full arrangement. Phrase grammar is an unordered style/genre choice vocabulary, not automatic melody generation: never expand a bundle as a template. Compose concrete pitch, scale-degree, onset, and duration material yourself from intent, lyric prosody, harmony, and form; then validate selected components, materialize them in notes/rests/allocation, and run phrase-grammar analysis before delivery. Production agents never query the local song library; offline library work may only add human-reviewed, non-reconstructive DSL components. Append concise evidence-bound decisions with vocaloid_creative_journal after each stage; do not store raw hidden chain-of-thought. Use vocaloid_edit_song with dry_run before bounded writes, then preflight, build, render, review, and master. Set composition guidance explicitly when final delivery must require theory-warning disposition or current intent review; exceptions must copy an exact current issue fingerprint and become structural errors when their targets change. When preflight returns bounded proposals, treat them only as revision-bound A/B hypotheses: keep one listening question fixed, run the candidate through vocaloid_edit_song dry_run, inspect the actual theory/intent delta, and audition before a separate write. Close one 20–30 second anchor passage through lead_solo → lead_harmony → minimal_band before treating full-song rendering as creative progress; one loudness-matched A/B answers one registered listening question and only an explicit human/agent listening note may write keep/reject/revise. Compare premaster and final delivery at equal loudness whenever mastering reports transparency-review risk. Japanese kanji require an explicit kana reading: preserve supplied lyric text separately, align morae to stable rhythm cells, repeat mora indices for melisma, and choose small-っ timing explicitly. Preserve stable IDs and pass expected_revision on every write. Use IA_ROCKS component ${IA_ROCKS_COMPONENT_ID} unless the user requests another verified voice; BLRGDDR4M3WM2LC6 is IA, not IA_ROCKS. Artifacts must match manifest hashes; native gesture materialization and an actual non-silent Editor render are separate evidence. Publish a hash-bound creative-record package with the final song and VSQX. VOCALOID pan is 0=left, 64=center, 127=right. The bundled GM SoundFont is draft quality and does not prove authentic acoustic articulation.`,
+  },
+);
+
+server.registerPrompt(
+  "vocaloid_compose_from_intent",
+  {
+    title: "Compose a complete VOCALOID song from one intent file",
+    description: "Loads the stable composition-agent workflow plus one validated, repo-local intents/*.intent.json brief.",
+    argsSchema: {
+      intent_file: z.string().min(1).max(4096).describe("Path to one *.intent.json file inside the repository intents directory"),
+    },
+  },
+  async ({ intent_file }) => {
+    const rendered = await renderCompositionAgentPrompt(intent_file);
+    return {
+      description: `Fresh composition task ${rendered.brief.run_id}`,
+      messages: [{ role: "user", content: { type: "text", text: rendered.prompt } }],
+    };
   },
 );
 
@@ -992,7 +1012,7 @@ const ImportVsqxDataOutputSchema = z.object({
   sourceArtifact: ArtifactOutputSchema,
 }).passthrough();
 
-const CreativeJournalActionSchema = z.enum(["record", "list", "report", "publish"]);
+const CreativeJournalActionSchema = z.enum(["record", "record_if_absent", "list", "report", "publish"]);
 
 const CreativeJournalDataOutputSchema = z.object({
   action: CreativeJournalActionSchema,
@@ -1099,6 +1119,14 @@ const CreativeJournalActionRequestSchema = z.discriminatedUnion("action", [
     response_format: ResponseFormatSchema,
   }).strict(),
   z.object({
+    action: z.literal("record_if_absent"),
+    manifest_path: PathSchema,
+    expected_revision: z.number().int().min(1),
+    decision: CreativeDecisionInputSchema,
+    dry_run: z.boolean().default(false),
+    response_format: ResponseFormatSchema,
+  }).strict(),
+  z.object({
     action: z.literal("list"),
     manifest_path: PathSchema,
     phases: z.array(CreativeDecisionPhaseSchema).min(1).max(15).optional(),
@@ -1133,7 +1161,7 @@ const CreativeJournalInputSchema = z.object({
         context.addIssue({ code: "custom", path: [reserved], message: `${reserved} belongs in the tool envelope` });
       }
     }
-  }).describe("Payload schema: vocaloid://creative-journal-contract/{action}"),
+  }).describe("See vocaloid://creative-journal-contract/{action}"),
   response_format: ResponseFormatSchema,
 }).strict();
 
@@ -3608,8 +3636,8 @@ server.registerTool(
 server.registerTool(
   "vocaloid_creative_journal",
   {
-    title: "Record and Publish Creative Decisions",
-    description: "Append, query, report, or publish the hash-bound creative journal.",
+    title: "Creative Decision Journal",
+    description: "Append/resume, query, report, or publish decisions.",
     inputSchema: CreativeJournalInputSchema,
     outputSchema: typedToolOutputSchema(CreativeJournalDataOutputSchema),
     annotations: {
@@ -3637,6 +3665,21 @@ server.registerTool(
           result,
           params.response_format,
           `${params.dry_run ? "Validated" : "Recorded"} creative decision ${result.entry.id}`,
+        );
+      }
+      if (params.action === "record_if_absent") {
+        const result = await recordCreativeDecisionIfAbsent({
+          manifestPath: params.manifest_path,
+          expectedRevision: params.expected_revision,
+          decision: params.decision,
+          dryRun: params.dry_run,
+        });
+        return textResult(
+          result,
+          params.response_format,
+          result.alreadyExisted
+            ? `Verified existing creative decision ${result.entry.id}`
+            : `${params.dry_run ? "Validated" : "Recorded"} creative decision ${result.entry.id}`,
         );
       }
       if (params.action === "list") {
@@ -3859,7 +3902,7 @@ server.registerTool(
   "vocaloid_preflight_song",
   {
     title: "Preflight Complete Song Workflow",
-    description: "Run non-mutating structural, theory, vocal, arrangement, mix, artifact, intent, and host readiness checks with stable issue codes. Optionally return 3–8 deterministic theory-only repair hypotheses; every apply blueprint remains revision-bound and requires vocaloid_edit_song dry_run plus listening review.",
+    description: "Run non-mutating structure, theory, vocal, arrangement, mix, artifact, intent, and host checks. Optional repair hypotheses stay deterministic, theory-only, revision-bound, and require vocaloid_edit_song dry_run plus listening.",
     inputSchema: z.object({
       manifest_path: PathSchema.describe("Canonical .song.json to lint"),
       artifact_check: z.enum(["none", "current", "all"]).default("current")

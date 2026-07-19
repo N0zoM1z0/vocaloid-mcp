@@ -111,9 +111,17 @@ export async function inspectEditorLease(): Promise<EditorLeaseSnapshot | null> 
 }
 
 async function removeStaleLease(snapshot: EditorLeaseSnapshot): Promise<boolean> {
-  if (snapshot.ownerAlive || snapshot.ageMilliseconds < STALE_MILLISECONDS) return false;
+  const malformedAndOld = snapshot.leaseId === "malformed"
+    && snapshot.ageMilliseconds >= STALE_MILLISECONDS;
+  const recordedOwnerIsDead = snapshot.leaseId !== "malformed" && !snapshot.ownerAlive;
+  if (!recordedOwnerIsDead && !malformedAndOld) return false;
   const current = await readSnapshot(snapshot.path);
-  if (!current || current.leaseId !== snapshot.leaseId || current.ownerAlive) return false;
+  if (!current || current.leaseId !== snapshot.leaseId) return false;
+  if (current.leaseId === "malformed") {
+    if (current.ageMilliseconds < STALE_MILLISECONDS) return false;
+  } else if (current.ownerAlive) {
+    return false;
+  }
   await unlink(snapshot.path).catch(() => undefined);
   return true;
 }

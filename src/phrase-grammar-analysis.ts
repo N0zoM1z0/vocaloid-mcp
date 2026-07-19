@@ -126,7 +126,10 @@ function phraseFeatures(
     stepwise_ratio: stepwise / denominator,
     maximum_leap_semitones: intervals.length > 0 ? Math.max(...intervals.map((interval) => Math.abs(interval))) : 0,
     maximum_consecutive_direction: maximumDirectionRun(intervals),
-    start_signature: `${phrase.start.beat}:${phrase.start.tick}`,
+    // Phrase containers begin at their scheduling boundary.  The audible
+    // entry can be later because phrase cells may deliberately begin with
+    // rests, so entry homogeneity must use the first materialized note.
+    start_signature: `${ordered[0]!.position.beat}:${ordered[0]!.position.tick ?? 0}`,
     duration_fingerprint: normalizedDurationFingerprint(ordered),
     contour: resample(pitches),
     ...(blueprint ? { grammar_blueprint_id: blueprint.id } : {}),

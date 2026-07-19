@@ -329,3 +329,58 @@ test("audition currentness follows mix dependencies instead of composition hash 
     [],
   );
 });
+
+test("intent realization measures a local dynamics arch instead of reducing it to endpoints", async (context) => {
+  const temporary = await mkdtemp(join(process.cwd(), ".test-intent-dynamics-arch-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const path = join(temporary, "intent-dynamics-arch.song.json");
+  const manifest = await createRealizationFixture(path);
+  const track = manifest.vocal_tracks[0]!;
+  const part = track.parts[0]!;
+  await upsertSongManifestVocalPart(
+    path,
+    path,
+    manifest.revision,
+    manifest.voices[0]!,
+    {
+      id: track.id,
+      name: track.name,
+      voice_id: track.voice_id,
+      mixer: track.mixer,
+    },
+    {
+      ...part,
+      control_curves: [{
+        id: "dyn-anchor",
+        curve: "DYN",
+        points: [
+          { id: "dyn-start", position: { measure: 4, beat: 0 }, value: 42 },
+          { id: "dyn-crest", position: { measure: 5, beat: 2 }, value: 92 },
+          { id: "dyn-release", position: { measure: 6, beat: 1 }, value: 48 },
+        ],
+      }],
+    },
+    true,
+  );
+  const withArch = (await loadSongManifest(path)).manifest;
+  const direction = withArch.composition_intent!.phrase_directions[0]!;
+  await upsertSongManifestPhraseDirection(path, path, withArch.revision, {
+    ...direction,
+    realization_hypothesis: {
+      ...direction.realization_hypothesis!,
+      symbolic_targets: {
+        ...direction.realization_hypothesis!.symbolic_targets!,
+        delivery_dynamics: "arch",
+      },
+    },
+  }, true);
+
+  const report = analyzeCompositionIntent((await loadSongManifest(path)).manifest);
+  const evidence = report.directions[0]?.evidence.find((entry) => entry.feature === "delivery.dynamic_trajectory");
+  assert.equal(evidence?.expected, "arch");
+  assert.equal(evidence?.observed, "arch");
+  assert.equal(evidence?.relation, "supports");
+  assert.equal(evidence?.details.distinct_ticks, 3);
+  assert.ok(Number(evidence?.details.peak_position_ratio) > 0.4);
+  assert.ok(Number(evidence?.details.peak_position_ratio) < 0.8);
+});

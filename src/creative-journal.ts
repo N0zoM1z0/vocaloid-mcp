@@ -145,6 +145,7 @@ const CreativeDecisionFieldsSchema = z.object({
   ]),
   author: CreativeDecisionAuthorSchema,
 }).strict();
+const CREATIVE_DECISION_FIELD_NAMES = CreativeDecisionFieldsSchema.keyof().options;
 
 export const CreativeDecisionInputSchema = CreativeDecisionFieldsSchema.superRefine((entry, context) => {
   if (entry.affected_object_ids.length === 0
@@ -446,6 +447,59 @@ export async function recordCreativeDecision(options: {
     return {
       action: "record" as const,
       dryRun: options.dryRun ?? false,
+      journalPath: path,
+      entry,
+      entryCount: entries.length + 1,
+      chainHead: entry.entry_hash,
+    };
+  });
+}
+
+function inputFieldsOf(entry: CreativeDecisionRecord): CreativeDecisionInput {
+  return CreativeDecisionInputSchema.parse(Object.fromEntries(
+    CREATIVE_DECISION_FIELD_NAMES.map((name) => [name, entry[name]]),
+  ));
+}
+
+export async function recordCreativeDecisionIfAbsent(options: {
+  manifestPath: string;
+  expectedRevision: number;
+  decision: CreativeDecisionInput;
+  dryRun?: boolean;
+}) {
+  const loaded = await loadSongManifest(options.manifestPath);
+  if (loaded.manifest.revision !== options.expectedRevision) {
+    throw new Error(
+      `Stale manifest revision ${options.expectedRevision}; current revision is ${loaded.manifest.revision}`,
+    );
+  }
+  const path = await resolveWritablePath(creativeJournalPath(loaded.path));
+  return withJournalLock(path, async () => {
+    const entries = await readJournal(path, loaded.manifest.song_id);
+    const parsed = CreativeDecisionInputSchema.parse(options.decision);
+    const existing = entries.find((entry) => entry.id === parsed.id);
+    if (existing) {
+      if (valueHash(inputFieldsOf(existing)) !== valueHash(parsed)) {
+        throw new Error(
+          `Creative decision ID ${parsed.id} already exists with different content; append a new decision or explicit supersession`,
+        );
+      }
+      return {
+        action: "record_if_absent" as const,
+        dryRun: options.dryRun ?? false,
+        alreadyExisted: true,
+        journalPath: path,
+        entry: existing,
+        entryCount: entries.length,
+        chainHead: entries.at(-1)?.entry_hash ?? existing.entry_hash,
+      };
+    }
+    const entry = createRecord(loaded.path, loaded.manifest, entries, parsed);
+    if (!options.dryRun) await persistJournal(path, [...entries, entry]);
+    return {
+      action: "record_if_absent" as const,
+      dryRun: options.dryRun ?? false,
+      alreadyExisted: false,
       journalPath: path,
       entry,
       entryCount: entries.length + 1,
