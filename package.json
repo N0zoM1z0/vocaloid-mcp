@@ -18,7 +18,7 @@
     "eval:intent-first": "npm run build && node scripts/evaluate-intent-first-benchmark.mjs",
     "eval:intent-first:finalize-trace": "npm run build && node scripts/finalize-intent-first-trace.mjs",
     "eval:intent-first:prompt": "npm run build && node scripts/render-intent-first-prompt.mjs",
-    "test": "npm run build && node --test dist/tests/*.test.js"
+    "test": "npm run build && node --test dist/tests/*.test.js scripts/lib/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

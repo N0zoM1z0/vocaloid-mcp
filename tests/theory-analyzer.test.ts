@@ -130,14 +130,24 @@ async function createProblemFixture(path: string): Promise<SongManifest> {
       name: "Verse Harmony",
       start: { measure: 0, beat: 0 },
       end: { measure: 2, beat: 0 },
-      notes: [{
-        id: "harmony-c-sharp4",
-        position: { measure: 0, beat: 0 },
-        duration: 480,
-        note_number: 61,
-        lyric: "あ",
-        phonemes: "a",
-      }],
+      notes: [
+        {
+          id: "harmony-c-sharp4",
+          position: { measure: 0, beat: 0 },
+          duration: 480,
+          note_number: 61,
+          lyric: "あ",
+          phonemes: "a",
+        },
+        {
+          id: "harmony-f-sharp5",
+          position: { measure: 0, beat: 1 },
+          duration: 480,
+          note_number: 78,
+          lyric: "あ",
+          phonemes: "a",
+        },
+      ],
     },
     true,
   );
@@ -227,6 +237,169 @@ test("symbolic analyzer is deterministic, non-mutating, and locates theory/arran
   assert.equal(metric(first, "melody.range.lead"), metric(transposedReport, "melody.range.lead"));
   assert.equal(metric(first, "melody.motif_repetition.lead"), metric(transposedReport, "melody.motif_repetition.lead"));
   assert.equal(metric(first, "rhythm.syncopation.lead"), metric(transposedReport, "rhythm.syncopation.lead"));
+});
+
+test("leading-tone resolution applies to semitone leading tones, not modal subtonics", async (context) => {
+  const temporary = await mkdtemp(join(process.cwd(), ".test-theory-leading-tone-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+
+  const fixture = async (name: string, tonic: string, mode: string, noteNumber: number) => {
+    const path = join(temporary, `${name}.song.json`);
+    await createSongManifest({
+      outputPath: path,
+      songId: name,
+      slug: name,
+      title: name,
+      format: "vsq3",
+      preMeasure: 1,
+      timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+      tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+      sections: [{
+        id: "verse",
+        name: "Verse",
+        kind: "verse",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 1, beat: 0 },
+      }],
+      keyChanges: [{ id: `key-${name}`, position: { measure: 0, beat: 0 }, tonic, mode }],
+      chordChanges: [{ id: `chord-${name}`, position: { measure: 0, beat: 0 }, symbol: `${tonic}m`, duration_ticks: 1920 }],
+      sampleRate: 44_100,
+      gain: 0.2,
+      reverb: false,
+      chorus: false,
+      overwrite: false,
+    });
+    await upsertSongManifestVocalPart(
+      path,
+      path,
+      1,
+      { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+      { id: "lead", name: "Lead", voice_id: "voice-ia" },
+      {
+        id: "verse-lead",
+        section_id: "verse",
+        name: "Verse Lead",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 1, beat: 0 },
+        notes: [{
+          id: "degree-seven",
+          position: { measure: 0, beat: 0 },
+          duration: 480,
+          note_number: noteNumber,
+          lyric: "あ",
+          phonemes: "a",
+        }],
+      },
+      true,
+    );
+    return analyzeManifestTheory((await loadSongManifest(path)).manifest);
+  };
+
+  const dorian = await fixture("d-dorian", "D", "dorian", 60);
+  assert.ok(!dorian.issues.some((issue) => issue.code === "LEADING_TONE_UNRESOLVED"));
+
+  const major = await fixture("c-major", "C", "major", 59);
+  const leadingTone = major.issues.find((issue) => issue.code === "LEADING_TONE_UNRESOLVED");
+  assert.ok(leadingTone);
+  assert.equal(leadingTone.evidence[0]?.details.leading_tone_distance_semitones, 1);
+});
+
+test("voice ordering is inferred from overlapping material, not unrelated song sections", async (context) => {
+  const temporary = await mkdtemp(join(process.cwd(), ".test-theory-overlap-order-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const path = join(temporary, "overlap-order.song.json");
+  await createSongManifest({
+    outputPath: path,
+    songId: "overlap-order",
+    slug: "overlap-order",
+    title: "Overlap Order",
+    format: "vsq3",
+    preMeasure: 1,
+    timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+    sections: [
+      {
+        id: "verse",
+        name: "Verse",
+        kind: "verse",
+        start: { measure: 0, beat: 0 },
+        end: { measure: 2, beat: 0 },
+      },
+      {
+        id: "chorus",
+        name: "Chorus",
+        kind: "chorus",
+        start: { measure: 2, beat: 0 },
+        end: { measure: 4, beat: 0 },
+      },
+    ],
+    keyChanges: [{ id: "key-c", position: { measure: 0, beat: 0 }, tonic: "C", mode: "major" }],
+    chordChanges: [{ id: "chord-c", position: { measure: 0, beat: 0 }, symbol: "C", duration_ticks: 7680 }],
+    sampleRate: 44_100,
+    gain: 0.2,
+    reverb: false,
+    chorus: false,
+    overwrite: false,
+  });
+  const voice = { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" };
+  const lead = { id: "lead", name: "Lead", voice_id: voice.id };
+  await upsertSongManifestVocalPart(path, path, 1, voice, lead, {
+    id: "lead-verse",
+    section_id: "verse",
+    name: "Low Verse",
+    start: { measure: 0, beat: 0 },
+    end: { measure: 2, beat: 0 },
+    notes: [{
+      id: "lead-low-unrelated",
+      position: { measure: 0, beat: 0 },
+      duration: 480,
+      note_number: 36,
+      lyric: "あ",
+      phonemes: "a",
+    }],
+  }, true);
+  await upsertSongManifestVocalPart(path, path, 2, voice, lead, {
+    id: "lead-chorus",
+    section_id: "chorus",
+    name: "Lead Chorus",
+    start: { measure: 2, beat: 0 },
+    end: { measure: 4, beat: 0 },
+    notes: [0, 1].map((beat) => ({
+      id: `lead-chorus-${beat}`,
+      position: { measure: 2, beat },
+      duration: 480,
+      note_number: 67,
+      lyric: "あ",
+      phonemes: "a",
+    })),
+  }, true);
+  await upsertSongManifestVocalPart(
+    path,
+    path,
+    3,
+    voice,
+    { id: "harmony", name: "Harmony", voice_id: voice.id },
+    {
+      id: "harmony-chorus",
+      section_id: "chorus",
+      name: "Harmony Chorus",
+      start: { measure: 2, beat: 0 },
+      end: { measure: 4, beat: 0 },
+      notes: [0, 1].map((beat) => ({
+        id: `harmony-chorus-${beat}`,
+        position: { measure: 2, beat },
+        duration: 480,
+        note_number: 64,
+        lyric: "あ",
+        phonemes: "a",
+      })),
+    },
+    true,
+  );
+
+  const report = analyzeManifestTheory((await loadSongManifest(path)).manifest);
+  assert.ok(!report.issues.some((issue) => issue.code === "VOICE_CROSSING"));
+  assert.equal(metric(report, "voice_leading.crossings"), 0);
 });
 
 test("Japanese phrase analysis measures short mora, melisma, and tuning suitability", async (context) => {

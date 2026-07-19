@@ -261,6 +261,11 @@ export function analyzeHarmony(manifest: SongManifest, index: SymbolicIndex): Do
       const scale = context.key?.value.parsed;
       if (!scale || scale.pitchClasses.length !== 7 || event.duration < 120) continue;
       const leadingTone = scale.pitchClasses[6]!;
+      const leadingToneDistance = normalizePitchClass(scale.tonic.pitchClass - leadingTone);
+      // Scale degree 7 is a leading tone only when it is a semitone below the
+      // tonic. Dorian, Mixolydian, Aeolian, and similar modes instead expose a
+      // whole-tone subtonic, which does not carry the same resolution duty.
+      if (leadingToneDistance !== 1) continue;
       if (normalizePitchClass(event.noteNumber) !== leadingTone) continue;
       const resolvesToTonic = next !== undefined
         && next.startTick - event.endTick <= 240
@@ -277,7 +282,11 @@ export function analyzeHarmony(manifest: SongManifest, index: SymbolicIndex): Do
           startTick: event.startTick,
           endTick: event.endTick,
           source: "symbolic vocal note and active key timeline",
-          details: { note_number: event.noteNumber, tonic_pitch_class: scale.tonic.pitchClass },
+          details: {
+            note_number: event.noteNumber,
+            tonic_pitch_class: scale.tonic.pitchClass,
+            leading_tone_distance_semitones: leadingToneDistance,
+          },
           suggestion: "Resolve to tonic, weaken the metric placement, or document the deliberate suspended direction.",
           repairKind: "pitch",
         });

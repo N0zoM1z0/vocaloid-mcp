@@ -90,6 +90,14 @@ and what changed after listening or diagnostics.
     progress-aware MCP timeout of at least 900 seconds for Editor/render calls.
     If you create a stdio runner, import `scripts/lib/production-mcp.mjs` rather
     than reimplementing transport, timeout, dry-run/edit, and journal recovery.
+    Use `mcp.tool(name)` and `mcp.jsonResource(uri)` for discoverable schemas
+    instead of reading server implementation source. `mcp.edit(...)` returns
+    normalized `preview`, `applied`, and `summary` fields and rejects any
+    preview/apply revision or change-count mismatch; do not guess raw response
+    nesting. Canonical vocal tracks are top-level `vocal_tracks`; inspect the
+    declared schema before writing resume checks. Creative-journal object
+    bindings accept stable manifest objects: a nested phrase-grammar blueprint
+    is evidence owned by its parent vocal phrase, so bind that parent phrase ID.
     Verify hashes, duration, non-silence, clipping/headroom, and source bindings.
 11. Append creative decisions with `record_if_absent`; an existing ID is success
     only when its semantic content matches exactly. Cover intent → form →

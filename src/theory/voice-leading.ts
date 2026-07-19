@@ -8,11 +8,6 @@ interface PairMoment {
   interval: number;
 }
 
-function meanPitch(events: readonly SymbolicVocalEvent[]): number {
-  if (events.length === 0) return 0;
-  return events.reduce((sum, event) => sum + event.noteNumber, 0) / events.length;
-}
-
 function overlappingMoments(
   left: readonly SymbolicVocalEvent[],
   right: readonly SymbolicVocalEvent[],
@@ -38,6 +33,24 @@ function overlappingMoments(
     || a.right.id.localeCompare(b.right.id));
 }
 
+function overlapWeightedMeanPitches(moments: readonly PairMoment[]): { left: number; right: number } {
+  let left = 0;
+  let right = 0;
+  let weight = 0;
+  for (const moment of moments) {
+    const overlap = Math.max(
+      0,
+      Math.min(moment.left.endTick, moment.right.endTick)
+        - Math.max(moment.left.startTick, moment.right.startTick),
+    );
+    if (overlap === 0) continue;
+    left += moment.left.noteNumber * overlap;
+    right += moment.right.noteNumber * overlap;
+    weight += overlap;
+  }
+  return weight > 0 ? { left: left / weight, right: right / weight } : { left: 0, right: 0 };
+}
+
 function perfectClass(interval: number): 0 | 7 | null {
   const pitchClass = ((Math.abs(interval) % 12) + 12) % 12;
   return pitchClass === 0 || pitchClass === 7 ? pitchClass : null;
@@ -48,7 +61,7 @@ export function analyzeVoiceLeading(index: SymbolicIndex): DomainAnalysis {
   const metrics: DomainAnalysis["metrics"] = [];
   const tracks = [...index.vocalEventsByTrack.entries()]
     .filter(([, events]) => events.length > 0)
-    .map(([id, events]) => ({ id, events, meanPitch: meanPitch(events) }));
+    .map(([id, events]) => ({ id, events }));
 
   let collisionCount = 0;
   let crossingCount = 0;
@@ -57,12 +70,23 @@ export function analyzeVoiceLeading(index: SymbolicIndex): DomainAnalysis {
     for (let rightIndex = leftIndex + 1; rightIndex < tracks.length; rightIndex += 1) {
       const first = tracks[leftIndex]!;
       const second = tracks[rightIndex]!;
-      const lower = first.meanPitch < second.meanPitch
-        || (first.meanPitch === second.meanPitch && first.id.localeCompare(second.id) < 0)
+      const unorderedMoments = overlappingMoments(first.events, second.events);
+      const overlapMeans = overlapWeightedMeanPitches(unorderedMoments);
+      const lower = overlapMeans.left < overlapMeans.right
+        || (overlapMeans.left === overlapMeans.right && first.id.localeCompare(second.id) < 0)
         ? first
         : second;
       const upper = lower === first ? second : first;
-      const moments = overlappingMoments(lower.events, upper.events);
+      const lowerMean = lower === first ? overlapMeans.left : overlapMeans.right;
+      const upperMean = lower === first ? overlapMeans.right : overlapMeans.left;
+      const moments = lower === first
+        ? unorderedMoments
+        : unorderedMoments.map((moment) => ({
+            tick: moment.tick,
+            left: moment.right,
+            right: moment.left,
+            interval: -moment.interval,
+          }));
       let pairCollisions = 0;
       let pairCrossings = 0;
       let pairSpacing = 0;
@@ -101,12 +125,12 @@ export function analyzeVoiceLeading(index: SymbolicIndex): DomainAnalysis {
             objectIds: [lower.id, upper.id, moment.left.id, moment.right.id],
             startTick: moment.tick,
             endTick: Math.min(moment.left.endTick, moment.right.endTick),
-            source: "duration-overlap voice ordering",
+            source: "overlap-weighted voice ordering",
             details: {
               lower_note: moment.left.noteNumber,
               upper_note: moment.right.noteNumber,
-              lower_mean: Number(lower.meanPitch.toFixed(4)),
-              upper_mean: Number(upper.meanPitch.toFixed(4)),
+              lower_overlap_mean: Number(lowerMean.toFixed(4)),
+              upper_overlap_mean: Number(upperMean.toFixed(4)),
             },
             suggestion: "Check whether the crossing clarifies a handoff; otherwise restore register separation.",
             repairKind: "voicing",

@@ -21,6 +21,61 @@ function dataOf(result, label) {
   return structured.data;
 }
 
+export function normalizeEditExchange(action, before, previewEnvelope, appliedEnvelope) {
+  if (!Number.isInteger(before?.revision)) {
+    throw new Error(`Inspected manifest has no integer revision before ${action}`);
+  }
+  if (previewEnvelope?.kind !== "mutation_preview" || previewEnvelope.action !== action
+    || !previewEnvelope.preview) {
+    throw new Error(`Unexpected dry-run response for ${action}`);
+  }
+  if (appliedEnvelope?.kind !== "mutation_applied" || appliedEnvelope.action !== action
+    || !appliedEnvelope.write) {
+    throw new Error(`Unexpected applied response for ${action}`);
+  }
+  const preview = previewEnvelope.preview;
+  const applied = appliedEnvelope.write;
+  if (!Number.isInteger(preview.source?.revision)
+    || !Number.isInteger(preview.predicted?.revision)
+    || !Number.isInteger(preview.totalChanges)) {
+    throw new Error(`Dry-run response for ${action} is missing integer revision/change fields`);
+  }
+  if (!Number.isInteger(applied.revision) || !Number.isInteger(appliedEnvelope.totalChanges)) {
+    throw new Error(`Applied response for ${action} is missing integer revision/change fields`);
+  }
+  if (preview.source?.revision !== before.revision) {
+    throw new Error(
+      `Dry-run source revision ${String(preview.source?.revision)} does not match inspected revision ${before.revision}`,
+    );
+  }
+  if (preview.predicted?.revision !== applied.revision) {
+    throw new Error(
+      `Dry-run predicted revision ${String(preview.predicted?.revision)} but apply wrote ${String(applied.revision)}`,
+    );
+  }
+  if (preview.totalChanges !== appliedEnvelope.totalChanges) {
+    throw new Error(
+      `Dry-run predicted ${String(preview.totalChanges)} change(s) but apply reported ${String(appliedEnvelope.totalChanges)}`,
+    );
+  }
+  return {
+    before,
+    preview,
+    applied,
+    evidence: appliedEnvelope.evidence ?? null,
+    summary: {
+      sourceRevision: before.revision,
+      predictedRevision: preview.predicted.revision,
+      appliedRevision: applied.revision,
+      totalChanges: preview.totalChanges,
+      compositionHash: applied.compositionHash,
+      mixHash: applied.mixHash,
+      contentHash: applied.contentHash,
+    },
+    raw: { preview: previewEnvelope, applied: appliedEnvelope },
+  };
+}
+
 export class ProductionMcpClient {
   constructor(options = {}) {
     this.timeout = options.timeout ?? DEFAULT_MCP_TIMEOUT_MS;
@@ -50,6 +105,27 @@ export class ProductionMcpClient {
     const result = await this.client.readResource({ uri });
     if (!result.contents?.[0]) throw new Error(`Missing MCP resource ${uri}`);
     return result.contents[0];
+  }
+
+  async jsonResource(uri) {
+    const resource = await this.resource(uri);
+    if (typeof resource.text !== "string") throw new Error(`MCP resource ${uri} is not textual JSON`);
+    try {
+      return JSON.parse(resource.text);
+    } catch (error) {
+      throw new Error(`MCP resource ${uri} contains invalid JSON`, { cause: error });
+    }
+  }
+
+  async tools() {
+    const result = await this.client.listTools();
+    return result.tools;
+  }
+
+  async tool(name) {
+    const selected = (await this.tools()).find((candidate) => candidate.name === name);
+    if (!selected) throw new Error(`Production MCP does not expose tool ${name}`);
+    return selected;
   }
 
   async call(name, arguments_, options = {}) {
@@ -93,15 +169,15 @@ export class ProductionMcpClient {
       overwrite: true,
       ...payload,
     };
-    const preview = await this.call("vocaloid_edit_song", {
+    const previewEnvelope = await this.call("vocaloid_edit_song", {
       action,
       payload: { ...common, dry_run: true },
     }, { ...options, label: options.previewLabel ?? `dry-run ${action}` });
-    const applied = await this.call("vocaloid_edit_song", {
+    const appliedEnvelope = await this.call("vocaloid_edit_song", {
       action,
       payload: { ...common, dry_run: false },
     }, { ...options, label: options.label ?? `apply ${action}` });
-    return { before, preview, applied };
+    return normalizeEditExchange(action, before, previewEnvelope, appliedEnvelope);
   }
 
   async recordDecisionIfAbsent(manifestPath, decision, options = {}) {

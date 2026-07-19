@@ -4,6 +4,69 @@ This is the stable index for implementation problems discovered through real
 composition and listening. Detailed evidence belongs in a dated note; this file
 records the durable problem, scope, decision, and current status.
 
+## 2026-07-19 — High-BPM IA_ROCKS cold-start validation
+
+Detailed note: `notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md`
+
+- **A fresh agent could consume a bounded BPM range and finish a 190 BPM song**
+  - Scope: a new `gpt-5.6-sol`/`xhigh` session received only the fixed prompt
+    plus the validated `summer night, rain, cicadas` intent, including IA_ROCKS, rock, a
+    180–200 BPM range, 190 preferred BPM, and a 50–70 second duration target.
+  - Evidence: it independently delivered `雨と蝉のあいだ`, 48 bars and
+    64.399683 seconds, at 190 BPM with the requested exact voice component.
+  - Status: transfer succeeded; the intent range/preference fields are enforced
+    by schema and the creative record retains the tempo decision. Human intent
+    and vocal-balance listening remains pending.
+
+- **Run code guessed raw edit-response nesting and failed after successful writes**
+  - Scope: two resumable interruptions followed valid canonical mutations
+    because run-local logging assumed `preview.diff.totalChanges` and
+    `predicted_revision` fields that the production envelope does not expose.
+  - Decision: make one shared client own response normalization and consistency
+    checks; keep raw envelopes diagnostic-only.
+  - Status: fixed. `production-mcp.mjs` returns stable `preview`, `applied`, and
+    `summary` fields, rejects revision/change-count drift or incomplete integer
+    fields, and has unit plus live temporary-manifest integration coverage.
+
+- **Resume and journal code guessed canonical object topology**
+  - Scope: one retry looked for `manifest.vocals.tracks` instead of top-level
+    `vocal_tracks`; another tried to bind nested phrase-grammar blueprint IDs as
+    top-level journal objects.
+  - Decision: require tool/resource schema discovery, use canonical top-level
+    vocal tracks, and bind nested phrase evidence through its owning vocal
+    phrase stable ID.
+  - Status: reusable prompt and shared discovery helpers updated. The song
+    resumed without duplicate mutation or lost state.
+
+- **Modal subtonics were incorrectly assigned leading-tone resolution duty**
+  - Scope: D Dorian C-natural produced 17 false
+    `LEADING_TONE_UNRESOLVED` warnings.
+  - Decision: degree 7 is a leading tone only when it lies one semitone below
+    tonic; modal whole-tone subtonics remain available without a major-key rule.
+  - Status: fixed globally with major-versus-Dorian regression coverage. The
+    unchanged song now has zero such findings and remains fully delivery-ready.
+
+- **Whole-track mean pitch could invert sparse local voice roles**
+  - Scope: a low lead verse could make a chorus-only lower harmony appear to be
+    the upper voice and generate false crossings.
+  - Decision: infer upper/lower roles from duration-weighted overlapping events,
+    not non-simultaneous sections.
+  - Status: fixed globally; real-crossing proposal fixtures now contain genuine
+    simultaneous crossings, and separate regression coverage protects sparse
+    form-specific harmony.
+
+- **IA_ROCKS F0 analysis can select a strong second harmonic**
+  - Scope: five MIDI-67 event windows were reported roughly one octave high,
+    while native note numbers and within-event/neighbor evidence remained
+    consistent with the score.
+  - Decision: do not retune correct notes or silently fold pitch estimates to
+    the expected score. A future tracker must compare subharmonic spectral
+    support and temporal continuity while preserving the ability to detect a
+    genuinely octave-wrong render.
+  - Status: open diagnostic limitation, recorded with exact event evidence; it
+    does not block the current artifact. This is deliberately not “fixed” by a
+    song-specific exception or circular expected-note snapping.
+
 ## 2026-07-19 — Original-IA swordsmen cold-start validation
 
 Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`

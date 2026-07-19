@@ -70,6 +70,7 @@ async function proposalFixture(directory: string): Promise<string> {
         { id: "lead-color", position: { measure: 9, beat: 0 }, duration: 480, note_number: 61, lyric: "い", phonemes: "i", phoneme_locked: true },
         { id: "lead-cross", position: { measure: 10, beat: 0 }, duration: 480, note_number: 60, lyric: "あ", phonemes: "a", phoneme_locked: true },
         { id: "lead-clash", position: { measure: 10, beat: 1 }, duration: 480, note_number: 60, lyric: "う", phonemes: "M", phoneme_locked: true },
+        { id: "lead-upper-reference", position: { measure: 10, beat: 2 }, duration: 480, note_number: 60, lyric: "え", phonemes: "e", phoneme_locked: true },
       ],
     },
     true,
@@ -87,8 +88,9 @@ async function proposalFixture(directory: string): Promise<string> {
       start: { measure: 10, beat: 0 },
       end: { measure: 11, beat: 0 },
       notes: [
-        { id: "harmony-cross", position: { measure: 10, beat: 0 }, duration: 480, note_number: 72, lyric: "あ", phonemes: "a", phoneme_locked: true },
+        { id: "harmony-cross", position: { measure: 10, beat: 0 }, duration: 480, note_number: 59, lyric: "あ", phonemes: "a", phoneme_locked: true },
         { id: "harmony-clash", position: { measure: 10, beat: 1 }, duration: 480, note_number: 61, lyric: "う", phonemes: "M", phoneme_locked: true },
+        { id: "harmony-upper-reference", position: { measure: 10, beat: 2 }, duration: 480, note_number: 72, lyric: "え", phonemes: "e", phoneme_locked: true },
       ],
     },
     true,
