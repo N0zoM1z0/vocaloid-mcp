@@ -1,0 +1,174 @@
+{
+  "schema": "vocaloid-creative-record-package/v1",
+  "published_at": "2026-07-19T08:26:39.233Z",
+  "song_id": "ame-semi-no-aida",
+  "slug": "ame-semi-no-aida",
+  "title": "雨と蝉のあいだ",
+  "manifest": {
+    "revision": 78,
+    "content_hash": "387cf727e96caa5902604627b70b20e53b7c31db8488c10cfd102a42ffa3c0fa",
+    "composition_hash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29",
+    "mix_hash": "b37e223771c3e021f4cb5aa5765cbfdbb08b81aa181c7b2814c555c64600217f",
+    "intent_hash": "9a90e0c548d79aabdd2b34209b8bca16a7013f3634b15130ab7c736d7489f220"
+  },
+  "journal": {
+    "entries": 24,
+    "chain_head": "dfdf038538bbe9179f366f94e3359a25542dd535950a94fd6c16bd561fb10627",
+    "completeness": {
+      "coreReady": true,
+      "coverage": 1,
+      "dimensions": [
+        {
+          "id": "intent",
+          "label": "Intent",
+          "requiredPhases": [
+            "intent"
+          ],
+          "currentEntryIds": [
+            "d21-intent-pre-density-confirmed"
+          ],
+          "complete": true
+        },
+        {
+          "id": "theory",
+          "label": "Theory / form / harmony / melody",
+          "requiredPhases": [
+            "form",
+            "meter_tempo",
+            "harmony",
+            "melody"
+          ],
+          "currentEntryIds": [
+            "d14-harmony-final-added-nine",
+            "d16-form-current",
+            "d17-meter-tempo-current",
+            "d18-melody-current"
+          ],
+          "complete": true
+        },
+        {
+          "id": "note_allocation",
+          "label": "Japanese note allocation",
+          "requiredPhases": [
+            "note_allocation"
+          ],
+          "currentEntryIds": [
+            "d11-note-allocation-qc-repair"
+          ],
+          "complete": true
+        },
+        {
+          "id": "ia_delivery",
+          "label": "IA delivery",
+          "requiredPhases": [
+            "ia_delivery"
+          ],
+          "currentEntryIds": [
+            "d19-ia-delivery-current"
+          ],
+          "complete": true
+        },
+        {
+          "id": "arrangement",
+          "label": "Arrangement",
+          "requiredPhases": [
+            "arrangement"
+          ],
+          "currentEntryIds": [
+            "d15-arrangement-qc-space"
+          ],
+          "complete": true
+        }
+      ],
+      "adjustmentEntryIds": [
+        "d11-note-allocation-qc-repair",
+        "d14-harmony-final-added-nine",
+        "d15-arrangement-qc-space",
+        "d16-form-current",
+        "d17-meter-tempo-current",
+        "d18-melody-current",
+        "d19-ia-delivery-current",
+        "d20-harmony-vocals-local-octave",
+        "d21-intent-pre-density-confirmed"
+      ],
+      "auditionEntryIds": [
+        "d23-audition-anchor-and-cicada-ab"
+      ],
+      "humanListeningStatus": "pending"
+    }
+  },
+  "deliverables": [
+    {
+      "role": "song",
+      "artifactId": "delivery-r77",
+      "artifactRole": "delivery",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/natsu-ame-semi-ia-rocks-20260719-final.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/natsu-ame-semi-ia-rocks-20260719-final.wav",
+      "sha256": "294963d6c8f456901205a4c8576d687029730a7c8f58e36145461494dd63091c",
+      "bytes": 11360182,
+      "sourceRevision": 77,
+      "sourceCompositionHash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29"
+    },
+    {
+      "role": "vsqx",
+      "artifactId": "vsqx-r63",
+      "artifactRole": "vsqx",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/natsu-ame-semi-ia-rocks-20260719-final.vsqx",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/natsu-ame-semi-ia-rocks-20260719-final.vsqx",
+      "sha256": "bda3234c9ce25a8a8b7b48ab5d1d39fc55e72b1670ffb078aa083bdd3b031b3f",
+      "bytes": 135697,
+      "sourceRevision": 63,
+      "sourceCompositionHash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-minimal_band-stem-mix-r70-chorus-coexist-r75",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/anchor-minimal-band-r75.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/anchor-minimal-band-r75.wav",
+      "sha256": "cbe3798c145da14d3f78a0293e8e517c71290131f8c50a056cd3b2347c2a1894",
+      "bytes": 4410078,
+      "sourceRevision": 75,
+      "sourceCompositionHash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-ab-a-stem-mix-r71-chorus-coexist-r76",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/ab-a-without-cicada-r76.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/ab-a-without-cicada-r76.wav",
+      "sha256": "82ca9572d68d8fabf1cf79ae7ec509fca77a468e800153e301ef272fde08a740",
+      "bytes": 4410078,
+      "sourceRevision": 76,
+      "sourceCompositionHash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-ab-b-stem-mix-r72-chorus-coexist-r76",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/ab-b-with-cicada-r76.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/natsu-ame-semi-ia-rocks-20260719/ab-b-with-cicada-r76.wav",
+      "sha256": "a458c2bd2a3700add9ed5d5f734019c009a698b95ff325574929836c353d31cc",
+      "bytes": 4410078,
+      "sourceRevision": 76,
+      "sourceCompositionHash": "4bd440c2d87dca26fb68552ec2b930ef3b8eb90f5b68c7f7ec832a5f33152e29"
+    }
+  ],
+  "files": [
+    {
+      "name": "ame-semi-no-aida.song.json",
+      "sha256": "e06c095ead8a60f961a2a7c02e1430c4cbd14d0274d60f2d84526f799fe08a19",
+      "bytes": 602144
+    },
+    {
+      "name": "ame-semi-no-aida.creative-journal.jsonl",
+      "sha256": "515e9d5f551fec627aceec57c39f9b4c810fd3e9fc2dd04d171f936a3f5fb81c",
+      "bytes": 178760
+    },
+    {
+      "name": "ame-semi-no-aida.creative-report.md",
+      "sha256": "0f6ff7ad4a7f3826b3e19c4b65921275edf725f12eb88251be93555f78ff3361",
+      "bytes": 67981
+    }
+  ]
+}

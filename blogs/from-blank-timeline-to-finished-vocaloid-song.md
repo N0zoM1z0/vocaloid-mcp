@@ -7,7 +7,6 @@
 - **Primary verified voice:** IA_ROCKS
 - **Implementation baseline described:** local commit `91545a0`, with the later paired-delivery convention documented below
 - **Current verification:** 47 tests discovered, 45 passed, 2 intentionally skipped, 0 failed
-
 ---
 
 ## Abstract
@@ -1886,7 +1885,7 @@ A one-off configuration can load the local server without editing global configu
 ```bash
 codex exec --skip-git-repo-check \
   -c 'mcp_servers.vocaloid.command="node"' \
-  -c 'mcp_servers.vocaloid.args=["/home/pentester/coding/codex_ida/vocaloid/dist/src/index.js"]' \
+  -c 'mcp_servers.vocaloid.args=["/absolute/path/to/vocaloid/dist/src/index.js"]' \
   'Use only the Vocaloid MCP. Read its capabilities and from-zero example, then create and preflight a new canonical song.'
 ```
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -16,6 +17,7 @@ const PRODUCTION_TOOLS = [
   "vocaloid_analyze_wav",
   "vocaloid_build_song_manifest",
   "vocaloid_create_song_manifest",
+  "vocaloid_creative_journal",
   "vocaloid_edit_song",
   "vocaloid_get_song_section",
   "vocaloid_host_readiness",
@@ -23,6 +25,7 @@ const PRODUCTION_TOOLS = [
   "vocaloid_inspect_song_manifest",
   "vocaloid_manifest_history",
   "vocaloid_master_manifest_delivery",
+  "vocaloid_phrase_grammar",
   "vocaloid_preflight_song",
   "vocaloid_probe_voice",
   "vocaloid_render_instrument_stems",
@@ -46,13 +49,40 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), PRODUCTION_TOOLS);
-  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 80_000, "production tools/list exceeded 80 KB");
+  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 90_000, "production tools/list exceeded 90 KB");
   for (const tool of tools.tools) {
     assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
     assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
   }
+  const prompts = await client.listPrompts();
+  assert.deepEqual(prompts.prompts.map((prompt) => prompt.name), ["vocaloid_compose_from_intent"]);
+  const compositionPrompt = await client.getPrompt({
+    name: "vocaloid_compose_from_intent",
+    arguments: { intent_file: "intents/2026-07-19-summer-night-rain-cicadas-ia-rocks.intent.json" },
+  });
+  const compositionPromptText = compositionPrompt.messages[0]?.content;
+  assert.equal(compositionPromptText?.type, "text");
+  assert.match(compositionPromptText?.type === "text" ? compositionPromptText.text : "", /summer-night-rain-cicadas/u);
+  assert.match(compositionPromptText?.type === "text" ? compositionPromptText.text : "", /BDREB7P2KTWKYDC5/u);
   const editTool = tools.tools.find((tool) => tool.name === "vocaloid_edit_song");
   assert.equal(editTool?.annotations?.destructiveHint, false, "recoverable dry-runs/writes must not trigger destructive-call cancellation");
+  assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_intent/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /set_composition_guidance/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /upsert_theory_exception/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /edit-song-contract/u);
+  assert.match(JSON.stringify(editTool?.inputSchema), /payload/u);
+  const creativeJournalTool = tools.tools.find((tool) => tool.name === "vocaloid_creative_journal");
+  assert.match(JSON.stringify(creativeJournalTool?.inputSchema), /creative-journal-contract/u);
+  assert.match(JSON.stringify(creativeJournalTool?.outputSchema), /publish/u);
+  const audioReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_audio");
+  assert.match(JSON.stringify(audioReviewTool?.inputSchema), /anchor_preview/u);
+  assert.match(JSON.stringify(audioReviewTool?.inputSchema), /compare_anchor_ab/u);
+  const songReviewTool = tools.tools.find((tool) => tool.name === "vocaloid_review_song");
+  assert.match(JSON.stringify(songReviewTool?.inputSchema), /intent_fidelity/u);
+  const preflightTool = tools.tools.find((tool) => tool.name === "vocaloid_preflight_song");
+  assert.match(JSON.stringify(preflightTool?.inputSchema), /include_theory_proposals/u);
+  assert.match(JSON.stringify(preflightTool?.outputSchema), /vocaloid-theory-proposals\/v1/u);
+  assert.match(JSON.stringify(preflightTool?.outputSchema), /releasePolicy/u);
 
   const capabilities = await client.readResource({ uri: "vocaloid://capabilities" });
   const capabilityEntry = capabilities.contents[0];
@@ -60,16 +90,133 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
   assert.equal(typeof capabilityText, "string");
   assert.equal(JSON.parse(capabilityText as string).profile, "production");
 
-  const lyricResource = await client.readResource({ uri: "vocaloid://lyrics/hanairo-biyori" });
-  const suppliedLyrics = await readFile(join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt"), "utf8");
-  const lyricEntry = lyricResource.contents[0];
-  assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+  const intentContract = await client.readResource({ uri: "vocaloid://composition-intent-contract" });
+  const intentEntry = intentContract.contents[0];
+  assert.match(intentEntry && "text" in intentEntry ? intentEntry.text : "", /What is IA meant to sing out/u);
+  const theoryPolicy = await client.readResource({ uri: "vocaloid://music-theory-policy" });
+  const theoryEntry = theoryPolicy.contents[0];
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /style evidence never suppresses/ui);
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /Bounded proposal contract/u);
+  assert.match(theoryEntry && "text" in theoryEntry ? theoryEntry.text : "", /must not silently replace the phrase purpose/u);
+  const phraseGrammar = await client.readResource({ uri: "vocaloid://phrase-grammar" });
+  const phraseGrammarEntry = phraseGrammar.contents[0];
+  const phraseGrammarIndex = JSON.parse(phraseGrammarEntry && "text" in phraseGrammarEntry ? phraseGrammarEntry.text : "null");
+  assert.equal(phraseGrammarIndex.schema, "vocaloid-phrase-grammar/v1");
+  assert.equal(phraseGrammarIndex.boundary.runtime_corpus_access, "forbidden");
+  const phraseGrammarTool = await client.callTool({
+    name: "vocaloid_phrase_grammar",
+    arguments: {
+      action: "catalog",
+      payload: { category: "contour", limit: 5, offset: 0 },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(phraseGrammarTool.isError, true);
+  const phraseGrammarData = phraseGrammarTool.structuredContent as { data?: { count?: number; items?: Array<{ category?: string }> } };
+  assert.equal(phraseGrammarData.data?.count, 5);
+  assert.ok(phraseGrammarData.data?.items?.every((entry) => entry.category === "contour"));
+  const phraseGrammarContract = await client.readResource({
+    uri: "vocaloid://phrase-grammar-contract/validate_blueprint",
+  });
+  const phraseGrammarContractEntry = phraseGrammarContract.contents[0];
+  assert.match(
+    phraseGrammarContractEntry && "text" in phraseGrammarContractEntry ? phraseGrammarContractEntry.text : "",
+    /melody_authorship/u,
+  );
+
+  const editContract = await client.readResource({ uri: "vocaloid://edit-song-contract" });
+  const editContractEntry = editContract.contents[0];
+  assert.match(editContractEntry && "text" in editContractEntry ? editContractEntry.text : "", /bind_phrase_realization/u);
+  const intentActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/set_composition_intent",
+  });
+  const intentActionEntry = intentActionContract.contents[0];
+  assert.match(intentActionEntry && "text" in intentActionEntry ? intentActionEntry.text : "", /composition_intent/u);
+  const guidanceActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/set_composition_guidance",
+  });
+  const guidanceActionEntry = guidanceActionContract.contents[0];
+  assert.match(guidanceActionEntry && "text" in guidanceActionEntry ? guidanceActionEntry.text : "", /required_review_severities/u);
+  const exceptionActionContract = await client.readResource({
+    uri: "vocaloid://edit-song-contract/upsert_theory_exception",
+  });
+  const exceptionActionEntry = exceptionActionContract.contents[0];
+  assert.match(exceptionActionEntry && "text" in exceptionActionEntry ? exceptionActionEntry.text : "", /target_fingerprint/u);
+  const journalPolicy = await client.readResource({ uri: "vocaloid://creative-decision-journal" });
+  const journalPolicyEntry = journalPolicy.contents[0];
+  assert.match(journalPolicyEntry && "text" in journalPolicyEntry ? journalPolicyEntry.text : "", /declared.*materialized.*rendered.*heard/su);
+  const journalContract = await client.readResource({ uri: "vocaloid://creative-journal-contract" });
+  const journalContractEntry = journalContract.contents[0];
+  assert.match(journalContractEntry && "text" in journalContractEntry ? journalContractEntry.text : "", /publish/u);
+  const recordJournalContract = await client.readResource({
+    uri: "vocaloid://creative-journal-contract/record",
+  });
+  const recordJournalEntry = recordJournalContract.contents[0];
+  assert.match(recordJournalEntry && "text" in recordJournalEntry ? recordJournalEntry.text : "", /expected_audible_effect/u);
+  const invalidIntentEdit = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: { action: "set_composition_intent", payload: {}, response_format: "json" },
+  });
+  assert.equal(invalidIntentEdit.isError, true);
+  assert.match(
+    JSON.stringify(invalidIntentEdit.structuredContent),
+    /(?:input_path|composition_intent)/u,
+  );
+
+  const proposalPreflight = await client.callTool({
+    name: "vocaloid_preflight_song",
+    arguments: {
+      manifest_path: join(ROOT, "tests/fixtures/mcp-v1-agent-eval.song.json"),
+      artifact_check: "none",
+      include_performance_warnings: true,
+      check_voice_cache: false,
+      include_theory_proposals: true,
+      max_theory_proposals: 3,
+      theory_proposal_issue_codes: ["SUSTAINED_NON_CHORD_TONE_UNRESOLVED"],
+      response_format: "json",
+    },
+  });
+  assert.notEqual(proposalPreflight.isError, true);
+  const proposalData = proposalPreflight.structuredContent as {
+    data?: {
+      theoryProposals?: {
+        constraints?: { corpusAndStyleAccess?: string; applyRequiresDryRun?: boolean };
+        candidates?: Array<{
+          apply?: { tool?: string; requiredDryRun?: boolean };
+          predictedDelta?: { verification?: string };
+        }>;
+      };
+      releasePolicy?: { enabled?: boolean; ready?: boolean; blockers?: string[] };
+    };
+  };
+  assert.equal(proposalData.data?.theoryProposals?.constraints?.corpusAndStyleAccess, "forbidden");
+  assert.equal(proposalData.data?.theoryProposals?.constraints?.applyRequiresDryRun, true);
+  assert.ok((proposalData.data?.theoryProposals?.candidates?.length ?? 0) >= 1);
+  assert.ok(proposalData.data?.theoryProposals?.candidates?.every((candidate) =>
+    candidate.apply?.tool === "vocaloid_edit_song"
+    && candidate.apply.requiredDryRun === true
+    && candidate.predictedDelta?.verification === "vocaloid_edit_song_dry_run"));
+  assert.equal(proposalData.data?.releasePolicy?.enabled, false);
+  assert.equal(proposalData.data?.releasePolicy?.ready, true);
+
+  const suppliedLyricsPath = join(ROOT, "artifacts/evals/[Lyrics] Hanairo Biyori.txt");
+  const resources = await client.listResources();
+  const lyricResource = resources.resources.find((resource) => resource.uri === "vocaloid://lyrics/hanairo-biyori");
+  if (existsSync(suppliedLyricsPath)) {
+    assert.ok(lyricResource, "local supplied lyrics should be exposed when present");
+    const lyricContents = await client.readResource({ uri: lyricResource.uri });
+    const suppliedLyrics = await readFile(suppliedLyricsPath, "utf8");
+    const lyricEntry = lyricContents.contents[0];
+    assert.equal(lyricEntry && "text" in lyricEntry ? lyricEntry.text : undefined, suppliedLyrics);
+  } else {
+    assert.equal(lyricResource, undefined, "ignored local lyrics must remain an optional resource");
+  }
 
   const exampleResource = await client.readResource({ uri: "vocaloid://examples/from-zero" });
   const exampleEntry = exampleResource.contents[0];
   const example = JSON.parse(exampleEntry && "text" in exampleEntry ? exampleEntry.text : "null");
-  assert.equal(example.calls[2].arguments.voice.component_id, "BDREB7P2KTWKYDC5");
-  assert.equal(example.calls[2].arguments.dry_run, true);
+  assert.equal(example.calls[2].arguments.payload.voice.component_id, "BDREB7P2KTWKYDC5");
+  assert.equal(example.calls[2].arguments.payload.dry_run, true);
 });
 
 test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
@@ -102,6 +249,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_create_project",
       "vocaloid_create_song",
       "vocaloid_create_song_manifest",
+      "vocaloid_creative_journal",
       "vocaloid_edit_song",
       "vocaloid_get_song_section",
       "vocaloid_host_readiness",
@@ -117,6 +265,7 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
       "vocaloid_manifest_history",
       "vocaloid_master_manifest_delivery",
       "vocaloid_master_wav",
+      "vocaloid_phrase_grammar",
       "vocaloid_preflight_song",
       "vocaloid_probe_voice",
       "vocaloid_remove_song_objects",
@@ -275,6 +424,52 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
   assert.equal(
     (manifestCreated.structuredContent as { data?: { revision?: number } }).data?.revision,
     1,
+  );
+
+  const journalDryRun = await client.callTool({
+    name: "vocaloid_creative_journal",
+    arguments: {
+      action: "record",
+      payload: {
+        manifest_path: manifestPath,
+        expected_revision: 1,
+        dry_run: true,
+        decision: {
+          id: "decision-smoke-intent",
+          phase: "intent",
+          kind: "framing",
+          title: "Frame the smoke-test phrase",
+          objective: "Verify the strict journal action through stdio.",
+          decision: "Bind this dry-run decision to the verse object.",
+          rationale: "A stable-object binding proves runtime parsing without mutating the journal.",
+          expected_audible_effect: "No audible change is expected from a dry run.",
+          affected_object_ids: ["verse"],
+          evidence: { observations: ["The verse exists at manifest revision 1."] },
+          outcome: "planned",
+          author: { type: "agent", name: "mcp-smoke" },
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(journalDryRun.isError, true);
+  assert.equal(
+    (journalDryRun.structuredContent as { data?: { entry?: { id?: string }; dryRun?: boolean } })
+      .data?.entry?.id,
+    "decision-smoke-intent",
+  );
+  const emptyJournal = await client.callTool({
+    name: "vocaloid_creative_journal",
+    arguments: {
+      action: "list",
+      payload: { manifest_path: manifestPath, offset: 0, limit: 20 },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(emptyJournal.isError, true);
+  assert.equal(
+    (emptyJournal.structuredContent as { data?: { total?: number } }).data?.total,
+    0,
   );
 
   const vocalUpsert = await client.callTool({
@@ -504,6 +699,112 @@ test("stdio MCP lists and executes the core VSQX workflow", async (context) => {
     (manifestInspect.structuredContent as { data?: { revision?: number } }).data?.revision,
     8,
   );
+
+  const intentDryRun = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "set_composition_intent",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        composition_intent: {
+          schema: "vocaloid-composition-intent/v1",
+          song: {
+            premise: "One line moves from uncertainty into a direct answer.",
+            central_tension: "The answer changes what can remain unsaid.",
+            state_at_start: "Uncertain.",
+            intended_destination: "Direct and restrained.",
+          },
+          sections: [{
+            id: "intent-verse",
+            section_id: "verse",
+            dramatic_function: "Move into the answer.",
+            state_before: "Indirect.",
+            intended_transition: "State one answer plainly.",
+            state_after: "The answer is present.",
+          }],
+          phrase_directions: [],
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(intentDryRun.isError, true);
+  const intentDryRunData = intentDryRun.structuredContent as {
+    data?: {
+      preview?: {
+        analysisDelta?: { creativeStatus?: { before?: string; after?: string } };
+      };
+    };
+  };
+  assert.deepEqual(intentDryRunData.data?.preview?.analysisDelta?.creativeStatus, {
+    before: "missing_intent",
+    after: "incomplete",
+  });
+
+  const guidanceDryRun = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "set_composition_guidance",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        composition_guidance: {
+          theory_ruleset_id: "core/v1",
+          strictness: "balanced",
+          harmonic_language: "tonal",
+          required_review_severities: [],
+          intent_review_policy: {
+            mode: "required_for_delivery",
+            require_song_intent: true,
+            require_section_intent: false,
+            minimum_anchor_phrases: 0,
+            require_current_audition_review: false,
+          },
+          exceptions: [],
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.notEqual(guidanceDryRun.isError, true);
+  const guidanceDryRunData = guidanceDryRun.structuredContent as {
+    data?: { preview?: { releasePolicy?: { ready?: boolean; blockers?: string[] } } };
+  };
+  assert.equal(guidanceDryRunData.data?.preview?.releasePolicy?.ready, false);
+  assert.ok(guidanceDryRunData.data?.preview?.releasePolicy?.blockers?.includes("COMPOSITION_INTENT_REQUIRED"));
+
+  const invalidTheoryException = await client.callTool({
+    name: "vocaloid_edit_song",
+    arguments: {
+      action: "upsert_theory_exception",
+      payload: {
+        input_path: manifestPath,
+        output_path: manifestPath,
+        expected_revision: 8,
+        overwrite: true,
+        dry_run: true,
+        theory_exception: {
+          id: "invalid-exception",
+          issue_code: "LARGE_LEAP_UNBALANCED",
+          object_ids: ["lead"],
+          target_fingerprint: "not-a-fingerprint",
+          rationale: "Invalid strict-contract fixture.",
+          author_type: "agent",
+          created_at: "2026-07-19T06:00:00.000Z",
+        },
+      },
+      response_format: "json",
+    },
+  });
+  assert.equal(invalidTheoryException.isError, true);
+  assert.match(JSON.stringify(invalidTheoryException.structuredContent), /target_fingerprint/u);
 
   const manifestBackingPath = join(temporary, "mcp-agent-song-backing-r8.wav");
   const manifestProjectPath = join(temporary, "mcp-agent-song-r8.vsqx");

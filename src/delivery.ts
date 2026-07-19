@@ -19,6 +19,7 @@ import {
   type ManifestArtifact,
 } from "./song-manifest.js";
 import { preflightSongManifest, type SongPreflightResult } from "./song-preflight.js";
+import type { ReleasePolicyGate } from "./theory/policy.js";
 
 
 async function exists(path: string): Promise<boolean> {
@@ -194,6 +195,7 @@ export interface MasterManifestDeliveryResult {
   manifestRevision: number;
   manifestContentHash: string;
   sourceArtifactId: string;
+  releasePolicy: ReleasePolicyGate;
   mastering: MasterWavResult;
   artifact: ManifestArtifact;
 }
@@ -216,6 +218,20 @@ export async function masterSongManifestDelivery(
     throw new Error(
       `Mix artifact ${sourceArtifact.id} belongs to mix hash ${String(sourceArtifact.metadata.source_mix_hash)}, `
       + `but the current mix hash is ${manifest.mix_hash}; render a new mix before delivery`,
+    );
+  }
+  const preflight = await preflightSongManifest(loaded.path, {
+    artifactCheck: "current",
+    includePerformanceWarnings: true,
+  });
+  const finalGateBlockers = [...new Set([
+    ...preflight.readiness.build.blockers,
+    ...preflight.releasePolicy.blockers,
+  ])];
+  if (finalGateBlockers.length > 0) {
+    throw new Error(
+      `Final delivery blocked by current song policy: ${finalGateBlockers.join(", ")}. `
+      + "Repair structural issues, resolve required theory warnings, or record current intent listening review/precise exceptions before mastering.",
     );
   }
   const sourcePath = await resolveVerifiedArtifact(sourceArtifact, ".wav");
@@ -257,11 +273,24 @@ export async function masterSongManifestDelivery(
         target_lra_lu: options.targetLoudnessRangeLu,
         integrated_lufs: mastering.output.integratedLufs,
         loudness_range_lu: mastering.output.loudnessRangeLu,
+        mastering_requested_gain_lu: mastering.requestedLoudnessGainLu,
+        mastering_peak_safe_gain_db: mastering.peakSafeGainDb,
+        mastering_peak_reduction_required_db: mastering.peakReductionRequiredDb,
+        mastering_lra_change_lu: mastering.loudnessRangeChangeLu,
+        mastering_transparency_review_recommended: mastering.transparencyReviewRecommended,
         true_peak_dbfs: mastering.output.truePeakDbfs,
         true_peak_correction_db: mastering.truePeakCorrectionDb,
         sample_clipping: mastering.output.sampleClipping,
         source_clipping_accepted: options.allowClippedSource,
         stereo_balance_db: mastering.output.stereoBalanceDb ?? 0,
+        release_policy_enabled: preflight.releasePolicy.enabled,
+        release_policy_ready: preflight.releasePolicy.ready,
+        ...(manifest.composition_guidance
+          ? {
+            theory_ruleset_id: manifest.composition_guidance.theory_ruleset_id,
+            intent_review_policy: manifest.composition_guidance.intent_review_policy?.mode ?? "off",
+          }
+          : {}),
       },
       created_at: new Date().toISOString(),
     };
@@ -277,6 +306,7 @@ export async function masterSongManifestDelivery(
       manifestRevision: mutation.write.revision,
       manifestContentHash: mutation.write.contentHash,
       sourceArtifactId: sourceArtifact.id,
+      releasePolicy: preflight.releasePolicy,
       mastering,
       artifact,
     };

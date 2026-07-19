@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { alignJapanesePhrase } from "../src/japanese.js";
+import { preflightSongManifest } from "../src/song-preflight.js";
 import {
   applySongManifestTuningGestures,
   buildSongManifest,
@@ -172,6 +173,11 @@ test("upserts an aligned phrase and compiles stable-ID tuning gestures into nati
     true,
   );
   assert.equal(gestureWrite.write.revision, 4);
+  const materialized = (await loadSongManifest(manifestPath)).manifest.vocal_tracks[0]?.parts[0];
+  assert.deepEqual(
+    materialized?.materialized_tuning_gesture_ids,
+    ["crisp-entry", "tail-vibrato", "lead-scoop", "phrase-arc", "opening-arc", "brightness-arc"],
+  );
   assert.deepEqual(
     gestureWrite.applied.compiled.map((entry) => [entry.type, entry.curves]),
     [
@@ -290,4 +296,88 @@ test("upserts an aligned phrase and compiles stable-ID tuning gestures into nati
   assert.equal(notes[2]?.style.vibType, 13);
   const controls = (await listControlPoints(projectPath, 0, 0, undefined, undefined, undefined, 0, 100)).page.items;
   assert.deepEqual([...new Set(controls.map((point) => point.curve))].sort(), ["BRI", "DYN", "PBS", "PIT"]);
+});
+
+test("preflight blocks declared tuning metadata until the gesture compiler materializes it", async (context) => {
+  const temporary = await mkdtemp(join(ROOT, ".test-unmaterialized-tuning-"));
+  context.after(async () => rm(temporary, { recursive: true, force: true }));
+  const manifestPath = join(temporary, "unmaterialized.song.json");
+  await createSongManifest({
+    outputPath: manifestPath,
+    songId: "unmaterialized-song",
+    slug: "unmaterialized-song",
+    title: "Unmaterialized Song",
+    format: "vsq3",
+    preMeasure: 1,
+    timeSignatures: [{ measure: 0, numerator: 4, denominator: 4 }],
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm: 120 }],
+    sections: [{
+      id: "verse",
+      name: "Verse",
+      kind: "verse",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 1, beat: 0 },
+    }],
+    sampleRate: 44_100,
+    gain: 0.2,
+    reverb: false,
+    chorus: false,
+    overwrite: false,
+  });
+  const gesture = {
+    id: "declared-vibrato",
+    type: "vibrato" as const,
+    event_ids: ["lead-note"],
+    vibrato_type: 13,
+    length_percent: 45,
+  };
+  await upsertSongManifestVocalPart(
+    manifestPath,
+    manifestPath,
+    1,
+    { id: "voice-ia", name: "IA", component_id: "BLRGDDR4M3WM2LC6" },
+    { id: "lead", name: "Lead", voice_id: "voice-ia" },
+    {
+      id: "verse-lead",
+      section_id: "verse",
+      name: "Verse Lead",
+      start: { measure: 0, beat: 0 },
+      end: { measure: 1, beat: 0 },
+      notes: [{
+        id: "lead-note",
+        position: { measure: 0, beat: 0 },
+        duration: 480,
+        note_number: 60,
+        lyric: "ら",
+        phonemes: "4 a",
+      }],
+      tuning_gestures: [gesture],
+    },
+    true,
+  );
+  const blocked = await preflightSongManifest(manifestPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  });
+  assert.ok(blocked.readiness.build.blockers.includes("TUNING_GESTURE_NOT_MATERIALIZED"));
+  assert.ok(blocked.issues.some((entry) => entry.code === "TUNING_GESTURE_NOT_MATERIALIZED"));
+
+  await assert.rejects(
+    applySongManifestTuningGestures(
+      manifestPath, manifestPath, 2, "lead", "verse-lead", [gesture], true,
+    ),
+    /materialize_existing=true/iu,
+  );
+  await applySongManifestTuningGestures(
+    manifestPath, manifestPath, 2, "lead", "verse-lead", [gesture], true, true,
+  );
+  const repaired = await preflightSongManifest(manifestPath, {
+    artifactCheck: "none",
+    includePerformanceWarnings: false,
+  });
+  assert.ok(!repaired.readiness.build.blockers.includes("TUNING_GESTURE_NOT_MATERIALIZED"));
+  const part = (await loadSongManifest(manifestPath)).manifest.vocal_tracks[0]?.parts[0];
+  assert.deepEqual(part?.materialized_tuning_gesture_ids, ["declared-vibrato"]);
+  assert.equal(part?.notes[0]?.vibrato?.type, 13);
+  assert.equal(part?.notes[0]?.vibrato?.length, 45);
 });

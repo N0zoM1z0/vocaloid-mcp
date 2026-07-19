@@ -1,0 +1,131 @@
+{
+  "schema": "vocaloid-creative-record-package/v1",
+  "published_at": "2026-07-19T03:39:58.998Z",
+  "song_id": "asa-ga-hodoku-mae-ni",
+  "slug": "asa-ga-hodoku-mae-ni",
+  "title": "朝がほどく前に",
+  "manifest": {
+    "revision": 41,
+    "content_hash": "3760b24dd353de741e1b0721821204bf7932ed55c27a3f8ec2f74ad0237b89cc",
+    "composition_hash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb",
+    "mix_hash": "6b8fca0efa64447b2f8e1252fadb018fd0e2ad7d5ca01c15db413ac50df1ebf7",
+    "intent_hash": "aa087bbbf3dcb27cb87d8fd60e5f020f1431ef3b8b391dc9e59bd0a083df1a1d"
+  },
+  "journal": {
+    "entries": 11,
+    "chain_head": "0d256483f497befa8e0aa1287d1cadab495f6b4d2ddd8720ad573c3ba88ea322",
+    "completeness": {
+      "coreReady": true,
+      "coverage": 1,
+      "dimensions": [
+        {
+          "id": "intent",
+          "label": "Intent",
+          "requiredPhases": [
+            "intent"
+          ],
+          "currentEntryIds": [
+            "asa-decision-intent-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "theory",
+          "label": "Theory / form / harmony / melody",
+          "requiredPhases": [
+            "form",
+            "meter_tempo",
+            "harmony",
+            "melody"
+          ],
+          "currentEntryIds": [
+            "asa-decision-form-v1",
+            "asa-decision-meter-tempo-v1",
+            "asa-decision-harmony-v1",
+            "asa-decision-melody-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "note_allocation",
+          "label": "Japanese note allocation",
+          "requiredPhases": [
+            "note_allocation"
+          ],
+          "currentEntryIds": [
+            "asa-decision-note-allocation-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "ia_delivery",
+          "label": "IA delivery",
+          "requiredPhases": [
+            "ia_delivery"
+          ],
+          "currentEntryIds": [
+            "asa-decision-ia-delivery-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "arrangement",
+          "label": "Arrangement",
+          "requiredPhases": [
+            "arrangement"
+          ],
+          "currentEntryIds": [
+            "asa-decision-arrangement-v1"
+          ],
+          "complete": true
+        }
+      ],
+      "adjustmentEntryIds": [
+        "asa-decision-materialization-repair-v1"
+      ],
+      "auditionEntryIds": [],
+      "humanListeningStatus": "pending"
+    }
+  },
+  "deliverables": [
+    {
+      "role": "song",
+      "artifactId": "delivery-r39",
+      "artifactRole": "delivery",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-r39-final.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-r39-final.wav",
+      "sha256": "d17f9aefd49853abb345146b2bd1c8220e62d48c49bfcff44596b004145aa347",
+      "bytes": 4952306,
+      "sourceRevision": 39,
+      "sourceCompositionHash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb"
+    },
+    {
+      "role": "vsqx",
+      "artifactId": "vsqx-r29",
+      "artifactRole": "vsqx",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/build/intent-demos/asa-ga-hodoku-mae-ni-20260719-a/asa-ga-hodoku-mae-ni-project-r29.vsqx",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/asa-ga-hodoku-mae-ni-asa-ga-hodoku-mae-ni-20260719-a-r29-demo.vsqx",
+      "sha256": "b7e8cc12e8e1e22c87dc2dc1024ffd6c7bbfc063d8a5d78c36a0244fbc2850e7",
+      "bytes": 20704,
+      "sourceRevision": 29,
+      "sourceCompositionHash": "577f4da953f844dd0c46de068c95aea1a72ab54af0fb20723d772206144b0adb"
+    }
+  ],
+  "files": [
+    {
+      "name": "asa-ga-hodoku-mae-ni.song.json",
+      "sha256": "0e4555fe3a5dec57d40aef31e274dd82cb60213104bfc624fb8210b80a42ef3c",
+      "bytes": 118164
+    },
+    {
+      "name": "asa-ga-hodoku-mae-ni.creative-journal.jsonl",
+      "sha256": "d61ff8026bddca243ddc28380107f69a645cf1d7712b7b535dd1d8a8e70bbc6c",
+      "bytes": 33388
+    },
+    {
+      "name": "asa-ga-hodoku-mae-ni.creative-report.md",
+      "sha256": "aa30ed7811fa2601ea5e45e690369e6c93554e52fd10180d8dec51478f16b6cb",
+      "bytes": 19416
+    }
+  ]
+}

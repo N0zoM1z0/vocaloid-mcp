@@ -1,0 +1,133 @@
+{
+  "schema": "vocaloid-creative-record-package/v1",
+  "published_at": "2026-07-19T04:34:31.926Z",
+  "song_id": "tooi-hi-aoi-yoru-ia-20260719-a",
+  "slug": "tooi-hi-aoi-yoru-ia-20260719-a",
+  "title": "遠い灯、青い夜",
+  "manifest": {
+    "revision": 52,
+    "content_hash": "3fc88cee37329e14096760181897d2020e07c3f6599d4d2dfc89888114e208c6",
+    "composition_hash": "83fd91723bb94fa19f366865fa0614075910ced9f10660fa9c6634809db2d385",
+    "mix_hash": "110f3fda76684b16ab637e551d042724802b11dc42a193cd1452cea0f132d7ae",
+    "intent_hash": "157f9a1b6593fdc555bf982e19a8605c20265e0c0272aaca0587693fd7899242"
+  },
+  "journal": {
+    "entries": 13,
+    "chain_head": "ea706e76210c8708a490258752b9c46eecb3ac7c5079ebcad968e3616c521c48",
+    "completeness": {
+      "coreReady": true,
+      "coverage": 1,
+      "dimensions": [
+        {
+          "id": "intent",
+          "label": "Intent",
+          "requiredPhases": [
+            "intent"
+          ],
+          "currentEntryIds": [
+            "distant-decision-intent-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "theory",
+          "label": "Theory / form / harmony / melody",
+          "requiredPhases": [
+            "form",
+            "meter_tempo",
+            "harmony",
+            "melody"
+          ],
+          "currentEntryIds": [
+            "distant-decision-form-v1",
+            "distant-decision-meter-tempo-v1",
+            "distant-decision-harmony-v1",
+            "distant-decision-melody-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "note_allocation",
+          "label": "Japanese note allocation",
+          "requiredPhases": [
+            "note_allocation"
+          ],
+          "currentEntryIds": [
+            "distant-decision-note-allocation-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "ia_delivery",
+          "label": "IA delivery",
+          "requiredPhases": [
+            "ia_delivery"
+          ],
+          "currentEntryIds": [
+            "distant-decision-ia-delivery-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "arrangement",
+          "label": "Arrangement",
+          "requiredPhases": [
+            "arrangement"
+          ],
+          "currentEntryIds": [
+            "distant-decision-section-balance-v2"
+          ],
+          "complete": true
+        }
+      ],
+      "adjustmentEntryIds": [
+        "distant-decision-section-balance-v2",
+        "distant-decision-mix-delivery-v2",
+        "distant-decision-harmony-vocals-v2"
+      ],
+      "auditionEntryIds": [],
+      "humanListeningStatus": "pending"
+    }
+  },
+  "deliverables": [
+    {
+      "role": "song",
+      "artifactId": "delivery-r51",
+      "artifactRole": "delivery",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/tooi-hi-aoi-yoru-ia-20260719-a-r50-final.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/tooi-hi-aoi-yoru-ia-20260719-a-r50-final.wav",
+      "sha256": "314314fbfd80256702c0889c152fb7366dcdaca650204c1a7f1c239e6b371f67",
+      "bytes": 22941494,
+      "sourceRevision": 51,
+      "sourceCompositionHash": "83fd91723bb94fa19f366865fa0614075910ced9f10660fa9c6634809db2d385"
+    },
+    {
+      "role": "vsqx",
+      "artifactId": "vsqx-r28",
+      "artifactRole": "vsqx",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/build/cold-start-songs/tooi-hi-aoi-yoru-ia-20260719-a/tooi-hi-aoi-yoru-ia-20260719-a-project-r28.vsqx",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/tooi-hi-aoi-yoru-ia-20260719-a-r50-final.vsqx",
+      "sha256": "ae80710813a0c0cdc2f1e172c027d79375e1f0057edb27c082073712dc18270f",
+      "bytes": 154916,
+      "sourceRevision": 28,
+      "sourceCompositionHash": "83fd91723bb94fa19f366865fa0614075910ced9f10660fa9c6634809db2d385"
+    }
+  ],
+  "files": [
+    {
+      "name": "tooi-hi-aoi-yoru-ia-20260719-a.song.json",
+      "sha256": "6e126866efb17fac3221ade615dbc101988f746149406c8032f99cc2aaa0378f",
+      "bytes": 665145
+    },
+    {
+      "name": "tooi-hi-aoi-yoru-ia-20260719-a.creative-journal.jsonl",
+      "sha256": "b977576ab0a9f48952c9191215f1ad0f4d22f75a82fc54449eb3484e1e12d259",
+      "bytes": 54766
+    },
+    {
+      "name": "tooi-hi-aoi-yoru-ia-20260719-a.creative-report.md",
+      "sha256": "3fdb082f0eab761c81e5833d1dc0226e4c0dd57c96ccbeaf652c4b2026c91744",
+      "bytes": 26862
+    }
+  ]
+}

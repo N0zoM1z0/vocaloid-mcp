@@ -1,0 +1,202 @@
+{
+  "schema": "vocaloid-creative-record-package/v1",
+  "published_at": "2026-07-19T07:17:41.386Z",
+  "song_id": "kaze-wa-na-o-yobanai-ia",
+  "slug": "kaze-wa-na-o-yobanai-ia",
+  "title": "風は名を呼ばない",
+  "manifest": {
+    "revision": 88,
+    "content_hash": "b54380075f96596d7ad874161dc8b5671f5790b51aec465968a65a1b15520774",
+    "composition_hash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355",
+    "mix_hash": "0aeb5591ba20c6eea2d36d56249c41f17b9bb8577ce0d33a57609f34653a9108",
+    "intent_hash": "83fded956e50ba2245ca07a3abf95f6d939752c8c6d9407690f197b824403910"
+  },
+  "journal": {
+    "entries": 23,
+    "chain_head": "bf8047beabf7f7308dd5e5fa5bf963b3d1bbfc7282bffb78f96bf60408893fbf",
+    "completeness": {
+      "coreReady": true,
+      "coverage": 1,
+      "dimensions": [
+        {
+          "id": "intent",
+          "label": "Intent",
+          "requiredPhases": [
+            "intent"
+          ],
+          "currentEntryIds": [
+            "decision-intent-analysis-adjustment-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "theory",
+          "label": "Theory / form / harmony / melody",
+          "requiredPhases": [
+            "form",
+            "meter_tempo",
+            "harmony",
+            "melody"
+          ],
+          "currentEntryIds": [
+            "decision-form-harmony-v1",
+            "decision-form-v1",
+            "decision-meter-tempo-v1",
+            "decision-grammar-disposition-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "note_allocation",
+          "label": "Japanese note allocation",
+          "requiredPhases": [
+            "note_allocation"
+          ],
+          "currentEntryIds": [
+            "decision-note-allocation-full-v2"
+          ],
+          "complete": true
+        },
+        {
+          "id": "ia_delivery",
+          "label": "IA delivery",
+          "requiredPhases": [
+            "ia_delivery"
+          ],
+          "currentEntryIds": [
+            "decision-anchor-ia-delivery-v1",
+            "decision-ia-render-verification-v1"
+          ],
+          "complete": true
+        },
+        {
+          "id": "arrangement",
+          "label": "Arrangement",
+          "requiredPhases": [
+            "arrangement"
+          ],
+          "currentEntryIds": [
+            "decision-arrangement-range-disposition-v4"
+          ],
+          "complete": true
+        }
+      ],
+      "adjustmentEntryIds": [
+        "decision-intent-analysis-adjustment-v1",
+        "decision-grammar-disposition-v1",
+        "decision-note-allocation-full-v2"
+      ],
+      "auditionEntryIds": [
+        "decision-anchor-audition-ladder-v2"
+      ],
+      "humanListeningStatus": "pending"
+    }
+  },
+  "deliverables": [
+    {
+      "role": "song",
+      "artifactId": "delivery-r86",
+      "artifactRole": "delivery",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/kaze-wa-na-o-yobanai-ia-final.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/kaze-wa-na-o-yobanai-ia-final.wav",
+      "sha256": "b6c7364ef06a35428b8a837e1dd708fb618fac23434c1ec8a42123d412a6a2a1",
+      "bytes": 33505958,
+      "sourceRevision": 86,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "vsqx",
+      "artifactId": "vsqx-r75",
+      "artifactRole": "vsqx",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/kaze-wa-na-o-yobanai-ia-final.vsqx",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/kaze-wa-na-o-yobanai-ia-final.vsqx",
+      "sha256": "fbb8a03909c5922bf24e75da4d697530d74a5dfa46600e92084ff25d867f0a49",
+      "bytes": 206514,
+      "sourceRevision": 75,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-lead_solo-vocal-stem-lead-r76-cliff-pass-r81",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-lead-solo.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-lead-solo.wav",
+      "sha256": "3bbf231eeb8be2d7f58a8eddbcc309c1f792c2227be97a2708c82e749c5c3c49",
+      "bytes": 3681470,
+      "sourceRevision": 81,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-lead_harmony-stem-mix-r78-cliff-pass-r82",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-lead-harmony.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-lead-harmony.wav",
+      "sha256": "0277fd775410810d51516328ccdceae15c11c2cdb7de4f5236b5128085f0a939",
+      "bytes": 3681470,
+      "sourceRevision": 82,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-minimal_band-stem-mix-r79-cliff-pass-r83",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-minimal-band.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-minimal-band.wav",
+      "sha256": "71a4095de43c58f2943912804605d47a20de6d0bfd519639cb73b62e83c6455b",
+      "bytes": 3681470,
+      "sourceRevision": 83,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-full_layers-stem-mix-r80-cliff-pass-r84",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-full-layers.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-anchor-final-full-layers.wav",
+      "sha256": "138a13b5c85bcfda8d671566a97d9bdbd88a947d6f8c356e9f4e3e4bf794521c",
+      "bytes": 3681470,
+      "sourceRevision": 84,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-ab-a-stem-mix-r80-cliff-pass-r87",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-mastering-premaster-equal-loudness.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-mastering-premaster-equal-loudness.wav",
+      "sha256": "7e0307d648a18dc26dd73861f9f4ee8d051ae088ae2ae491f4692354b5711965",
+      "bytes": 3681470,
+      "sourceRevision": 87,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-ab-b-delivery-r86-cliff-pass-r87",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-mastering-delivery-equal-loudness.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/kaze-wa-na-o-yobanai-ia-20260719/kaze-wa-na-o-yobanai-mastering-delivery-equal-loudness.wav",
+      "sha256": "e965f9186cebafb5f004e031d57c737b7cbcf288ce9105b2ef830c80158356d0",
+      "bytes": 3681470,
+      "sourceRevision": 87,
+      "sourceCompositionHash": "b87b357cb0b89859479bc2ce63b613d457763dede9db402d5d41dfe2cb03c355"
+    }
+  ],
+  "files": [
+    {
+      "name": "kaze-wa-na-o-yobanai-ia.song.json",
+      "sha256": "94bc5459640ef73105c9e87c812271cbff4b4734cece88b8d66f2e6a5c424efc",
+      "bytes": 821716
+    },
+    {
+      "name": "kaze-wa-na-o-yobanai-ia.creative-journal.jsonl",
+      "sha256": "e02b1fceb635c2da7ca23118ef7ef1ded5a1871821a0ab71d3e4266057242e72",
+      "bytes": 104028
+    },
+    {
+      "name": "kaze-wa-na-o-yobanai-ia.creative-report.md",
+      "sha256": "c2c65ada5c7be20668e9a942e5d0a699f72b2766c299af5a63fec7b954875515",
+      "bytes": 56981
+    }
+  ]
+}

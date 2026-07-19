@@ -1,0 +1,40 @@
+{
+  "schema": "vocaloid-composition-brief/v1",
+  "id": "replace-me",
+  "run_id": "replace-me-yyyymmdd",
+  "intent": {
+    "core": "Replace with the compact creative intent.",
+    "scene": "Describe what is concretely happening and where.",
+    "emotional_color": "Describe the emotional mixture, including what it must not collapse into.",
+    "dramatic_motion": "Describe the change from the opening state to the ending state.",
+    "perspective": "Describe who perceives or speaks.",
+    "listener_question": "Does the finished song make the intended change audible without relying on prose explanation?"
+  },
+  "musical_constraints": {
+    "target_duration_seconds": { "min": 50, "max": 70 },
+    "tempo_bpm": { "min": 90, "max": 130, "preferred": 110 },
+    "meter_preferences": ["4/4"],
+    "primary_genre": "agent-selected",
+    "style_tags": [],
+    "voice": {
+      "id": "voice-ia",
+      "name": "IA",
+      "component_id": "BLRGDDR4M3WM2LC6"
+    },
+    "lyric_language": "Japanese",
+    "lyric_mode": "agent_original",
+    "arrangement_hints": [],
+    "must_avoid": []
+  },
+  "source_boundaries": {
+    "local_ia_corpus": "forbidden",
+    "prior_song_artifacts": "forbidden",
+    "reference_tracks_or_melodies": "forbidden",
+    "phrase_grammar_usage": "selection_only"
+  },
+  "evaluation": {
+    "fresh_session": true,
+    "human_listening_disposition": "pending",
+    "record_framework_issues": true
+  }
+}

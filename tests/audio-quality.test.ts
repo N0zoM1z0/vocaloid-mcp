@@ -69,6 +69,16 @@ test("analyzes EBU loudness and masters to bounded targets", async (context) => 
   assert.equal(result.sourceClipped, false);
   assert.equal(result.loudnessRangeTargetMet, false);
   assert.equal(result.targetLoudnessRangeLu, 7);
+  assert.ok(Number.isFinite(result.requestedLoudnessGainLu));
+  assert.ok(Number.isFinite(result.peakSafeGainDb));
+  assert.equal(
+    result.peakReductionRequiredDb,
+    Math.max(0, result.requestedLoudnessGainLu - result.peakSafeGainDb),
+  );
+  assert.equal(
+    result.transparencyReviewRecommended,
+    result.peakReductionRequiredDb > 1.5 || Math.abs(result.loudnessRangeChangeLu) > 1.5,
+  );
   assert.ok(Math.abs(result.output.integratedLufs - -16) <= 0.6);
   assert.ok(result.output.truePeakDbfs <= -0.95);
   assert.ok(result.truePeakCorrectionDb <= 0);

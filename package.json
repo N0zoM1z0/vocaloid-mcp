@@ -1,7 +1,8 @@
 {
   "name": "vocaloid-mcp-server",
   "version": "1.0.0",
-  "description": "Local MCP server for inspecting and safely editing VOCALOID VSQX projects",
+  "description": "Agent-native MCP for composing, tuning, rendering, mixing, and auditing native VOCALOID3/4 projects",
+  "private": true,
   "type": "module",
   "main": "dist/src/index.js",
   "bin": {
@@ -11,8 +12,14 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
+    "compose:intent-demo": "npm run build && node scripts/compose-intent-demo.mjs",
+    "compose:distant-lights": "npm run build && node scripts/compose-distant-lights.mjs",
+    "compose:prompt": "npm run build && node scripts/render-composition-agent-prompt.mjs",
     "eval:styles": "node scripts/generate-style-evals.mjs",
-    "test": "npm run build && node --test dist/tests/*.test.js"
+    "eval:intent-first": "npm run build && node scripts/evaluate-intent-first-benchmark.mjs",
+    "eval:intent-first:finalize-trace": "npm run build && node scripts/finalize-intent-first-trace.mjs",
+    "eval:intent-first:prompt": "npm run build && node scripts/render-intent-first-prompt.mjs",
+    "test": "npm run build && node --test dist/tests/*.test.js scripts/lib/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

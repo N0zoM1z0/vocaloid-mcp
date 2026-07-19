@@ -39,6 +39,8 @@ typedef struct DialogTextSearch {
 
 static HWINEVENTHOOK g_event_hook = NULL;
 static const wchar_t *g_cancel_path = NULL;
+static wchar_t g_filename_confirmation_path[32768] = {0};
+static wchar_t g_filename_window_path[32768] = {0};
 static int g_event_verification_seen = 0;
 static int g_pre_send_adjusted = 0;
 
@@ -48,6 +50,47 @@ static int cancel_requested(void) {
     attributes = GetFileAttributesW(g_cancel_path);
     return attributes != INVALID_FILE_ATTRIBUTES &&
            !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static int filename_confirmed(void) {
+    DWORD attributes;
+    if (g_filename_confirmation_path[0] == L'\0') return 0;
+    attributes = GetFileAttributesW(g_filename_confirmation_path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static const wchar_t *path_basename(const wchar_t *path) {
+    const wchar_t *cursor;
+    const wchar_t *filename;
+    if (!path) return NULL;
+    filename = path;
+    for (cursor = path; *cursor != L'\0'; cursor++) {
+        if (*cursor == L'\\' || *cursor == L'/') filename = cursor + 1;
+    }
+    return filename;
+}
+
+static int publish_filename_window(HWND filename_edit) {
+    HANDLE file;
+    char text[64];
+    DWORD written = 0;
+    int length;
+    if (!filename_edit || g_filename_window_path[0] == L'\0') return 0;
+    length = _snprintf(text, sizeof(text), "%llu\n",
+                       (unsigned long long)(uintptr_t)filename_edit);
+    if (length <= 0 || length >= (int)sizeof(text)) return 0;
+    file = CreateFileW(g_filename_window_path, GENERIC_WRITE, FILE_SHARE_READ,
+                       NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) return 0;
+    if (!WriteFile(file, text, (DWORD)length, &written, NULL) ||
+        written != (DWORD)length) {
+        CloseHandle(file);
+        return 0;
+    }
+    FlushFileBuffers(file);
+    CloseHandle(file);
+    return 1;
 }
 
 static void pump_window_events(void) {
@@ -325,6 +368,241 @@ static int wait_for_save_controls(
     return 0;
 }
 
+static int set_save_filename(
+    HWND dialog,
+    HWND filename_edit,
+    HWND save_button,
+    HANDLE process,
+    DWORD deadline,
+    const wchar_t *output
+) {
+    wchar_t observed[32768] = {0};
+    wchar_t parent_class[64] = {0};
+    int control_id;
+    HWND parent;
+    DWORD current_thread;
+    DWORD dialog_thread;
+    DWORD foreground_thread = 0;
+    DWORD input_deadline;
+    int attached = 0;
+    int foreground_attached = 0;
+    UINT keyboard_events = 0;
+    HWND previous_foreground;
+
+    if (!dialog || !filename_edit || !output || output[0] == L'\0') return 0;
+    control_id = GetDlgCtrlID(filename_edit);
+    if (control_id <= 0) return 0;
+    parent = GetParent(filename_edit);
+    if (parent) GetClassNameW(parent, parent_class, 64);
+    current_thread = GetCurrentThreadId();
+    dialog_thread = GetWindowThreadProcessId(dialog, NULL);
+    previous_foreground = GetForegroundWindow();
+    if (previous_foreground) {
+        foreground_thread = GetWindowThreadProcessId(previous_foreground, NULL);
+    }
+    if (dialog_thread && dialog_thread != current_thread) {
+        attached = AttachThreadInput(current_thread, dialog_thread, TRUE);
+    }
+    if (foreground_thread && foreground_thread != current_thread &&
+        foreground_thread != dialog_thread) {
+        foreground_attached = AttachThreadInput(current_thread,
+                                                 foreground_thread, TRUE);
+    }
+    input_deadline = GetTickCount() + 15000;
+    if (input_deadline > deadline) input_deadline = deadline;
+    if (!publish_filename_window(filename_edit)) {
+        if (foreground_attached) {
+            AttachThreadInput(current_thread, foreground_thread, FALSE);
+        }
+        if (attached) AttachThreadInput(current_thread, dialog_thread, FALSE);
+        return 0;
+    }
+
+    /* The legacy Explorer-style common dialog keeps filename state outside
+       the child Edit control.  Use exactly one physical-keyboard-style input
+       sequence.  Mixing WM_CHAR/WM_SETTEXT with SendInput creates a race in
+       which accessibility can briefly observe the first complete value before
+       a failed Ctrl+A appends the second copy. */
+    while (GetTickCount() < input_deadline) {
+        const wchar_t *character;
+        if (cancel_requested() || process_exited(process) ||
+            !IsWindow(dialog) || !IsWindow(filename_edit)) break;
+        pump_window_events();
+        if (!IsWindowEnabled(filename_edit) || !IsWindowEnabled(save_button)) {
+            Sleep(50);
+            continue;
+        }
+        SetWindowPos(dialog, HWND_TOPMOST, -32000, -32000, 0, 0,
+                     SWP_NOSIZE | SWP_SHOWWINDOW);
+        BringWindowToTop(dialog);
+        SetForegroundWindow(dialog);
+        SetActiveWindow(dialog);
+        SetFocus(filename_edit);
+        SetWindowPos(dialog, HWND_NOTOPMOST, -32000, -32000, 0, 0,
+                     SWP_NOSIZE | SWP_SHOWWINDOW);
+        if (keyboard_events == 0 && GetFocus() == filename_edit &&
+            GetForegroundWindow() == dialog) {
+            INPUT select_all[4];
+            ZeroMemory(select_all, sizeof(select_all));
+            select_all[0].type = INPUT_KEYBOARD;
+            select_all[0].ki.wVk = VK_CONTROL;
+            select_all[1].type = INPUT_KEYBOARD;
+            select_all[1].ki.wVk = 'A';
+            select_all[2] = select_all[1];
+            select_all[2].ki.dwFlags = KEYEVENTF_KEYUP;
+            select_all[3] = select_all[0];
+            select_all[3].ki.dwFlags = KEYEVENTF_KEYUP;
+            keyboard_events += SendInput(4, select_all, sizeof(INPUT));
+            for (character = output; *character != L'\0'; character++) {
+                INPUT unicode_input[2];
+                ZeroMemory(unicode_input, sizeof(unicode_input));
+                unicode_input[0].type = INPUT_KEYBOARD;
+                unicode_input[0].ki.wScan = *character;
+                unicode_input[0].ki.dwFlags = KEYEVENTF_UNICODE;
+                unicode_input[1] = unicode_input[0];
+                unicode_input[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+                keyboard_events += SendInput(2, unicode_input, sizeof(INPUT));
+            }
+        }
+        Sleep(100);
+        if (filename_confirmed()) {
+            if (previous_foreground && IsWindow(previous_foreground)) {
+                SetForegroundWindow(previous_foreground);
+            }
+            if (foreground_attached) {
+                AttachThreadInput(current_thread, foreground_thread, FALSE);
+            }
+            if (attached) AttachThreadInput(current_thread, dialog_thread, FALSE);
+            return 1;
+        }
+        observed[0] = L'\0';
+        GetWindowTextW(filename_edit, observed, 32768);
+    }
+    {
+        DWORD edit_process = 0;
+        DWORD dialog_process = 0;
+        wchar_t edit_class[64] = {0};
+        GetWindowThreadProcessId(filename_edit, &edit_process);
+        GetWindowThreadProcessId(dialog, &dialog_process);
+        GetClassNameW(filename_edit, edit_class, 64);
+        fwprintf(stderr,
+                 L"filename input diagnostics: edit_class=%ls parent_class=%ls "
+                 L"edit_pid=%lu dialog_pid=%lu enabled=%d visible=%d "
+                 L"style=0x%llx focus=%p edit=%p foreground=%p "
+                 L"sendinput_events=%u observed_length=%u\n",
+                 edit_class, parent_class,
+                 (unsigned long)edit_process, (unsigned long)dialog_process,
+                 IsWindowEnabled(filename_edit), IsWindowVisible(filename_edit),
+                 (unsigned long long)(uintptr_t)GetWindowLongPtrW(filename_edit, GWL_STYLE),
+                 (void *)GetFocus(), (void *)filename_edit,
+                 (void *)GetForegroundWindow(), keyboard_events,
+                 (unsigned int)wcslen(observed));
+    }
+    if (previous_foreground && IsWindow(previous_foreground)) {
+        SetForegroundWindow(previous_foreground);
+    }
+    if (foreground_attached) {
+        AttachThreadInput(current_thread, foreground_thread, FALSE);
+    }
+    if (attached) AttachThreadInput(current_thread, dialog_thread, FALSE);
+    return 0;
+}
+
+static int submit_save_dialog(
+    HWND dialog,
+    HWND save_button,
+    HANDLE process,
+    DWORD deadline
+) {
+    DWORD current_thread;
+    DWORD dialog_thread;
+    DWORD foreground_thread = 0;
+    DWORD submission_deadline = GetTickCount() + 15000;
+    DWORD keyboard_deadline;
+    HWND foreground;
+    int attached = 0;
+    int foreground_attached = 0;
+    int submitted = 0;
+    INPUT enter_input[2];
+
+    if (submission_deadline > deadline) submission_deadline = deadline;
+    if (!dialog || !save_button || !IsWindow(dialog) ||
+        !IsWindow(save_button)) return 0;
+
+    current_thread = GetCurrentThreadId();
+    dialog_thread = GetWindowThreadProcessId(dialog, NULL);
+    foreground = GetForegroundWindow();
+    if (foreground) {
+        foreground_thread = GetWindowThreadProcessId(foreground, NULL);
+    }
+    if (dialog_thread && dialog_thread != current_thread) {
+        attached = AttachThreadInput(current_thread, dialog_thread, TRUE);
+    }
+    if (foreground_thread && foreground_thread != current_thread &&
+        foreground_thread != dialog_thread) {
+        foreground_attached = AttachThreadInput(current_thread,
+                                                 foreground_thread, TRUE);
+    }
+
+    SetWindowPos(dialog, HWND_TOPMOST, -32000, -32000, 0, 0,
+                 SWP_NOSIZE | SWP_SHOWWINDOW);
+    BringWindowToTop(dialog);
+    SetForegroundWindow(dialog);
+    SetActiveWindow(dialog);
+    SetFocus(save_button);
+    SetWindowPos(dialog, HWND_NOTOPMOST, -32000, -32000, 0, 0,
+                 SWP_NOSIZE | SWP_SHOWWINDOW);
+
+    /* Shell-backed common dialogs can ignore a cross-process BM_CLICK even
+       when the filename field has accepted keyboard input.  Press Enter
+       through the active default Save button first, just as an interactive
+       user would. */
+    ZeroMemory(enter_input, sizeof(enter_input));
+    enter_input[0].type = INPUT_KEYBOARD;
+    enter_input[0].ki.wVk = VK_RETURN;
+    enter_input[1] = enter_input[0];
+    enter_input[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    submitted = SendInput(2, enter_input, sizeof(INPUT)) == 2;
+
+    keyboard_deadline = GetTickCount() + 1000;
+    if (keyboard_deadline > submission_deadline) {
+        keyboard_deadline = submission_deadline;
+    }
+    while (GetTickCount() < keyboard_deadline) {
+        if (cancel_requested()) break;
+        pump_window_events();
+        if (!IsWindow(dialog)) {
+            submitted = 1;
+            break;
+        }
+        if (process_exited(process)) break;
+        Sleep(POLL_MS);
+    }
+
+    if (IsWindow(dialog) && !cancel_requested() &&
+        !process_exited(process)) {
+        SendMessageW(dialog, WM_COMMAND,
+                     MAKEWPARAM(IDOK, BN_CLICKED), (LPARAM)save_button);
+        SendMessageW(save_button, BM_CLICK, 0, 0);
+    }
+    while (GetTickCount() < submission_deadline) {
+        if (cancel_requested()) break;
+        pump_window_events();
+        if (!IsWindow(dialog)) {
+            submitted = 1;
+            break;
+        }
+        if (process_exited(process)) break;
+        Sleep(POLL_MS);
+    }
+
+    if (foreground_attached) {
+        AttachThreadInput(current_thread, foreground_thread, FALSE);
+    }
+    if (attached) AttachThreadInput(current_thread, dialog_thread, FALSE);
+    return submitted && !IsWindow(dialog);
+}
+
 static int file_size(const wchar_t *path, uint64_t *size) {
     WIN32_FILE_ATTRIBUTE_DATA attributes;
     ULARGE_INTEGER value;
@@ -479,6 +757,18 @@ int wmain(int argc, wchar_t **argv) {
     timeout_ms = wcstoul(argv[4], NULL, 10);
     allow_pre_send_adjustment = wcscmp(argv[5], L"1") == 0;
     g_cancel_path = argv[6];
+    if (_snwprintf(g_filename_confirmation_path, 32768,
+                   L"%ls.save-monitor-confirmed", g_cancel_path) < 0) {
+        return fail(65, "build_confirmation_path", ERROR_INSUFFICIENT_BUFFER,
+                    NULL, NULL, NULL);
+    }
+    if (_snwprintf(g_filename_window_path, 32768,
+                   L"%ls.save-monitor-window", g_cancel_path) < 0) {
+        return fail(65, "build_window_path", ERROR_INSUFFICIENT_BUFFER,
+                    NULL, NULL, NULL);
+    }
+    DeleteFileW(g_filename_confirmation_path);
+    DeleteFileW(g_filename_window_path);
     if (cancel_requested()) {
         return fail(66, "cancelled_before_launch", ERROR_CANCELLED,
                     NULL, NULL, NULL);
@@ -622,9 +912,20 @@ int wmain(int argc, wchar_t **argv) {
         return fail(74, "find_save_controls", ERROR_NOT_FOUND,
                     &process_info, &search, desktop);
     }
-    SendMessageW(children.filename_edit, WM_SETTEXT, 0, (LPARAM)output);
-    SendMessageW(search.save_dialog, WM_COMMAND,
-                 MAKEWPARAM(IDOK, BN_CLICKED), (LPARAM)children.save_button);
+    if (!set_save_filename(search.save_dialog, children.filename_edit,
+                           children.save_button, process_info.hProcess,
+                           deadline, path_basename(output))) {
+        EnumChildWindows(search.save_dialog, dump_dialog_child, 0);
+        return fail(75, "set_save_filename", ERROR_INVALID_DATA,
+                    &process_info, &search, desktop);
+    }
+    if (!submit_save_dialog(search.save_dialog, children.save_button,
+                            process_info.hProcess, deadline)) {
+        EnumChildWindows(search.save_dialog, dump_dialog_child, 0);
+        return fail(75, "submit_save_dialog", ERROR_TIMEOUT,
+                    &process_info, &search, desktop);
+    }
+    search.save_dialog = NULL;
 
     if (!wait_for_stable_file(output, process_info.hProcess, deadline, &output_size)) {
         return fail(75, "wait_for_wave", ERROR_TIMEOUT,

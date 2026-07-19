@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import {
   access,
   copyFile,
+  mkdir,
   rename,
   unlink,
   writeFile,
@@ -34,6 +35,19 @@ interface NativeExportResult {
   event_verification_seen: boolean;
   pre_send_adjusted: boolean;
 }
+
+interface NativeExportFailure {
+  ok: false;
+  stage: string;
+  win32_error?: number;
+}
+
+const TRANSIENT_SAVE_DIALOG_STAGES = new Set([
+  "wait_for_save_dialog",
+  "find_save_controls",
+  "set_save_filename",
+  "submit_save_dialog",
+]);
 
 export type RenderProgressStage =
   | "validating"
@@ -89,6 +103,7 @@ export interface RenderResult extends WavAnalysis {
   preSendAdjustmentAllowed: boolean;
   eventVerificationSeen: boolean;
   preSendAdjusted: boolean;
+  renderAttempts: number;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -148,6 +163,39 @@ function parseNativeResult(stdout: string): NativeExportResult {
     }
   }
   throw new Error(`Native exporter did not return a success result: ${stdout.trim()}`);
+}
+
+export function parseNativeExportFailure(stdout: string): NativeExportFailure | null {
+  const lines = stdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index--) {
+    try {
+      const value: unknown = JSON.parse(lines[index] ?? "");
+      if (
+        typeof value === "object"
+        && value !== null
+        && "ok" in value
+        && value.ok === false
+        && "stage" in value
+        && typeof value.stage === "string"
+      ) return value as NativeExportFailure;
+    } catch {
+      // Search earlier lines for the helper's structured failure.
+    }
+  }
+  return null;
+}
+
+function exportFailureFromError(error: unknown): NativeExportFailure | null {
+  if (typeof error !== "object" || error === null || !("stdout" in error)) return null;
+  const stdout = typeof error.stdout === "string"
+    ? error.stdout
+    : Buffer.isBuffer(error.stdout)
+      ? error.stdout.toString("utf8")
+      : "";
+  return parseNativeExportFailure(stdout);
 }
 
 async function sha256(path: string): Promise<{ sha256: string; bytes: number }> {
@@ -287,13 +335,18 @@ export async function renderProjectToWav(
   const host = await inspectRenderHost(runtime.allowUnknownEditor);
   const windowsEditor = await windowsPath(host.editorPath);
 
-  const temporary = join(
-    dirname(outputPath),
-    `.${basename(outputPath)}.render-${process.pid}-${Date.now()}.wav`,
-  );
+  const renderToken = `${process.pid}-${randomUUID()}`;
+  const temporary = join(dirname(outputPath), `.vocaloid-render-${renderToken}.wav`);
+  const stagedSource = join(dirname(outputPath), `.vocaloid-render-${renderToken}.vsqx`);
+  /* Keep helper coordination paths independent of the requested output name.
+     VOCALOID3 uses legacy Win32 common dialogs, and their sidecar files can
+     otherwise exceed MAX_PATH when a descriptive stem basename is appended
+     to an already-deep output directory. */
+  const runtimeDirectory = join(PROJECT_ROOT, "build", "runtime");
+  await mkdir(runtimeDirectory, { recursive: true });
   const cancelPath = join(
-    dirname(outputPath),
-    `.${basename(outputPath)}.cancel-${process.pid}-${Date.now()}-${randomUUID()}`,
+    runtimeDirectory,
+    `.vocaloid-export-${process.pid}-${randomUUID()}.cancel`,
   );
   const requestId = runtime.requestId ?? `render-${process.pid}-${randomUUID()}`;
   await report("waiting_for_editor", 3, "Acquiring the host-wide VOCALOID Editor render lease");
@@ -309,51 +362,74 @@ export async function renderProjectToWav(
   let nativeResult: NativeExportResult;
   try {
     if (cancelled) throw abortError();
+    /* VOCALOID3's legacy Save dialog opens in the loaded VSQX directory.  A
+       disposable adjacent project lets the helper type only a short basename
+       instead of asking the dialog to interpret a \\wsl UNC output path. */
+    await copyFile(source, stagedSource);
     const [windowsHelper, windowsSource, windowsTemporary, windowsRunner, windowsCancel] =
       await Promise.all([
         windowsPath(host.helperPath),
-        windowsPath(source),
+        windowsPath(stagedSource),
         windowsPath(temporary),
         windowsPath(runner),
         windowsPath(cancelPath),
       ]);
-    let stdout: string;
-    try {
-      await report("launching_editor", 4, "Launching the helper-owned minimized VOCALOID3 Editor");
-      await report("synthesizing", 5, "Waiting for original-Editor synthesis and WAV export");
-      const result = await execFileAsync(
-        host.powershellPath,
-        [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          windowsRunner,
-          "-HelperPath",
-          windowsHelper,
-          "-EditorPath",
-          windowsEditor,
-          "-ProjectPath",
-          windowsSource,
-          "-OutputPath",
-          windowsTemporary,
-          "-TimeoutMilliseconds",
-          String(timeoutSeconds * 1000),
-          "-AllowPreSendAdjustment",
-          allowPreSendAdjustment ? "1" : "0",
-          "-CancelPath",
-          windowsCancel,
-        ],
-        {
-          timeout: timeoutSeconds * 1000 + 30_000,
-          maxBuffer: 1024 * 1024,
-          windowsHide: true,
-        },
-      );
-      stdout = result.stdout;
-    } catch (error) {
-      if (cancelled || runtime.signal?.aborted) throw abortError();
-      throw processFailure(error);
+    let stdout = "";
+    let renderAttempts = 0;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      renderAttempts = attempt;
+      try {
+        await report(
+          "launching_editor",
+          4,
+          attempt === 1
+            ? "Launching the helper-owned minimized VOCALOID3 Editor"
+            : "Retrying VOCALOID3 with a fresh Save dialog after transient filename automation failure",
+        );
+        await report("synthesizing", 5, "Waiting for original-Editor synthesis and WAV export");
+        const result = await execFileAsync(
+          host.powershellPath,
+          [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            windowsRunner,
+            "-HelperPath",
+            windowsHelper,
+            "-EditorPath",
+            windowsEditor,
+            "-ProjectPath",
+            windowsSource,
+            "-OutputPath",
+            windowsTemporary,
+            "-TimeoutMilliseconds",
+            String(timeoutSeconds * 1000),
+            "-AllowPreSendAdjustment",
+            allowPreSendAdjustment ? "1" : "0",
+            "-CancelPath",
+            windowsCancel,
+          ],
+          {
+            timeout: timeoutSeconds * 1000 + 30_000,
+            maxBuffer: 1024 * 1024,
+            windowsHide: true,
+          },
+        );
+        stdout = result.stdout;
+        break;
+      } catch (error) {
+        if (cancelled || runtime.signal?.aborted) throw abortError();
+        const failure = exportFailureFromError(error);
+        if (attempt === 1 && failure && TRANSIENT_SAVE_DIALOG_STAGES.has(failure.stage)) {
+          // The helper owns and terminates its Editor process on failure.  The
+          // staging WAV is framework-owned, so remove a possible partial file
+          // before one bounded retry with newly discovered dialog handles.
+          await unlink(temporary).catch(() => undefined);
+          continue;
+        }
+        throw processFailure(error);
+      }
     }
     nativeResult = parseNativeResult(stdout);
     if (cancelled || runtime.signal?.aborted) throw abortError();
@@ -390,12 +466,14 @@ export async function renderProjectToWav(
       preSendAdjustmentAllowed: allowPreSendAdjustment,
       eventVerificationSeen: nativeResult.event_verification_seen,
       preSendAdjusted: nativeResult.pre_send_adjusted,
+      renderAttempts,
     };
   } catch (error) {
     await unlink(temporary).catch(() => undefined);
     throw error;
   } finally {
     runtime.signal?.removeEventListener("abort", requestCancel);
+    await unlink(stagedSource).catch(() => undefined);
     await unlink(cancelPath).catch(() => undefined);
     await ownedLease?.release();
     try {
