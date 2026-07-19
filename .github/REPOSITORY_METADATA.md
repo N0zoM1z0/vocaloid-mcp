@@ -13,7 +13,7 @@ This file is the local review source for the public repository settings. Apply i
 - **Discussions:** optional; useful if the repository attracts music/agent workflow experiments
 - **Wiki:** disabled; durable documentation belongs in `notes/` and `blogs/`
 - **Projects:** disabled initially
-- **License:** no license selected; default copyright applies unless the owner adds one before publication
+- **License:** MIT
 
 ## Recommended topics
 
@@ -37,7 +37,7 @@ codex
 Before creating or pushing the public repository:
 
 1. obtain explicit owner approval of the final diff, commit list, README, blogs, and release tag;
-2. confirm whether to keep the current no-license/default-copyright state or add a source-code/documentation license;
+2. confirm that the tracked `LICENSE` is the intended MIT grant for the repository's original code and documentation;
 3. verify that `artifacts/songs/`, `artifacts/evals/`, and `build/` are absent from the Git index;
 4. run the full test suite and a tracked-file secret/path scan;
 5. confirm that no voicebank data, activation data, local corpus files, final WAVs, or transient Editor artifacts are tracked;

@@ -300,3 +300,7 @@ The most useful conclusion is deliberately modest:
 > Agents can already be strong composition assistants, production engineers, and experimental partners. The hit song is still not an engineering primitive.
 
 And that is fine. This repository exists because making a real Vocaloid production system with an agent was fun — and because the failures turned out to be as interesting as the songs.
+
+## License
+
+The source code and repository documentation are available under the [MIT License](LICENSE). VOCALOID, voicebanks, Yamaha software, supplied lyrics, local corpus material, and other third-party assets remain subject to their respective owners and licenses; they are not relicensed or distributed by this repository.

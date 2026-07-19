@@ -18,6 +18,7 @@ All notable repository-level milestones are recorded here. Detailed implementati
 - A fixed composition-agent prompt plus strict per-song intent files with duration, BPM range/preference, exact voice identity, listener question, and source boundaries.
 - Four tracked creative-record packages and matching publishable native VSQX projects from intent-first and fresh-agent evaluations.
 - Three paired Traditional Chinese/English retrospectives, with real Editor screenshots and data-derived audio visualizations.
+- MIT licensing for the repository's original source code and documentation, without relicensing third-party software, voicebanks, lyrics, or corpus material.
 
 ### Changed
 
