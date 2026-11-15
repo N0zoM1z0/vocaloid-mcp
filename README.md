@@ -155,6 +155,7 @@ Each tracked package holds a manifest snapshot, the append-only creative journal
 | `遠い灯、青い夜` | IA_ROCKS | 2:10 cold-start song | [record](artifacts/creative-records/tooi-hi-aoi-yoru-ia-20260719-a/) |
 | `風は名を呼ばない` | IA | 3:10 fresh-agent song | [record](artifacts/creative-records/kaze-wa-na-o-yobanai-ia-20260719/) |
 | `雨と蝉のあいだ` | IA_ROCKS | 64 seconds at 190 BPM | [record](artifacts/creative-records/natsu-ame-semi-ia-rocks-20260719/) |
+| `初雪のホーム` | IA_ROCKS | 31 seconds at 108 BPM | [record](artifacts/creative-records/hatsuyuki-platform-ia-rocks-20261115/) |
 
 Editable native projects are in [`artifacts/vsqxs/`](artifacts/vsqxs/README.md).
 

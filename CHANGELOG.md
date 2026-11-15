@@ -19,6 +19,15 @@ All notable repository-level milestones are recorded here. Detailed implementati
 - The three long-form articles were rewritten for readability (about half the length) and to match the current repository.
 - Docs were rewritten to match the current surface: README, song manifest workflows (now `vocaloid_edit_song`-based), Japanese lyric workflow, stem mix workflow, and host troubleshooting.
 
+### Added
+
+- `初雪のホーム` (IA_ROCKS, 31 s, 108 BPM): a cold-start composition made through the README flow from a new intent file, with a 12-decision creative record and a published VSQX.
+
+### Fixed
+
+- Anchor auditions no longer fail when the anchor's section is shorter than 20 seconds; the window borrows context from neighbouring sections.
+- `noEmitOnError` stops a type-broken build from producing a runnable `dist/`.
+
 ### Verification
 
 - 96 tests: 94 passed, 2 skipped without local fixtures, 0 failed. The stdio end-to-end test now drives a manifest from creation to a measured stem mix using only production tools.

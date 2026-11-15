@@ -5,6 +5,22 @@ composition and listening. It records the durable problem, scope, decision, and
 current status. Per-run evaluation notes from July 2026 were archived; their
 links point at the last commit that contained them.
 
+## 2026-11-15 — 30-second cold-start run `初雪のホーム`
+
+- **Anchor auditions were impossible for short anchor sections**
+  - Symptom: `vocaloid_review_audio` `anchor_preview` failed with "Anchor passage pd-look-up is
+    8.89s" for a 4-bar anchor section in a 31-second song.
+  - Root cause: the 20–30 s window was clamped to the anchor's own section.
+  - Status: fixed. A section that cannot hold 20 s now borrows context from neighbouring
+    sections inside the song; the passage keeps the anchor's section ID. Regression test in
+    `tests/intent-realization.test.ts`.
+- **Delivered audio starts with the pre-measure as silence**
+  - Symptom: the final WAV opens with 2.2 s of silence and is 35.7 s long for a 31.2 s song.
+  - Root cause: stem mixes align to the Editor project start, which includes the pre-measure.
+  - Status: open. Acceptance test: a delivered master starts within 50 ms of the song start.
+- **`publish` gives a bare `ENOENT` when a deliverable copy is missing**
+  - Status: open. The error should name the missing hash-identical copy and its expected path.
+
 ## 2026-11-15 — Voice probe blocked by a missing audio device
 
 - **The Editor's saved audio output device disappeared**
