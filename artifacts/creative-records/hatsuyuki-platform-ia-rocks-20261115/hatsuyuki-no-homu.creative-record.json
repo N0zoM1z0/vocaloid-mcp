@@ -1,19 +1,19 @@
 {
   "schema": "vocaloid-creative-record-package/v1",
-  "published_at": "2026-11-15T08:49:40.712Z",
+  "published_at": "2026-11-15T09:00:44.173Z",
   "song_id": "hatsuyuki-platform-ia-rocks-20261115",
   "slug": "hatsuyuki-no-homu",
   "title": "初雪のホーム",
   "manifest": {
-    "revision": 25,
-    "content_hash": "18ac25cbb9d0d4bc0b93a75c1a24aa842969fb7a3db337b49ed21e5ca077d283",
+    "revision": 26,
+    "content_hash": "ef30b8169e021a04b49ee50c82d8bb3eca2a1a1c17f7694bbca0c6e8994a74c9",
     "composition_hash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6",
     "mix_hash": "752bda93ffa6347952e6e074621ba52d8ff676b1fa7cb2852f37df32a80200b8",
     "intent_hash": "d58d931ff6fbd69b38d871f61ccb6af04cfbfd05c8d89945d27abcff6565cc63"
   },
   "journal": {
-    "entries": 12,
-    "chain_head": "c3da0efa7bf10fdc414ba4a9f487fdcdf228494b62238b273a22483c6eaa7980",
+    "entries": 13,
+    "chain_head": "65f3ed124bf280e941e1eef4b4879465fff7fc94966c589af3b7d6ab89039b0f",
     "completeness": {
       "coreReady": true,
       "coverage": 1,
@@ -82,9 +82,9 @@
       ],
       "adjustmentEntryIds": [],
       "auditionEntryIds": [
-        "dec-audition"
+        "dec-human-keep"
       ],
-      "humanListeningStatus": "pending"
+      "humanListeningStatus": "recorded"
     }
   },
   "deliverables": [
@@ -147,18 +147,18 @@
   "files": [
     {
       "name": "hatsuyuki-no-homu.song.json",
-      "sha256": "c94fefc8fdc49c27edf20f3e67de759ed440a2456ef2b32968e0f396cce406c1",
-      "bytes": 99194
+      "sha256": "faae62d4ef20d5ee39e1e4e5f330cf0514bb4add0d09447c1f053384f697d32f",
+      "bytes": 100150
     },
     {
       "name": "hatsuyuki-no-homu.creative-journal.jsonl",
-      "sha256": "5655af9c76d455094e9978c63d02f8d8358efff0956a9e45ef8f1e5bd03e68be",
-      "bytes": 27848
+      "sha256": "60f4fdec52597be64de806c365a44c42e6e6cad888c4a9a413dce9bff001b104",
+      "bytes": 29886
     },
     {
       "name": "hatsuyuki-no-homu.creative-report.md",
-      "sha256": "30905dc234d9b283aafb90be1bcc7ce0e45b0766bd1a38cdab16c7f717cc8f61",
-      "bytes": 15289
+      "sha256": "aea1f1c437afe41fac9cf44d790686731af1830ccf442532fdd827bd96077c5e",
+      "bytes": 15990
     }
   ]
 }

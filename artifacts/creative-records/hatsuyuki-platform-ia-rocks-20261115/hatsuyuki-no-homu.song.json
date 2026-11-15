@@ -1,17 +1,17 @@
 {
   "schema": "vocaloid-song-manifest/v1",
-  "revision": 25,
+  "revision": 26,
   "composition_hash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6",
   "mix_hash": "752bda93ffa6347952e6e074621ba52d8ff676b1fa7cb2852f37df32a80200b8",
-  "content_hash": "18ac25cbb9d0d4bc0b93a75c1a24aa842969fb7a3db337b49ed21e5ca077d283",
-  "parent_hash": "cd13123d82032637b02c225e86fcf5d232bae382ce2069e3bcbbc6bed1184a38",
+  "content_hash": "ef30b8169e021a04b49ee50c82d8bb3eca2a1a1c17f7694bbca0c6e8994a74c9",
+  "parent_hash": "18ac25cbb9d0d4bc0b93a75c1a24aa842969fb7a3db337b49ed21e5ca077d283",
   "song_id": "hatsuyuki-platform-ia-rocks-20261115",
   "slug": "hatsuyuki-no-homu",
   "title": "初雪のホーム",
   "format": "vsq3",
   "pre_measure": 1,
   "created_at": "2026-11-15T08:42:56.178Z",
-  "updated_at": "2026-11-15T08:47:11.860Z",
+  "updated_at": "2026-11-15T09:00:43.887Z",
   "time_signatures": [
     {
       "measure": 0,
@@ -3432,5 +3432,32 @@
       "created_at": "2026-11-15T08:47:11.848Z"
     }
   ],
-  "review_notes": []
+  "review_notes": [
+    {
+      "id": "review-look-up-keep",
+      "author_type": "human",
+      "author_name": "N0zoM1z0",
+      "observation": "Listened to the final song and judged it good; the look-up moment works. Keep.",
+      "section_id": "lift",
+      "object_ids": [
+        "lead-l1",
+        "lead-l2"
+      ],
+      "artifact_ids": [
+        "delivery-r24"
+      ],
+      "intent_fidelity": {
+        "review_kind": "intent_fidelity",
+        "phrase_direction_id": "pd-look-up",
+        "listening_question_id": "lq-look-up",
+        "intent_hash": "d58d931ff6fbd69b38d871f61ccb6af04cfbfd05c8d89945d27abcff6565cc63",
+        "composition_hash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6",
+        "artifact_id": "delivery-r24",
+        "artifact_sha256": "7ac10682ffabc88683c6a7ee52ceb9927ad2f683df7ee58aecf3e7e317505116",
+        "outcome": "keep"
+      },
+      "status": "open",
+      "created_at": "2026-11-15T09:00:43.871Z"
+    }
+  ]
 }

@@ -6,12 +6,12 @@
 
 - Song ID: `hatsuyuki-platform-ia-rocks-20261115`
 - Manifest: `/home/pentester/coding/codex_ida/vocaloid/build/cold-start-songs/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115.song.json`
-- Revision: 25
+- Revision: 26
 - Intent SHA-256: `d58d931ff6fbd69b38d871f61ccb6af04cfbfd05c8d89945d27abcff6565cc63`
 - Composition SHA-256: `8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6`
 - Mix SHA-256: `752bda93ffa6347952e6e074621ba52d8ff676b1fa7cb2852f37df32a80200b8`
 - Journal coverage: 100% (core complete)
-- Human listening: pending
+- Human listening: recorded
 
 ## intent → theory → note allocation → IA delivery → arrangement
 
@@ -393,7 +393,7 @@ Artifacts: `stem-mix-r20`
 - Author: claude-opus-5-5 (agent)
 - Recorded: 2026-11-15T08:48:54.621Z
 - Outcome: `deferred`
-- Currentness: `current`
+- Currentness: `superseded`
 - Bound revision: 25
 
 **Objective**
@@ -463,7 +463,45 @@ Affected objects: `lead`
 
 Artifacts: `delivery-r24`
 
+### 13. Listener keeps the song
+
+- ID: `dec-human-keep`
+- Phase / kind: `audition` / `evaluation`
+- Author: N0zoM1z0 (human)
+- Recorded: 2026-11-15T09:00:43.955Z
+- Outcome: `auditioned`
+- Currentness: `current`
+- Bound revision: 26
+
+**Objective**
+
+Answer lq-look-up by listening.
+
+**Decision**
+
+Keep the current delivery.
+
+**Rationale**
+
+The listener heard the final song and judged it good.
+
+**Expected audible effect**
+
+No change; the current version stands.
+
+**Evidence / observations**
+
+- Review note review-look-up-keep binds outcome keep to the delivery digest and current intent/composition hashes.
+
+**Actual result**
+
+Human listening outcome: keep.
+
+Affected objects: `lead-l1`, `lead-l2`
+
+Artifacts: `delivery-r24`
+
 ## Review status
 
-Human listening is still pending. Technical evidence and agent rationale do not self-approve the creative result.
+A hash-bound human intent-fidelity listening decision exists in the current manifest.
 
