@@ -139,16 +139,20 @@ export function buildAnchorAuditionPlan(
   const sectionEndSeconds = secondsAtTick(index, section.endTick);
   const coreStartSeconds = secondsAtTick(index, coreStartTick);
   const coreEndSeconds = secondsAtTick(index, coreEndTick);
-  const sectionDurationSeconds = sectionEndSeconds - sectionStartSeconds;
-  const desiredDuration = Math.min(targetDurationSeconds, sectionDurationSeconds);
+  // Stay inside the anchor's section when it can hold the window; a short section borrows
+  // context from its neighbours, because a phrase's change is heard against what precedes it.
+  const sectionFits = sectionEndSeconds - sectionStartSeconds >= 20;
+  const boundsStartSeconds = sectionFits ? sectionStartSeconds : 0;
+  const boundsEndSeconds = sectionFits ? sectionEndSeconds : secondsAtTick(index, index.timeline.songEndTick);
+  const desiredDuration = Math.min(targetDurationSeconds, boundsEndSeconds - boundsStartSeconds);
   const coreMiddleSeconds = (coreStartSeconds + coreEndSeconds) / 2;
   let startSeconds = coreMiddleSeconds - desiredDuration / 2;
-  startSeconds = Math.max(sectionStartSeconds, Math.min(startSeconds, sectionEndSeconds - desiredDuration));
+  startSeconds = Math.max(boundsStartSeconds, Math.min(startSeconds, boundsEndSeconds - desiredDuration));
   let endSeconds = startSeconds + desiredDuration;
   if (coreStartSeconds < startSeconds) startSeconds = coreStartSeconds;
   if (coreEndSeconds > endSeconds) endSeconds = coreEndSeconds;
-  startSeconds = Math.max(sectionStartSeconds, startSeconds);
-  endSeconds = Math.min(sectionEndSeconds, endSeconds);
+  startSeconds = Math.max(boundsStartSeconds, startSeconds);
+  endSeconds = Math.min(boundsEndSeconds, endSeconds);
   const startTick = Math.min(coreStartTick, tickAtSeconds(index, startSeconds));
   const endTick = Math.max(coreEndTick, tickAtSeconds(index, endSeconds));
   const actualStartSeconds = secondsAtTick(index, startTick);

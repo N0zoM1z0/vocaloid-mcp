@@ -49,9 +49,10 @@ the requested scope.
 ## Minimal sequence
 
 1. Inspect the manifest and select current stem artifact IDs.
-2. Upsert one chain per target with `vocaloid_upsert_manifest_effect_chain`.
-3. Upsert individual section decisions with
-   `vocaloid_upsert_manifest_section_dynamic`.
+2. Upsert one chain per target with the `vocaloid_edit_song`
+   `upsert_effect_chain` action.
+3. Upsert individual section decisions with the `upsert_section_dynamic`
+   action.
 4. Inspect the new `mix_hash`.
 5. Call `vocaloid_render_stem_mix` with explicit sample rate and bit depth.
 6. Inspect returned LUFS/LRA, true/sample peak, clipping, per-channel RMS, and

@@ -200,17 +200,18 @@ static BOOL CALLBACK find_dialog_text(HWND window, LPARAM parameter) {
     return TRUE;
 }
 
-static int is_known_singer_warning(WindowSearch *search) {
-    static const wchar_t *warning =
-        L"Some singers in the file have been changed to the default singer";
+static int dialog_contains_text(HWND dialog, const wchar_t *needle) {
     DialogTextSearch text_search;
-    if (!search->singer_warning_dialog ||
-        !IsWindow(search->singer_warning_dialog)) return 0;
-    text_search.needle = warning;
+    if (!dialog || !IsWindow(dialog)) return 0;
+    text_search.needle = needle;
     text_search.matched = 0;
-    EnumChildWindows(search->singer_warning_dialog, find_dialog_text,
-                    (LPARAM)&text_search);
+    EnumChildWindows(dialog, find_dialog_text, (LPARAM)&text_search);
     return text_search.matched;
+}
+
+static int is_known_singer_warning(WindowSearch *search) {
+    return dialog_contains_text(search->singer_warning_dialog,
+                                L"Some singers in the file have been changed to the default singer");
 }
 
 static BOOL CALLBACK dump_dialog_child(HWND window, LPARAM parameter) {
@@ -880,6 +881,16 @@ int wmain(int argc, wchar_t **argv) {
             fwprintf(stderr, L"unexpected VOCALOID dialog: %ls\n",
                      search.any_dialog_title);
             EnumChildWindows(search.any_dialog, dump_dialog_child, 0);
+            /* A missing saved AudioOut device raises a "VOCALOID Editor" modal
+               followed by Preferences; neither exposes readable text across
+               processes, so the title is the only available evidence. */
+            if (wcscmp(search.any_dialog_title, L"VOCALOID Editor") == 0 ||
+                wcscmp(search.any_dialog_title, L"Preferences") == 0) {
+                fwprintf(stderr,
+                         L"hint: this usually means the Editor cannot find its "
+                         L"saved audio output device; open the Editor, choose a "
+                         L"present Audio Device in Preferences, and press OK\n");
+            }
         }
         return fail(71, "wait_for_export_dialog", ERROR_TIMEOUT,
                     &process_info, &search, desktop);

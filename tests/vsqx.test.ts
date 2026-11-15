@@ -6,27 +6,44 @@ import { fileURLToPath } from "node:url";
 
 import { discoverVoices } from "../src/voices.js";
 import {
-  addControlPointsToProject,
-  addNotesToProject,
-  createProject,
   createSong,
-  inspectProjectMixer,
   inspectProject,
   listControlPoints,
   listNotes,
   prepareVocalStemProject,
-  updateNoteExpressionsInProject,
-  updateProjectMixer,
   validateProject,
 } from "../src/vsqx.js";
+import type { SongPartInput } from "../src/vsqx.js";
 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const IA = { name: "IA", componentId: "BLRGDDR4M3WM2LC6" };
-const BASE_NOTES = [
-  { tick: 0, duration: 480, noteNumber: 60, lyric: "ら", phonemes: "a", velocity: 64 },
-  { tick: 480, duration: 480, noteNumber: 62, lyric: "ら", phonemes: "a", velocity: 72 },
-];
+const FOUR_FOUR = [{ measure: 0, numerator: 4, denominator: 4 }];
+
+/** Write a one-track, one-part song whose part starts at measure 0. */
+async function createSingleTrackSong(
+  outputPath: string,
+  format: "vsq3" | "vsq4",
+  bpm: number,
+  part: Omit<SongPartInput, "name" | "start">,
+) {
+  return createSong({
+    outputPath,
+    format,
+    sequenceName: "Single Track",
+    preMeasure: 1,
+    timeSignatures: FOUR_FOUR,
+    tempos: [{ position: { measure: 0, beat: 0 }, bpm }],
+    tracks: [{
+      name: "Lead",
+      voice: IA,
+      bankSelect: 0,
+      programChange: 0,
+      parts: [{ name: "Verse", start: { measure: 0, beat: 0 }, ...part }],
+    }],
+    overwrite: false,
+  });
+}
 
 async function isReadable(path: string): Promise<boolean> {
   try {
@@ -67,105 +84,22 @@ async function writeStereoWav(path: string, durationSeconds = 0.1): Promise<void
 }
 
 for (const format of ["vsq3", "vsq4"] as const) {
-  test(`${format} create, edit, paginate, and validate`, async (context) => {
+  test(`${format} writes notes, expressions, vibrato, and curves that read back and validate`, async (context) => {
     const temporary = await mkdtemp(join(ROOT, `.test-${format}-`));
     context.after(async () => rm(temporary, { recursive: true, force: true }));
-    const original = join(temporary, `original-${format}.vsqx`);
-    const withNotes = join(temporary, `notes-${format}.vsqx`);
-    const withControls = join(temporary, `controls-${format}.vsqx`);
-    const withExpressions = join(temporary, `expressions-${format}.vsqx`);
-
-    await createProject({
-      outputPath: original,
-      format,
-      voice: IA,
-      bankSelect: 0,
-      programChange: 0,
-      sequenceName: "MCP Smoke",
-      trackName: "Lead",
-      partName: "Verse",
-      bpm: 128,
-      numerator: 4,
-      denominator: 4,
-      preMeasure: 4,
-      notes: BASE_NOTES,
-      overwrite: false,
-    });
-
-    const validation = await validateProject(original);
-    assert.equal(validation.valid, true, validation.diagnostics.join("\n"));
-    const summary = await inspectProject(original);
-    assert.equal(summary.format, format);
-    assert.equal(summary.sequenceName, "MCP Smoke");
-    assert.equal(summary.tracks[0]?.noteCount, 2);
-    assert.equal(summary.tempos[0]?.bpm, 128);
-
-    const firstPage = await listNotes(original, 0, 0, undefined, undefined, 0, 1);
-    assert.equal(firstPage.page.count, 1);
-    assert.equal(firstPage.page.total, 2);
-    assert.equal(firstPage.page.has_more, true);
-    assert.equal(firstPage.page.next_offset, 1);
-
-    await addNotesToProject(
-      original,
-      withNotes,
-      0,
-      0,
-      [{ tick: 960, duration: 960, noteNumber: 64, lyric: "あ", phonemes: "a" }],
-      false,
-    );
-    assert.equal((await inspectProject(withNotes)).tracks[0]?.noteCount, 3);
-
-    await addControlPointsToProject(
-      withNotes,
-      withControls,
-      0,
-      0,
-      "DYN",
-      [
-        { tick: 0, value: 64 },
-        { tick: 480, value: 80 },
-      ],
-      false,
-      false,
-    );
-    const controls = await listControlPoints(
-      withControls,
-      0,
-      0,
-      "DYN",
-      undefined,
-      undefined,
-      0,
-      100,
-    );
-    assert.deepEqual(
-      controls.page.items.map(({ tick, value, curve }) => ({ tick, value, curve })),
-      [
-        { tick: 0, value: 64, curve: "DYN" },
-        { tick: 480, value: 80, curve: "DYN" },
-      ],
-    );
-    const editedValidation = await validateProject(withControls);
-    assert.equal(editedValidation.valid, true, editedValidation.diagnostics.join("\n"));
-
-    await updateNoteExpressionsInProject(
-      withControls,
-      withExpressions,
-      0,
-      0,
-      [
+    const output = join(temporary, `song-${format}.vsqx`);
+    await createSingleTrackSong(output, format, 128, {
+      end: { measure: 1, beat: 0 },
+      notes: [
+        { position: { measure: 0, beat: 0 }, duration: 480, noteNumber: 60, lyric: "ら", phonemes: "4 a", velocity: 64 },
         {
-          noteIndex: 1,
+          position: { measure: 0, beat: 1 },
+          duration: 480,
+          noteNumber: 62,
+          lyric: "ら",
+          phonemes: "4 a",
           velocity: 58,
-          style: {
-            accent: 68,
-            decay: 42,
-            bendDep: 18,
-            bendLen: 24,
-            risePort: 1,
-            opening: 112,
-          },
+          style: { accent: 68, decay: 42, bendDep: 18, bendLen: 24, risePort: 1, opening: 112 },
           vibrato: {
             type: 13,
             length: 55,
@@ -176,19 +110,42 @@ for (const format of ["vsq3", "vsq4"] as const) {
             rate: [{ position: 29_491, value: 56 }],
           },
         },
+        { position: { measure: 0, beat: 2 }, duration: 960, noteNumber: 64, lyric: "あ", phonemes: "a" },
       ],
-      false,
+      controlCurves: {
+        DYN: [
+          { position: { measure: 0, beat: 0 }, value: 64 },
+          { position: { measure: 0, beat: 1 }, value: 80 },
+        ],
+      },
+    });
+
+    const validation = await validateProject(output);
+    assert.equal(validation.valid, true, validation.diagnostics.join("\n"));
+    const summary = await inspectProject(output);
+    assert.equal(summary.format, format);
+    assert.equal(summary.sequenceName, "Single Track");
+    assert.equal(summary.tracks[0]?.noteCount, 3);
+    assert.equal(summary.tempos[0]?.bpm, 128);
+
+    const firstPage = await listNotes(output, 0, 0, undefined, undefined, 0, 1);
+    assert.equal(firstPage.page.count, 1);
+    assert.equal(firstPage.page.total, 3);
+    assert.equal(firstPage.page.has_more, true);
+    assert.equal(firstPage.page.next_offset, 1);
+    assert.equal(firstPage.page.items[0]?.phonemes, "4 a", "numeric Japanese flap token survives");
+
+    const controls = await listControlPoints(output, 0, 0, "DYN", undefined, undefined, 0, 100);
+    assert.deepEqual(
+      controls.page.items.map(({ tick, value, curve }) => ({ tick, value, curve })),
+      [
+        { tick: 0, value: 64, curve: "DYN" },
+        { tick: 480, value: 80, curve: "DYN" },
+      ],
     );
-    const tunedNotes = await listNotes(
-      withExpressions,
-      0,
-      0,
-      undefined,
-      undefined,
-      0,
-      100,
-    );
-    const tuned = tunedNotes.page.items.find((note) => note.index === 1);
+
+    const notes = await listNotes(output, 0, 0, undefined, undefined, 0, 100);
+    const tuned = notes.page.items.find((note) => note.index === 1);
     assert.equal(tuned?.velocity, 58);
     assert.equal(tuned?.style.accent, 68);
     assert.equal(tuned?.style.bendDep, 18);
@@ -202,8 +159,6 @@ for (const format of ["vsq3", "vsq4"] as const) {
     assert.deepEqual(tuned?.styleSequences.vibRate, [
       { position: 29_491, value: 56 },
     ]);
-    const tunedValidation = await validateProject(withExpressions);
-    assert.equal(tunedValidation.valid, true, tunedValidation.diagnostics.join("\n"));
   });
 }
 
@@ -308,25 +263,6 @@ for (const format of ["vsq3", "vsq4"] as const) {
       ],
       overwrite: false,
     });
-    const mixer = await inspectProjectMixer(output);
-    assert.equal(mixer.panSemantics, "0=hard left, 64=center, 127=hard right");
-    assert.deepEqual(
-      mixer.vocalUnits.map((unit) => [unit.trackNumber, unit.pan, unit.panPosition]),
-      [[0, 64, "center"], [1, 80, "right"]],
-    );
-    const remixed = join(temporary, `structured-${format}-remixed.vsqx`);
-    const mixerUpdate = await updateProjectMixer(
-      output,
-      remixed,
-      [{ trackNumber: 0, pan: 60 }, { trackNumber: 1, pan: 68, volume: -180 }],
-      false,
-    );
-    assert.deepEqual(
-      mixerUpdate.after.map((unit) => [unit.trackNumber, unit.pan, unit.volume]),
-      [[0, 60, 0], [1, 68, -180]],
-    );
-    const remixedValidation = await validateProject(remixed);
-    assert.equal(remixedValidation.valid, true, remixedValidation.diagnostics.join("\n"));
     assert.deepEqual(
       { tracks: result.tracks, parts: result.parts, notes: result.notes, controls: result.controlPoints },
       { tracks: 2, parts: 3, notes: 3, controls: 3 },
@@ -384,82 +320,46 @@ for (const format of ["vsq3", "vsq4"] as const) {
   });
 }
 
-test("creates a tuned VSQX atomically from notes, vibrato, and curves", async (context) => {
+test("materializes PIT/PBS curves and pre-measure offsets", async (context) => {
   const temporary = await mkdtemp(join(ROOT, ".test-song-spec-"));
   context.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = join(temporary, "from-zero.vsqx");
-  await createProject({
-    outputPath: output,
-    format: "vsq4",
-    voice: IA,
-    bankSelect: 0,
-    programChange: 0,
-    sequenceName: "From Zero",
-    trackName: "Lead",
-    partName: "Verse",
-    bpm: 132,
-    numerator: 4,
-    denominator: 4,
-    preMeasure: 1,
-    notes: [
-      {
-        tick: 0,
-        duration: 960,
-        noteNumber: 64,
-        lyric: "あ",
-        phonemes: "a",
-        vibrato: {
-          type: 1,
-          length: 50,
-          depth: [{ position: 32_768, value: 64 }],
-          rate: [{ position: 32_768, value: 50 }],
-        },
+  await createSingleTrackSong(output, "vsq4", 132, {
+    end: { measure: 1, beat: 0 },
+    notes: [{
+      position: { measure: 0, beat: 0 },
+      duration: 960,
+      noteNumber: 64,
+      lyric: "あ",
+      phonemes: "a",
+      vibrato: {
+        type: 1,
+        length: 50,
+        depth: [{ position: 32_768, value: 64 }],
+        rate: [{ position: 32_768, value: 50 }],
       },
-    ],
+    }],
     controlCurves: {
       DYN: [
-        { tick: 0, value: 58 },
-        { tick: 720, value: 72 },
+        { position: { measure: 0, beat: 0 }, value: 58 },
+        { position: { measure: 0, beat: 1, tick: 240 }, value: 72 },
       ],
-      PBS: [{ tick: 0, value: 2 }],
+      PBS: [{ position: { measure: 0, beat: 0 }, value: 2 }],
       PIT: [
-        { tick: 0, value: -1024 },
-        { tick: 90, value: 0 },
+        { position: { measure: 0, beat: 0 }, value: -1024 },
+        { position: { measure: 0, beat: 0, tick: 90 }, value: 0 },
       ],
     },
-    overwrite: false,
   });
   assert.equal((await validateProject(output)).valid, true);
+  const summary = await inspectProject(output);
+  assert.equal(summary.tracks[0]?.parts[0]?.tick, 1_920, "one 4/4 pre-measure precedes measure 0");
   assert.equal((await listNotes(output, 0, 0, undefined, undefined, 0, 10)).page.items[0]?.style.vibType, 1);
-  assert.equal((await listControlPoints(output, 0, 0, undefined, undefined, undefined, 0, 100)).page.total, 5);
-});
-
-test("accepts the numeric Japanese flap phoneme token", async (context) => {
-  const temporary = await mkdtemp(join(ROOT, ".test-phonemes-"));
-  context.after(async () => rm(temporary, { recursive: true, force: true }));
-  const output = join(temporary, "japanese-flap.vsqx");
-  await createProject({
-    outputPath: output,
-    format: "vsq4",
-    voice: IA,
-    bankSelect: 0,
-    programChange: 0,
-    sequenceName: "Japanese flap phoneme regression",
-    trackName: "Lead",
-    partName: "Verse",
-    bpm: 120,
-    numerator: 4,
-    denominator: 4,
-    preMeasure: 1,
-    notes: [
-      { tick: 0, duration: 480, noteNumber: 60, lyric: "ら", phonemes: "4 a" },
-    ],
-    overwrite: false,
-  });
-  assert.equal((await validateProject(output)).valid, true);
-  assert.equal(
-    (await listNotes(output, 0, 0, undefined, undefined, 0, 10)).page.items[0]?.phonemes,
-    "4 a",
+  const curves = await listControlPoints(output, 0, 0, undefined, undefined, undefined, 0, 100);
+  assert.equal(curves.page.total, 5);
+  assert.deepEqual(
+    curves.page.items.filter((point) => point.curve === "PIT").map(({ tick, value }) => [tick, value]),
+    [[0, -1024], [90, 0]],
   );
 });
 

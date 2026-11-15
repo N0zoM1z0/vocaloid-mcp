@@ -2,6 +2,36 @@
 
 All notable repository-level milestones are recorded here. Detailed implementation evidence remains in `notes/`, and the full narrative remains in `blogs/`.
 
+## [1.1.0] — 2026-11-15
+
+### Removed
+
+- The `full` and `legacy-vsqx` MCP profiles and their 29 tools. Every granular manifest mutation remains available as a `vocaloid_edit_song` action; direct VSQX mutation (`createProject`, `addNotesToProject`, mixer edits, and so on) is gone. `VOCALOID_MCP_PROFILE` is ignored.
+- The intent-first benchmark harness (it was never run), the per-song compose scripts, the IDA/UI debugging scripts, the historical plan, and dated evaluation notes. Remaining docs link to commit `58436eb` for archived material.
+
+### Changed
+
+- `src/index.ts` is a small stdio entry point; the server lives in `src/server/` (instructions, results, schemas, resources, and tools grouped by host, composition, manifest, render, and review).
+- `src/song-manifest.ts` is a barrel over `src/song-manifest/{schema,store,mutations,build}.ts`; import paths are unchanged.
+- All 22 tools return the same structured error (`code`, `message`, `retryable`, `suggested_action`).
+- TypeScript now enforces `noUnusedLocals` and `noUnusedParameters`; `npm run build` clears `dist/` first so deleted tests cannot linger.
+- The native export helper prints an actionable hint when the Editor's saved audio output device is missing (see `notes/host-troubleshooting.md`).
+- The three long-form articles were rewritten for readability (about half the length) and to match the current repository.
+- Docs were rewritten to match the current surface: README, song manifest workflows (now `vocaloid_edit_song`-based), Japanese lyric workflow, stem mix workflow, and host troubleshooting.
+
+### Added
+
+- `初雪のホーム` (IA_ROCKS, 31 s, 108 BPM): a cold-start composition made through the README flow from a new intent file, with a 12-decision creative record and a published VSQX.
+
+### Fixed
+
+- Anchor auditions no longer fail when the anchor's section is shorter than 20 seconds; the window borrows context from neighbouring sections.
+- `noEmitOnError` stops a type-broken build from producing a runnable `dist/`.
+
+### Verification
+
+- 96 tests: 94 passed, 2 skipped without local fixtures, 0 failed. The stdio end-to-end test now drives a manifest from creation to a measured stem mix using only production tools.
+
 ## [1.0.0] — 2026-07-19
 
 ### Added
@@ -17,7 +47,7 @@ All notable repository-level milestones are recorded here. Detailed implementati
 - Voicebank registration/readiness diagnostics and cross-component render-identity collision protection for IA and IA_ROCKS.
 - A fixed composition-agent prompt plus strict per-song intent files with duration, BPM range/preference, exact voice identity, listener question, and source boundaries.
 - Four tracked creative-record packages and matching publishable native VSQX projects from intent-first and fresh-agent evaluations.
-- Three paired Traditional Chinese/English retrospectives, with real Editor screenshots and data-derived audio visualizations.
+- Three long-form retrospectives with real Editor screenshots and data-derived audio visualizations.
 - MIT licensing for the repository's original source code and documentation, without relicensing third-party software, voicebanks, lyrics, or corpus material.
 
 ### Changed

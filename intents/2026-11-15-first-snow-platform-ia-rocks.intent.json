@@ -1,0 +1,40 @@
+{
+  "schema": "vocaloid-composition-brief/v1",
+  "id": "first-snow-platform",
+  "run_id": "hatsuyuki-platform-ia-rocks-20261115",
+  "intent": {
+    "core": "The first snow of the year starts falling while someone waits on an outdoor train platform, and the small surprise of it loosens a worry they have been carrying all day.",
+    "scene": "Late afternoon, an open-air suburban platform. The train is a few minutes late. The first flakes land on a coat sleeve and melt.",
+    "emotional_color": "Quiet relief with a little wonder in it. It must not turn into big sentimental release or Christmas cheer.",
+    "dramatic_motion": "From head-down waiting and replaying the day, to looking up and noticing the snow, to a small private smile as the train arrives.",
+    "perspective": "First person, speaking to themselves under their breath.",
+    "listener_question": "Can I hear the moment the singer looks up from the worry to the snow, without the song telling me in words that they feel better?"
+  },
+  "musical_constraints": {
+    "target_duration_seconds": { "min": 25, "max": 35 },
+    "tempo_bpm": { "min": 96, "max": 120, "preferred": 108 },
+    "meter_preferences": ["4/4"],
+    "primary_genre": "soft pop-rock",
+    "style_tags": ["piano", "restrained", "winter"],
+    "voice": {
+      "id": "voice-ia-rocks",
+      "name": "IA_ROCKS",
+      "component_id": "BDREB7P2KTWKYDC5"
+    },
+    "lyric_language": "Japanese",
+    "lyric_mode": "agent_original",
+    "arrangement_hints": ["piano carries the harmony", "bass and a light kit enter only after the look-up moment"],
+    "must_avoid": ["sleigh bells or other Christmas signifiers", "a final big chorus or key change", "the word for happiness in the lyrics"]
+  },
+  "source_boundaries": {
+    "local_ia_corpus": "forbidden",
+    "prior_song_artifacts": "forbidden",
+    "reference_tracks_or_melodies": "forbidden",
+    "phrase_grammar_usage": "selection_only"
+  },
+  "evaluation": {
+    "fresh_session": true,
+    "human_listening_disposition": "pending",
+    "record_framework_issues": true
+  }
+}

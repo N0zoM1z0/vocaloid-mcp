@@ -158,7 +158,3 @@ export function scaleDegreeForPitchName(pitchName: string, scale: ParsedScale): 
   const alteration = signedPitchClassOffset(expectedPitchClass, pitch.pitchClass);
   return { degree: degreeIndex + 1, alteration, exact: alteration === 0 };
 }
-
-export function scaleIntervals(mode: ScaleMode): readonly number[] {
-  return MODE_INTERVALS[mode];
-}

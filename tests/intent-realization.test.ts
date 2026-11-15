@@ -217,6 +217,20 @@ test("intent realization evidence stays measurable and cannot self-approve liste
   const plan = buildAnchorAuditionPlan(manifest, "anchor-name", 25);
   assert.equal(plan.passage.targetDurationMet, true);
   assert.ok(plan.passage.durationSeconds >= 24.9 && plan.passage.durationSeconds <= 25.1);
+
+  // An anchor section shorter than the window borrows context from neighbouring sections.
+  const shortSection = structuredClone(manifest);
+  const chorus = shortSection.sections[0]!;
+  shortSection.sections = [
+    { ...chorus, id: "verse", name: "Verse", kind: "verse", start: { measure: 0, beat: 0, tick: 0 }, end: { measure: 4, beat: 0, tick: 0 } },
+    { ...chorus, start: { measure: 4, beat: 0, tick: 0 }, end: { measure: 8, beat: 0, tick: 0 } },
+    { ...chorus, id: "outro", name: "Outro", kind: "outro", start: { measure: 8, beat: 0, tick: 0 }, end: { measure: 16, beat: 0, tick: 0 } },
+  ];
+  const borrowed = buildAnchorAuditionPlan(shortSection, "anchor-name", 25);
+  assert.equal(borrowed.passage.sectionId, "chorus");
+  assert.equal(borrowed.passage.targetDurationMet, true);
+  assert.ok(borrowed.passage.durationSeconds >= 24.9 && borrowed.passage.durationSeconds <= 25.1);
+  assert.ok(borrowed.passage.startPosition.measure < 4, "window reaches back into the verse");
   assert.deepEqual(plan.stages.slice(0, 3).map((stage) => stage.layer), [
     "lead_solo",
     "lead_harmony",

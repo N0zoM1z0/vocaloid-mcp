@@ -1,0 +1,164 @@
+{
+  "schema": "vocaloid-creative-record-package/v1",
+  "published_at": "2026-11-15T08:49:40.712Z",
+  "song_id": "hatsuyuki-platform-ia-rocks-20261115",
+  "slug": "hatsuyuki-no-homu",
+  "title": "初雪のホーム",
+  "manifest": {
+    "revision": 25,
+    "content_hash": "18ac25cbb9d0d4bc0b93a75c1a24aa842969fb7a3db337b49ed21e5ca077d283",
+    "composition_hash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6",
+    "mix_hash": "752bda93ffa6347952e6e074621ba52d8ff676b1fa7cb2852f37df32a80200b8",
+    "intent_hash": "d58d931ff6fbd69b38d871f61ccb6af04cfbfd05c8d89945d27abcff6565cc63"
+  },
+  "journal": {
+    "entries": 12,
+    "chain_head": "c3da0efa7bf10fdc414ba4a9f487fdcdf228494b62238b273a22483c6eaa7980",
+    "completeness": {
+      "coreReady": true,
+      "coverage": 1,
+      "dimensions": [
+        {
+          "id": "intent",
+          "label": "Intent",
+          "requiredPhases": [
+            "intent"
+          ],
+          "currentEntryIds": [
+            "dec-intent"
+          ],
+          "complete": true
+        },
+        {
+          "id": "theory",
+          "label": "Theory / form / harmony / melody",
+          "requiredPhases": [
+            "form",
+            "meter_tempo",
+            "harmony",
+            "melody"
+          ],
+          "currentEntryIds": [
+            "dec-form",
+            "dec-tempo",
+            "dec-harmony",
+            "dec-melody"
+          ],
+          "complete": true
+        },
+        {
+          "id": "note_allocation",
+          "label": "Japanese note allocation",
+          "requiredPhases": [
+            "note_allocation"
+          ],
+          "currentEntryIds": [
+            "dec-allocation"
+          ],
+          "complete": true
+        },
+        {
+          "id": "ia_delivery",
+          "label": "IA delivery",
+          "requiredPhases": [
+            "ia_delivery"
+          ],
+          "currentEntryIds": [
+            "dec-delivery"
+          ],
+          "complete": true
+        },
+        {
+          "id": "arrangement",
+          "label": "Arrangement",
+          "requiredPhases": [
+            "arrangement"
+          ],
+          "currentEntryIds": [
+            "dec-arrangement"
+          ],
+          "complete": true
+        }
+      ],
+      "adjustmentEntryIds": [],
+      "auditionEntryIds": [
+        "dec-audition"
+      ],
+      "humanListeningStatus": "pending"
+    }
+  },
+  "deliverables": [
+    {
+      "role": "song",
+      "artifactId": "delivery-r24",
+      "artifactRole": "delivery",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-master-r24.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/songs/hatsuyuki-platform-ia-rocks-20261115-final.wav",
+      "sha256": "7ac10682ffabc88683c6a7ee52ceb9927ad2f683df7ee58aecf3e7e317505116",
+      "bytes": 6304102,
+      "sourceRevision": 24,
+      "sourceCompositionHash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6"
+    },
+    {
+      "role": "vsqx",
+      "artifactId": "vsqx-r10",
+      "artifactRole": "vsqx",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-r10.vsqx",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/vsqxs/hatsuyuki-platform-ia-rocks-20261115-final.vsqx",
+      "sha256": "516c7803b8a1e524b3f64604c4e3e06324b7ddd30fa1d1b8b07fe3deb8b950e8",
+      "bytes": 24168,
+      "sourceRevision": 10,
+      "sourceCompositionHash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-lead_solo-stem-mix-r18-lift-r21",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-lead_solo-r21.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-lead_solo-r21.wav",
+      "sha256": "f79cefbf2a9c335d59419e470cfded8cd7db4455ff539c617bbe0308e1488ba2",
+      "bytes": 3796574,
+      "sourceRevision": 21,
+      "sourceCompositionHash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-lead_harmony-stem-mix-r19-lift-r22",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-lead_harmony-r22.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-lead_harmony-r22.wav",
+      "sha256": "9ab51e7b92e437d43a5267e5d0e22377eb5cab478a238788d825288d412481e5",
+      "bytes": 3807990,
+      "sourceRevision": 22,
+      "sourceCompositionHash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6"
+    },
+    {
+      "role": "preview",
+      "artifactId": "anchor-minimal_band-stem-mix-r20-lift-r23",
+      "artifactRole": "preview",
+      "sourcePath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-minimal_band-r23.wav",
+      "publishedPath": "/home/pentester/coding/codex_ida/vocaloid/artifacts/evals/hatsuyuki-platform-ia-rocks-20261115/hatsuyuki-platform-ia-rocks-20261115-anchor-minimal_band-r23.wav",
+      "sha256": "bf3ce560bb3eb408d62acb80a3d0720d7e9d3fd222143594d78da9c4b8a463a6",
+      "bytes": 4410078,
+      "sourceRevision": 23,
+      "sourceCompositionHash": "8d7cc4679d214834e7f394ede913e606eb41bdc649e494c10bbff5fe586e5bc6"
+    }
+  ],
+  "files": [
+    {
+      "name": "hatsuyuki-no-homu.song.json",
+      "sha256": "c94fefc8fdc49c27edf20f3e67de759ed440a2456ef2b32968e0f396cce406c1",
+      "bytes": 99194
+    },
+    {
+      "name": "hatsuyuki-no-homu.creative-journal.jsonl",
+      "sha256": "5655af9c76d455094e9978c63d02f8d8358efff0956a9e45ef8f1e5bd03e68be",
+      "bytes": 27848
+    },
+    {
+      "name": "hatsuyuki-no-homu.creative-report.md",
+      "sha256": "30905dc234d9b283aafb90be1bcc7ce0e45b0766bd1a38cdab16c7f717cc8f61",
+      "bytes": 15289
+    }
+  ]
+}

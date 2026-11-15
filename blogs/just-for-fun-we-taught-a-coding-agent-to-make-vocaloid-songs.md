@@ -1,358 +1,165 @@
-# Just for Fun: We Told a Coding Agent to Make VOCALOID Songs, and Things Got Out of Hand
+# We Told a Coding Agent to Make VOCALOID Songs. It Got Out of Hand.
 
-## A story involving IDA, MCP, IA, Win32 dialogs, music theory, swordsmen, summer nights, rain, cicadas, and “it still does not rock”
+*IDA, Win32 dialogs, Japanese morae, swordsmen, rain, cicadas, and a 190 BPM song that still doesn't rock.*
 
-> It really did begin as just for fun.
+It started as a joke with a real question inside it. We had VOCALOID3, the IA and IA_ROCKS voicebanks, a coding agent running in WSL, and a free weekend. Could the agent make a Vocaloid song by itself?
 
-We had VOCALOID3, IA and IA_ROCKS, a coding agent running inside WSL, and one extremely irresponsible but irresistible question:
+If "make a song" had meant "export a MIDI file", we would have been done by lunch. We wanted more than that: a native VSQX project, Japanese lyrics with real phonemes, IA's actual voice rendered by the actual VOCALOID3 Editor, accompaniment, stems, a mix, a master, and a project file that still opened afterwards. And because we are the kind of people who build things like this for fun, we also wanted a record of *why* each line was sung the way it was.
 
-> Could Codex make a Vocaloid song by itself?
+Two days later we had a TypeScript MCP server, a 32-bit Windows helper, a UI-automation state machine, a canonical song database, a music-theory analyzer, a Japanese mora allocator, an audio production graph, a hash-chained decision journal, and an unreasonable number of Save As dialogs. We also had finished songs.
 
-If we had quietly defined “make a song” as “export MIDI,” the project could have ended in an afternoon.
+We had a more interesting answer too. Engineering can get an agent to *finish* a song. It cannot yet get it to write a great one.
 
-Unfortunately, we did not.
+## Rule one: no MIDI, no templates
 
-We wanted native VSQX, Japanese lyrics and phonemes, IA's real voice, accompaniment, stems, mixing, mastering, an export from the actual VOCALOID3 Editor, a project that still opened afterward, and a complete record of why each line had been sung that way.
+A Vocaloid performance is a lot more than pitch and duration. Each note carries a lyric, a phoneme string, consonant timing, accent, decay, mouth opening, bends, portamento, and a vibrato envelope. Around the notes sit continuous curves for dynamics, breathiness, brightness, and pitch, plus parts, pre-measures, mixer state, and the singer binding. MIDI throws most of that away.
 
-The fun project quickly became:
+So the first rule was simple: the agent builds a native project from nothing. No copying a known-good VSQX, swapping a few notes, and calling it composition.
 
-```text
-TypeScript MCP server
-+ 32-bit native Windows helper
-+ Win32 UI automation
-+ Yamaha schema / native loader
-+ canonical song database
-+ music-theory analyzer
-+ Japanese mora allocator
-+ audio production graph
-+ creative-decision hash chain
-+ several gigabytes of local experiments
-+ many, many Save As dialogs
-```
-
-We did eventually produce complete songs.
-
-We also found a more interesting answer: **engineering can make an agent finish a song; it cannot yet make the agent consistently write a masterpiece.**
-
----
-
-## Act I: do not fob us off with MIDI
-
-A VOCALOID performance is more than note number and duration. It contains lyrics, language-specific phonemes, singer identity, consonant timing, accent, decay, opening, bends, portamento, vibrato, master controls, parts, pre-measures, mixer state, and singer events.
-
-Our first rule was therefore simple: no stealing a template from an existing VSQX, changing a few notes, and calling it AI composition. The agent had to create a native project from a blank state.
-
-The first tiny victory looked like this:
+The first success looked like this:
 
 ![VOCALOID3 accepting a native score created from zero by the MCP](../docs/assets/vocaloid-native-score-smoke.png)
 
-The screenshot is wonderfully unglamorous: three notes, a valid IA_ROCKS singer, and an Editor willing to open the file.
+Three notes, a valid IA_ROCKS singer, and an Editor that agreed to open the file. Getting there meant reading the VOCALOID3 manual, studying the VSQ3/VSQ4 schemas, opening 32-bit DLLs in IDA, writing a probe that loads projects through Yamaha's own `Vsq3.dll`, and spending half a day convinced that the phoneme `4 a` was our bug. It wasn't. In VOCALOID's Japanese phoneme set, `4` is the flap in ら. The manual had been saying so the whole time.
 
-Before that moment we had read the VOCALOID3 manual, studied the VSQ3/VSQ4 schemas, opened 32-bit DLLs in IDA, written a native-loader probe, worked through an MSVC 2008 ABI, walked Yamaha's object tree, and wrongly blamed the phoneme `4 a`—only to learn that `4` is VOCALOID's official Japanese flap/tap phoneme.
+## We almost called the synthesis engine directly
 
-Software engineering is sometimes spending half a day suspecting one digit before the manual calmly tells you it has always been legal.
+IDA showed a tempting route: load the VSQX, encode a musical part into the engine's internal "Daisy" event stream, hand it to the DSE3 synthesizer, and collect 256-sample frames into a WAV. No Editor, no UI, just a function call.
 
-## Act II: we almost called VOCALOID's synthesis DLL directly
+We got surprisingly far. The probe loaded the project, built the time map, encoded the events, loaded both DLLs, and resolved every export we needed. Then the engine returned `-100` at the voice-database step. That step reads registry state tied to voicebank installation and activation.
 
-IDA revealed an enticing route:
+At that point we had two options: dig into licensing internals, or move up a level and let the original Editor do the synthesis, since it already has a legitimate, fully registered context. We moved up. It felt like giving up at the time. In hindsight it was the most useful result of the reverse-engineering work: we knew exactly where the line was, and why the production design had to sit above it.
 
-```text
-VSQX
-  -> musical part
-  -> Daisy MIDI buffer
-  -> CRtSynthesis
-  -> DSE3
-  -> 256-sample render frames
-  -> WAV
-```
+## The final boss is a desktop app from 2014
 
-We reached VSQX loading, time-map creation, Daisy encoding, DSCL3/DSE3 loading, and synthesis-export resolution. Then the engine returned `-100` at the voice-database and registration boundary.
+The VOCALOID3 Editor is not an API. It opens modal dialogs, wants a filename typed into a Save As box, sometimes remembers its last folder and sometimes doesn't, keeps running after it looks closed, and now and then crashes during cleanup.
 
-There were two choices: keep digging into activation and licensing, or stop and use the original Editor, which legitimately possessed the complete voicebank context. We stopped.
+![A VOCALOID3 cleanup crash](../docs/assets/vocaloid3-legacy-crash.png)
 
-That was not a failed reverse engineering exercise. It was one of its best outcomes: knowing where to stop, and being able to explain why the production architecture should move one level upward.
+Driving it reliably meant treating every export as a transaction. Fingerprint the Editor binary. Take a host-wide lock. Launch the exact project on a hidden desktop. Check the singer. Trigger Export Wave. Wait for a *fresh* Save dialog, fill it in, submit, and wait with a progress-aware timeout. Then check that the output is a well-formed, non-silent WAV with a recorded digest. Close only the process we launched, and release the lock.
 
-## Act III: ancient desktop software is the final boss
+"A file appeared" never counts as success. Partial exports, zero-byte files, silence, a quietly substituted default singer, and stale dialog handles all have to fail loudly. None of these bugs had anything to do with music, but any one of them could leave a finished song stuck inside the Editor. (Months later the Editor found a new trick. A pair of unplugged headphones left its saved audio device pointing at nothing, and it refused to export until someone clicked OK in a dialog nobody could see. The helper now tells you that, too.)
 
-VOCALOID3 Editor is not an API server. It opens modal dialogs, waits for a Save As filename, remembers or forgets its previous path, exports for a long time, remains alive after it appears to have closed, and occasionally throws an access violation during cleanup.
+## An XML writer turns into a small production system
 
-![A particularly VOCALOID3 cleanup crash](../docs/assets/vocaloid3-legacy-crash.png)
+VSQX is a good file to hand to the Editor and a poor place to keep everything else. It has nowhere to put effect chains, artifact hashes, review notes, dependencies, edit history, or the question an A/B test is supposed to answer.
 
-UI automation became a transaction protocol:
+So a JSON manifest, `.song.json`, became the source of truth. Every edit carries a revision number and stable IDs, and three hashes are recomputed each time: one for content, one for composition, one for mix. Writes are atomic and backed up. The VSQX, backing track, stems, mixes, and masters are all derived from the manifest.
 
-```text
-fingerprint editor
-  -> acquire host-wide lease
-  -> launch exact project
-  -> verify singer / dialog state
-  -> invoke Export Wave
-  -> discover a fresh Save dialog
-  -> validate parent + filename
-  -> submit
-  -> wait with a progress-aware timeout
-  -> verify WAV structure + non-silence + digest
-  -> close only the owned process
-  -> release lease
-```
+That sounds like the opposite of fun, but it makes the fun part possible. The agent can rewrite one chorus line without resending three thousand events, and an old WAV can never pass itself off as the current song.
 
-“A file appeared” is not success. Partial exports, zero-byte output, silence, singer fallback, and stale dialog handles must all fail closed.
+## The first finished songs
 
-One export repeatedly stalled at the end because the Save As dialog had no filename. Another claimed the path did not exist because a legacy Windows application had received a bizarre path. None of these bugs had anything to do with composition, but any one of them could keep a finished song trapped forever.
+The pipeline closed on three IA_ROCKS songs in three styles:
 
-## Act IV: an XML writer grows into a small production system
-
-VSQX is a good delivery format for the Editor and a bad sole database for an agent. It does not naturally retain renderer choices, effect chains, artifact hashes, reviews, dependencies, mutation history, creative intent, or the question an A/B test is meant to answer.
-
-`.song.json` became the canonical source of truth. Each mutation carries a monotonic revision, stable IDs, composition/mix/content hashes, a parent hash, dry-run evidence, atomic writes, backups, and provenance. VSQX, backing, stems, mixes, analyses, and mastered WAVs are derived artifacts.
-
-That does not sound much like “just for fun,” but it enables something genuinely fun: the agent can revise one chorus line without resending three thousand events or letting an old WAV impersonate the current song.
-
-## Act V: the first complete songs
-
-Before the composer-intent phase, the pipeline closed three IA_ROCKS styles:
-
-| Work | Direction | Length |
+| Song | Style | Length |
 | --- | --- | ---: |
 | `花色日和` | wa-rock | 4:16 |
-| `火花の航路` | driving J-Rock | 2:06 |
+| `火花の航路` | driving J-rock | 2:07 |
 | `夏の夜に浮かぶ声` | summer-night dream pop | 3:18 |
 
-Each had lead and harmony, multiple instruments, stems, mix, master, loudness/dynamics/peak/clipping QC, and a matching VSQX. The checkpoint proved that an agent-native pipeline could deliver a complete song.
+Each had a lead and a harmony line, several instruments, isolated stems, a mix, a master that passed loudness, peak, and clipping checks, and a matching VSQX. The pipeline could deliver a complete song.
 
-Then we finally asked, with uncomfortable seriousness:
+So we asked the uncomfortable question: what is it actually trying to *say*?
 
-> What is it actually trying to sing?
+## The engineer steps back, the composer steps in
 
-## Act VI: the engineer steps back so the composer can appear
+The second phase was built around one question: not "can it sing?" but "what do I want IA to sing out in *this* line?"
 
-The next phase revolved around one sentence:
+The repository grew a vocabulary for that. Composition intent comes first: what the song is about, what each section changes, and which one to three anchor phrases carry the weight, each with a single listening question. A deterministic theory analyzer flags real risks such as voice crossings, missing breaths, register crowding, and unresolved tones. It is explicitly not allowed to decide that a line is moving. A short audition ladder (solo, then with harmony, then with a minimal band) tests one anchor passage before anyone renders a whole song. And a creative journal records each decision, the alternatives it beat, and what the listener should expect to hear.
 
-> Stop asking, “Can it sing?” and begin asking, “What, exactly, do I want IA to sing out in this line?”
+Evidence came in four levels: *declared*, *materialized*, *rendered*, *heard*. They matter because an audit soon found a manifest that declared a dynamics arc, an opening arc, a focus vibrato, and a final pitch fall, while the VSQX it produced contained none of them. That's like writing "the singer trembles on the last line" in the session notes and then forgetting to record it. Now a declared gesture that never made it into native controls blocks the build.
 
-The repository gained composition intent, section transitions, anchor phrase directions, listening questions, deterministic theory, bounded repairs, phrase grammar, short audition ladders, creative journals, three kinds of freshness, and four evidence levels: declared, materialized, rendered, and heard.
+The funny part: that song already sounded better than the earlier ones before any of those curves existed. The lyrics, the contour, the timing of the morae, a little harmony, and some silence were doing the real work. Automation can't stand in for composition.
 
-A line now follows:
+## Hundreds of IA songs the agent is not allowed to see
 
-```text
-Why does it exist?
-  -> What must change inside the sentence?
-  -> Which word is the semantic focus?
-  -> How do melody, duration, and harmony serve it?
-  -> How should IA bite, brighten, and withdraw?
-  -> Which instruments enter, and which must move aside?
-  -> Does it work in solo / harmony / minimal-band auditions?
-```
+The machine has a few hundred IA tracks on disk. The obvious idea was to profile all of them (tempo, form, harmony, pitch contours) and let the agent consult the profile while composing.
 
-Theory can locate crossings, breath risk, register crowding, and chord conflict. It cannot tell us whether a line is heartbreaking. That limit is a contract, not a TODO.
+It doesn't take long to see where that ends up. If the agent can ask for the nearest melody or the next likely note, a "style system" turns into an imitation system. So we made a rule that looks restrictive and turned out to be freeing: the production agent cannot see the library at all. The only thing the library may do is help a human maintainer notice that the phrase vocabulary is missing a generally useful idea. That idea then gets added in abstract form, with no source identity and no notes.
 
-## Act VII: hundreds of local IA songs that the production agent cannot see
+The agent gets words like *delayed entry*, *late peak*, *semantic breath*, and *modal pivot*. It never gets "do what happens at 0:27 in that song".
 
-The drive contains hundreds of IA tracks. We initially imagined a comprehensive corpus profile: tempo, form, harmony, F0, vocal performance, aggregate ranges, and novelty audits.
+## Melodies really do turn into staircases
 
-The danger becomes clear quickly. If an agent can query a nearest melody, next note, or per-track contour, a “style system” eventually slides into an imitation system.
-
-We made a decision that looks restrictive and is actually liberating:
-
-```text
-the production agent cannot see the corpus
-```
-
-The library may only help a maintainer notice that the phrase vocabulary lacks a broadly useful choice. The abstraction must be human-reviewed, free of source identity, non-reconstructive, and contain no melody, chord, lyric sequence, or next-note hint.
-
-The agent sees `delayed entry`, `late peak`, `semantic breath`, and `modal pivot`—never “copy what happens at 0:27 in this song.”
-
-## Act VIII: melodies really do turn into staircases
-
-After a cold-start agent wrote `遠い灯、青い夜`, we opened its VSQX:
+After a fresh agent wrote `遠い灯、青い夜`, we opened the VSQX and saw this:
 
 ![Rise, fall, rise, fall: a phrase habit visible at a glance](../docs/assets/formulaic-rise-fall-contour.png)
 
-It was not random. It was painfully tidy: rise, fall, rise, fall; every phrase began in the same place; 97.9% of comparable motion was small stepwise motion.
+Rise, fall, rise, fall. Every phrase entered on the same beat, and 97.9% of the melodic motion was small steps. It wasn't random. It was painfully tidy.
 
-Phrase grammar was born from this screenshot. We explicitly forbid it from compiling melody, because solving “the agent is too templated” by giving it more templates merely creates a larger template library.
+That screenshot is where the phrase grammar came from, along with a hard rule against letting it generate melody. Fixing "the agent is too formulaic" by handing it more formulas would just give it a bigger template library. The grammar asks better questions instead: is this line a statement or an answer? Does it enter on the downbeat, as a pickup, or late? Is it an arch, a terrace, a plateau? Where does the breath go? Is the development repetition or fragmentation? The notes still come from the agent.
 
-The DSL can ask whether a line is a statement or answer; whether it begins on the downbeat, as a pickup, late, or offbeat; whether it forms an arch, terrace, plateau, or asymmetric wave; where the semantic breath belongs; and whether development uses repetition or fragmentation. The final notes still belong to the agent.
+## Can a brand-new agent take over?
 
-## Act IX: “tuning intent exists” and “the VSQX is tuned” are different claims
+To find out, we started a fresh Codex session (gpt-5.6-sol, xhigh reasoning) with no access to the library, the earlier songs, or the old composition scripts, and gave it one image: two swordsmen who haven't seen each other in decades pass on a cliff path without a word.
 
-One audit found a manifest declaring dynamics, opening, focus vibrato, and a pitch fall-away while the final VSQX contained none of the matching controls. It was the musical equivalent of writing “the singer should tremble on the final line” in a production note and forgetting to record it.
+It wrote `風は名を呼ばない`, in which IA isn't either swordsman but the nameless mountain wind. The song runs 3:10 over 68 bars, with 433 vocal events, 23 recorded decisions, and a real Editor render. Along the way it also found a parade of bugs: short timeouts, dead render locks, an intermittent Save As failure, journal retries that weren't idempotent, and an analyzer that ignored leading rests. That's what a good benchmark does. It doesn't just pass or fail; it shows you what to fix next.
 
-Evidence was split into:
+After that, every new song started from the same two files: a fixed workflow prompt and a strict, validated intent file holding the voice, duration, BPM range, scene, listener question, and what to avoid. The next agent reads a contract, not the previous agent's chat history.
 
-```text
-declared -> materialized -> rendered -> heard
-```
+## Summer night, rain, cicadas, 190 BPM
 
-The `apply_tuning` compiler must truly turn gestures into note styles and native PIT/PBS/DYN/BRI data. Without materialization provenance, build stops.
-
-The funny part is that the song already sounded better before those fancy controls arrived. Lyrics, contour, mora timing, harmony, silence, and restrained arrangement were doing the real work. Automation cannot impersonate composition.
-
-## Act X: can a completely new agent take over?
-
-We launched a fresh `gpt-5.6-sol`/`xhigh` session, forbidding access to the corpus, older songs, and old compose scripts. Its first intent described two swordsmen passing on a cliff.
-
-It wrote `風は名を呼ばない`, treating IA as the nameless mountain wind:
-
-- original IA;
-- 3:10;
-- 68 bars;
-- 433 vocal events;
-- 23 decisions;
-- a real Editor render.
-
-The framework transferred successfully. The agent also found a parade of timeout, dead-lease, Save As, journal retry, false phrase-entry, and endpoint-trend bugs. Perfect. A useful benchmark does more than pass or fail; it points directly at the next engineering work.
-
-## Act XI: one fixed prompt plus one intent file
-
-To free the next session from chat history, composition now begins with:
-
-```text
-prompts/vocaloid-composition-agent.md
-+ intents/<song>.intent.json
-```
-
-The intent can specify:
-
-```json
-"tempo_bpm": { "min": 180, "max": 200, "preferred": 190 }
-```
-
-It also carries exact voicebank component, duration, genre, must-avoid constraints, listener question, and source boundaries. The next agent reads a strict, validated, hashable contract—not the previous agent's mood.
-
-## Act XII: summer night, rain, cicadas, IA_ROCKS, 190 BPM!
-
-The final experiment deliberately requested 180–200 BPM, IA_ROCKS, and rock. A new session delivered `雨と蝉のあいだ`:
-
-- 190 BPM;
-- 48 bars and 64.4 seconds;
-- 287 vocal notes;
-- drums, bass, rhythm guitar, rain guitar, and cicada pulse;
-- 24 hash-chained decisions;
-- valid VSQ3 and original-Editor render;
-- -16.3 LUFS, -1.2 dBTP, and no clipping.
+For the final test the intent asked for IA_ROCKS, rock, and 180–200 BPM. A new session delivered `雨と蝉のあいだ`: 190 BPM, 48 bars, 64 seconds, 287 vocal notes, drums, bass, rhythm guitar, a "rain" guitar, and a cicada pulse. It came with 24 hash-chained decisions, a valid VSQ3, an original-Editor render, −16.3 LUFS, −1.2 dBTP, and no clipping.
 
 ![Arrangement map of 雨と蝉のあいだ](../docs/assets/ame-semi-no-aida-arrangement-map.svg)
 
-Its waveform looks exactly like a “finished song”:
+The waveform looks like a finished song:
 
 ![Final stereo waveform](../docs/assets/ame-semi-no-aida-waveform.png)
 
-The spectrogram is suitably busy:
+The spectrogram looks suitably busy:
 
 ![Final spectrogram](../docs/assets/ame-semi-no-aida-spectrogram.jpg)
 
-Then human ears said:
+Then a person listened and said two things. The accompaniment buries IA. And it's flat; it doesn't really feel like rock.
 
-> The accompaniment completely buries IA.
+That isn't a perfect song, but it is a perfect experiment, because those two sentences separate engineering completion from musical completion more cleanly than any metric we have.
 
-And:
+## Passing tests can't argue with ears
 
-> It is still rather flat. It does not really feel like rock.
+Every check passed. The song was valid, current, non-silent, unclipped, hash-verified, and documented. None of that gets a vote when the listener can't hear the singer, and writing `primary_genre: rock` in a JSON file does not change the audio.
 
-Perfect.
+It became our favorite rule: metrics can disprove a technical hypothesis, but they can't overrule what someone actually heard.
 
-Not a perfect song—a perfect experiment. Those two comments cleanly separate engineering completion from musical completion.
-
-## Act XIII: 100 passing tests cannot argue with ears
-
-The final repository result was:
-
-```text
-102 tests
-100 passed
-2 skipped by environment
-0 failed
-```
-
-The song was valid, current, non-silent, unclipped, hash-verified, reproducible, and documented. If the listener cannot hear IA, however, the test suite does not get to answer, “but the vocal-presence metric is green.” If it does not sound like rock, `primary_genre: rock` does not alter the audio.
-
-This became our favorite project rule:
-
-> Metrics may disprove a mistaken technical hypothesis. They may not overrule a real listening experience.
-
-## Boss-fight ledger
+## The boss-fight ledger
 
 | Boss | Loot |
 | --- | --- |
-| `4 a` falsely rejected | manual-backed phoneme regression |
-| direct DSE `-100` | a clear licensing boundary |
-| VOCALOID cleanup crash | owned-process teardown protocol |
-| Save As without a filename | fresh-dialog retry and path diagnostics |
-| export timeout | progress-aware 900-second client |
-| dead Editor lease | PID/liveness-aware reclaim |
-| identical IA/IA_ROCKS probe digests | singer-identity collision guard |
-| tuning intent absent from VSQX | materialization compiler and preflight blocker |
-| every melody phrase rises and falls | phrase grammar and concentration analyzer |
-| D-Dorian C called a leading tone | semitone-aware modal rule |
+| `4 a` "rejected" | a manual-backed phoneme regression test |
+| direct synthesis returns `-100` | a clear licensing boundary |
+| Editor crashes on cleanup | a teardown protocol that only touches its own process |
+| Save As with no filename | fresh-dialog retries and path diagnostics |
+| two voicebanks, identical probe audio | a singer-identity collision guard |
+| tuning declared but never written | a materialization compiler and a build blocker |
+| every phrase rises and falls | the phrase grammar and a concentration analyzer |
+| D Dorian's C called a leading tone | a semitone-aware modal rule |
 | sparse harmony reported as 46 crossings | overlap-weighted voice ordering |
-| F0 tracker selects second harmonic | an honestly open limitation |
 | mastering sounds sharper | equal-loudness A/B and transparency metrics |
-| accompaniment masks IA | a real mix problem that automation has not solved |
-| 190 BPM still does not rock | a real musical problem engineering has not solved |
+| the band buries IA | a real mix problem, still open |
+| 190 BPM that doesn't rock | a real musical problem, still open |
 
 ## So what is the agent now?
 
-It is already a good composer assistant, arrangement-hypothesis generator, Japanese note-allocation worker, production engineer, test operator, A/B machine, obsessive archivist, and teammate who can watch a VOCALOID export at midnight.
+A good composing assistant, a tireless arrangement-hypothesis generator, a careful Japanese note allocator, a production engineer, a test operator, an A/B machine, an obsessive archivist, and a teammate happy to babysit a VOCALOID export at midnight.
 
-It is not a taste oracle, a rock band, a mixing engineer's ears, a producer's cultural memory, or a hit-song compiler.
+It is not a taste oracle, a rock band, a mixing engineer's ears, or a hit-song compiler.
 
-## What remains in the repository
-
-We do not pour every WAV into Git:
-
-```text
-artifacts/songs/             local-only final listening WAVs
-artifacts/evals/             local-only stems / A-B / debug / traces
-build/                       local-only working state
-
-artifacts/vsqxs/             tracked native projects
-artifacts/creative-records/  tracked manifests / journals / reports / digests
-notes/                       tracked contracts and failure evidence
-blogs/                       tracked long-form story
-```
-
-The public repository can prove what happened without becoming a three-gigabyte audio truck.
-
-## If you want to play too
-
-The smallest entry point is:
+## Want to play?
 
 ```bash
 npm install
 npm test
-npm run build
+cp intents/template.intent.json intents/my-song.intent.json
+npm run --silent compose:prompt -- --intent=intents/my-song.intent.json
 ```
 
-Generate a fixed-workflow, intent-specific agent prompt with:
+You'll need your own licensed VOCALOID3 Editor and voicebank for real singing; the repository contains neither. More importantly, bring one line you genuinely want to hear IA sing. Not "make me a rock song", but an answer to this: before this line, what state is the world in, and after IA sings it, what has changed?
 
-```bash
-npm run --silent compose:prompt -- --intent=intents/template.intent.json
-```
-
-You need your own legitimately licensed VOCALOID3 Editor and voicebank for original-Editor synthesis. The repository contains no voicebank, license data, or final WAV.
-
-Most importantly, prepare one line that you genuinely want to hear IA sing. Not merely, “make me a rock song,” but:
-
-> Before this line appears, what state is the world in? After IA sings it, what should have changed?
-
-That question is much harder than BPM.
-
-It is also much more fun.
+That question is a lot harder than picking a BPM. It's also a lot more fun.
 
 ---
 
-## Ending
+We went from a 32-bit vtable in IDA to IA singing about rain and cicadas on a 190 BPM summer night. In between were native loaders, crashing dialogs, hard-left pan, silent singer swaps, LUFS, Dorian mode, swordsmen, mountain wind, and many rounds of "I honestly can't hear the difference."
 
-The project traveled from a 32-bit vtable in IDA to IA singing about rain and cicadas in a 190 BPM summer night. In between were native loaders, UI crashes, hard-left pan, silent fallback, LUFS, Dorian, swordsmen, mountain wind, Save As, hash chains, and many moments of “I am crying; I cannot hear the difference XD.”
-
-At the beginning, the goal was probably: “Let an agent make a Vocaloid song, just for fun.”
-
-Now the answer is:
-
-> We built an unusually serious, auditable Vocaloid production machine that finds its own bugs, records every decision, and occasionally writes a passage with real feeling.
-
-It still cannot reliably write masterpieces.
-
-But it is remarkably well suited to making music together with a person.
-
-And honestly—that is already fun enough.
+The goal was to let an agent make a Vocaloid song, just for fun. What we ended up with is an unusually serious, auditable production machine that finds its own bugs, writes down every decision, and occasionally produces a passage with real feeling. It still can't reliably write a masterpiece. It's very good at making music *with* a person, though, and that turned out to be the fun part.
