@@ -87,7 +87,7 @@ export class ProductionMcpClient {
       command: process.execPath,
       args: [SERVER_ENTRYPOINT],
       cwd: REPOSITORY_ROOT,
-      env: { ...process.env, VOCALOID_MCP_PROFILE: "production" },
+      env: { ...process.env },
       stderr: options.stderr ?? "inherit",
     });
   }

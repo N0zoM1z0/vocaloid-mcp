@@ -48,7 +48,8 @@ test("production MCP is compact, fully typed, and exposes workflow resources", a
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), PRODUCTION_TOOLS);
-  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 90_000, "production tools/list exceeded 90 KB");
+  // Budget keeps tools/list cheap for agents; every tool carries the shared structured error schema.
+  assert.ok(Buffer.byteLength(JSON.stringify(tools)) < 92_000, "production tools/list exceeded 92 KB");
   for (const tool of tools.tools) {
     assert.ok(tool.outputSchema, `${tool.name} has no MCP output schema`);
     assert.doesNotMatch(JSON.stringify(tool.outputSchema), /"data":\{\}/u, `${tool.name} exposes unknown data`);
