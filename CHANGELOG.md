@@ -16,6 +16,7 @@ All notable repository-level milestones are recorded here. Detailed implementati
 - All 22 tools return the same structured error (`code`, `message`, `retryable`, `suggested_action`).
 - TypeScript now enforces `noUnusedLocals` and `noUnusedParameters`; `npm run build` clears `dist/` first so deleted tests cannot linger.
 - The native export helper prints an actionable hint when the Editor's saved audio output device is missing (see `notes/host-troubleshooting.md`).
+- The three long-form articles were rewritten for readability (about half the length) and to match the current repository.
 - Docs were rewritten to match the current surface: README, song manifest workflows (now `vocaloid_edit_song`-based), Japanese lyric workflow, stem mix workflow, and host troubleshooting.
 
 ### Verification
