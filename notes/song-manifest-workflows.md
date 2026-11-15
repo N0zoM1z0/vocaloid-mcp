@@ -2,210 +2,190 @@
 
 `.song.json` is the editable source of truth. A VSQX or WAV is a derived build
 artifact and must not be used as the only memory of section, pattern, harmony,
-or mix intent. Every mutation below requires the revision returned by the most
-recent inspect/mutation. All IDs are lowercase, globally unique, and preserved
-across unrelated revisions.
+or mix intent. Every mutation passes the revision returned by the most recent
+inspect/mutation as `expected_revision`; a stale revision fails instead of
+silently overwriting a newer song. IDs are lowercase, unique across the
+manifest, and preserved across unrelated revisions.
 
-## Example 1: create a long-song skeleton
+All score, intent, arrangement, and mix writes go through one tool,
+`vocaloid_edit_song`, with one `action` and a strict `payload`. Read
+`vocaloid://edit-song-contract` (and the per-action contract it links) before
+the first write. Positions are zero-based; a quarter note is 480 ticks.
 
-Start with structure, timeline, and harmonic intent. Do not submit vocals and
-every instrument in this call.
+## 1. Create a skeleton
+
+Start with structure, timeline, and harmonic intent only.
 
 ```json
 {
   "name": "vocaloid_create_song_manifest",
   "arguments": {
-    "output_path": "songs/ame-no-ato.song.json",
+    "output_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
     "song_id": "ame-no-ato",
     "slug": "ame-no-ato",
     "title": "雨のあとで",
     "format": "vsq3",
-    "time_signatures": [
-      { "measure": 0, "numerator": 4, "denominator": 4 },
-      { "measure": 24, "numerator": 6, "denominator": 8 },
-      { "measure": 32, "numerator": 4, "denominator": 4 }
-    ],
-    "tempos": [
-      { "position": { "measure": 0, "beat": 0 }, "bpm": 128 },
-      { "position": { "measure": 24, "beat": 0 }, "bpm": 142 },
-      { "position": { "measure": 32, "beat": 0 }, "bpm": 168 }
-    ],
+    "time_signatures": [{ "measure": 0, "numerator": 4, "denominator": 4 }],
+    "tempos": [{ "position": { "measure": 0, "beat": 0 }, "bpm": 128 }],
     "sections": [
-      {
-        "id": "intro",
-        "name": "Intro",
-        "kind": "intro",
-        "start": { "measure": 0, "beat": 0 },
-        "end": { "measure": 4, "beat": 0 },
-        "energy": 0.25
-      },
-      {
-        "id": "verse-a",
-        "name": "Verse A",
-        "kind": "verse",
-        "start": { "measure": 4, "beat": 0 },
-        "end": { "measure": 16, "beat": 0 },
-        "energy": 0.5
-      },
-      {
-        "id": "chorus-a",
-        "name": "Chorus A",
-        "kind": "chorus",
-        "start": { "measure": 16, "beat": 0 },
-        "end": { "measure": 24, "beat": 0 },
-        "energy": 0.86
-      }
+      { "id": "verse-a", "name": "Verse A", "kind": "verse",
+        "start": { "measure": 0, "beat": 0 }, "end": { "measure": 8, "beat": 0 }, "energy": 0.5 },
+      { "id": "chorus-a", "name": "Chorus A", "kind": "chorus",
+        "start": { "measure": 8, "beat": 0 }, "end": { "measure": 16, "beat": 0 }, "energy": 0.86 }
     ],
     "key_changes": [
-      {
-        "id": "key-dminor",
-        "position": { "measure": 0, "beat": 0 },
-        "tonic": "D",
-        "mode": "minor"
-      }
+      { "id": "key-dminor", "position": { "measure": 0, "beat": 0 }, "tonic": "D", "mode": "minor" }
     ],
     "response_format": "json"
   }
 }
 ```
 
-The response supplies revision `1` and a content hash. If another agent or tool
-has advanced the file, a mutation with `expected_revision: 1` fails instead of
-silently overwriting the newer song.
+The response returns revision `1` and a content hash.
 
-## Example 2: add rapid lyrics and melisma one part at a time
+## 2. Preview, then write, one bounded change
 
-This call adds one voice, one track definition, and one part. Rhythm cells retain
-the high-level lyric/rhythm source, while the build compiles them to native VSQX
-notes. `explicit` allocation lets several cells point at one lyric; continuation
-notes become native `lyric="-"` / `phonemes="-"` events.
+Every edit can run with `dry_run: true` first. The preview returns the
+predicted revision, a music-aware diff, theory/intent deltas, and readiness
+without touching the file. Send the same payload again without `dry_run` to
+write it.
 
 ```json
 {
-  "name": "vocaloid_upsert_manifest_vocal_part",
+  "name": "vocaloid_edit_song",
   "arguments": {
-    "input_path": "songs/ame-no-ato.song.json",
-    "output_path": "songs/ame-no-ato.song.json",
-    "expected_revision": 1,
-    "overwrite": true,
-    "voice": {
-      "id": "voice-ia-rocks",
-      "name": "IA ROCKS",
-      "component_id": "BDREB7P2KTWKYDC5"
-    },
-    "track": {
-      "id": "lead",
-      "name": "Lead",
-      "voice_id": "voice-ia-rocks",
-      "mixer": { "volume": -100, "pan": 64 }
-    },
-    "part": {
-      "id": "verse-a-lead",
-      "section_id": "verse-a",
-      "name": "Verse A Lead",
-      "start": { "measure": 4, "beat": 0 },
-      "end": { "measure": 16, "beat": 0 },
-      "phrases": [
-        {
+    "action": "upsert_vocal_part",
+    "payload": {
+      "input_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
+      "output_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
+      "expected_revision": 1,
+      "overwrite": true,
+      "dry_run": true,
+      "voice": { "id": "voice-ia-rocks", "name": "IA_ROCKS", "component_id": "BDREB7P2KTWKYDC5" },
+      "track": { "id": "lead", "name": "Lead", "voice_id": "voice-ia-rocks", "mixer": { "volume": -100, "pan": 64 } },
+      "part": {
+        "id": "verse-a-lead",
+        "section_id": "verse-a",
+        "name": "Verse A Lead",
+        "start": { "measure": 0, "beat": 0 },
+        "end": { "measure": 8, "beat": 0 },
+        "phrases": [{
           "id": "verse-a-line-1",
-          "start": { "measure": 4, "beat": 0 },
+          "start": { "measure": 0, "beat": 0 },
           "allocation": "explicit",
           "lyrics": [
-            { "id": "lyric-ame", "lyric": "あ", "phonemes": "a" },
-            { "id": "lyric-no", "lyric": "め", "phonemes": "m e" }
+            { "id": "lyric-a", "lyric": "あ", "phonemes": "a" },
+            { "id": "lyric-me", "lyric": "め", "phonemes": "m e" }
           ],
           "cells": [
-            {
-              "id": "cell-ame-1",
-              "duration": { "denominator": 16 },
-              "note_number": 67,
-              "lyric_index": 0,
-              "velocity": 58
-            },
-            {
-              "id": "cell-ame-2",
-              "duration": { "denominator": 16 },
-              "note_number": 69,
-              "lyric_index": 0,
-              "velocity": 64
-            },
-            {
-              "id": "cell-no-1",
-              "duration": { "denominator": 8, "tuplet": { "played": 3, "in_time_of": 2 } },
-              "note_number": 71,
-              "lyric_index": 1,
-              "velocity": 70,
-              "vibrato": { "type": 13, "length": 35 }
-            }
+            { "id": "cell-a-1", "duration": { "denominator": 16 }, "note_number": 67, "lyric_index": 0 },
+            { "id": "cell-a-2", "duration": { "denominator": 16 }, "note_number": 69, "lyric_index": 0 },
+            { "id": "cell-me-1", "duration": { "denominator": 8, "tuplet": { "played": 3, "in_time_of": 2 } },
+              "note_number": 71, "lyric_index": 1, "vibrato": { "type": 13, "length": 35 } }
           ]
-        }
-      ]
+        }]
+      }
     },
     "response_format": "json"
   }
 }
 ```
 
-Use separate calls for lead, double, harmony, and counterline. That keeps a
-failed harmony edit from replacing a valid lead part.
+Use separate writes for lead, double, harmony, and counterline so a failed
+harmony edit cannot replace a valid lead part.
 
-## Example 3: inspect, revise stable events, then build
+### Phrase cells
 
-First read only the target chorus:
+Phrases keep the rhythm/lyric source; the build compiles them to native notes.
+
+- `allocation: "sequential"` consumes one lyric unit per non-rest cell, so a
+  rapid line can change durations inside the phrase instead of sitting on a
+  uniform grid.
+- `allocation: "explicit"` lets several consecutive cells share one
+  `lyric_index`; the second and later notes compile to native `-` continuation
+  events (melisma). A rest breaks the chain.
+- A cell duration is either integer ticks or a note value (`denominator`,
+  optional `dots`, optional `tuplet`). `gate_percent` shortens the sounding
+  part of a cell.
+- For Japanese text, prefer `vocaloid_align_japanese_phrase`: it turns a
+  surface string plus explicit kana reading into a manifest-compatible phrase
+  with mora allocation, small-`っ` timing, and phonemes, which you then send
+  with `upsert_vocal_phrase`.
+
+## 3. Revise stable events
+
+Read only the section you are changing:
 
 ```json
 {
   "name": "vocaloid_get_song_section",
-  "arguments": {
-    "path": "songs/ame-no-ato.song.json",
-    "section_id": "chorus-a",
-    "response_format": "json"
-  }
+  "arguments": { "path": "build/songs/ame-no-ato/ame-no-ato.song.json", "section_id": "chorus-a", "response_format": "json" }
 }
 ```
 
-After using the returned stable IDs and current revision, transpose only the
-chosen notes and strengthen their velocity. An empty `event_ids` array would
-select every matching event in the supplied scope, so use it intentionally.
+Then transform exactly the returned event IDs. An empty `event_ids` array
+selects every matching event in the supplied scope, so use it deliberately.
 
 ```json
 {
-  "name": "vocaloid_transform_song_events",
+  "name": "vocaloid_edit_song",
   "arguments": {
-    "input_path": "songs/ame-no-ato.song.json",
-    "output_path": "songs/ame-no-ato.song.json",
-    "expected_revision": 12,
-    "overwrite": true,
-    "transform": {
-      "section_id": "chorus-a",
-      "vocal_track_id": "harmony-high",
-      "event_ids": ["chorus-harmony-note-7", "chorus-harmony-note-8"],
-      "targets": ["vocal_notes"],
-      "transpose": 3,
-      "velocity_scale": 1.08
+    "action": "transform_events",
+    "payload": {
+      "input_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
+      "output_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
+      "expected_revision": 12,
+      "overwrite": true,
+      "transform": {
+        "section_id": "chorus-a",
+        "vocal_track_id": "harmony-high",
+        "event_ids": ["chorus-harmony-note-7", "chorus-harmony-note-8"],
+        "targets": ["vocal_notes"],
+        "transpose": 3,
+        "velocity_scale": 1.08
+      }
     },
     "response_format": "json"
   }
 }
 ```
 
-Build only after inspecting the resulting revision. Output names include the
-song slug and source revision; the build advances the manifest once more to
-record artifact hashes and dependencies.
+Other actions follow the same envelope: `upsert_section`, `replace_timeline`,
+`upsert_vocal_phrase`, `apply_tuning`, `upsert_arrangement` (pitched or drum
+tracks with reusable patterns and placements), `apply_groove`,
+`upsert_effect_chain`, `upsert_section_dynamic`, `remove_objects`, and the
+intent actions described in `notes/composition-intent-contract.md`.
+
+## 4. Build, render, mix, deliver
+
+Run `vocaloid_preflight_song` until the needed readiness gate passes, then
+build. Output names should carry the slug and source revision; the build
+advances the manifest once more to record artifact hashes and dependencies.
 
 ```json
 {
   "name": "vocaloid_build_song_manifest",
   "arguments": {
-    "manifest_path": "songs/ame-no-ato.song.json",
+    "manifest_path": "build/songs/ame-no-ato/ame-no-ato.song.json",
     "expected_revision": 13,
-    "backing_output_path": "artifacts/ame-no-ato-backing-r13.wav",
-    "project_output_path": "artifacts/ame-no-ato-r13.vsqx",
+    "backing_output_path": "artifacts/evals/ame-no-ato/ame-no-ato-backing-r13.wav",
+    "project_output_path": "artifacts/evals/ame-no-ato/ame-no-ato-r13.vsqx",
     "response_format": "json"
   }
 }
 ```
 
-Then call `vocaloid_render_wav` on the built VSQX, analyze the rendered audio,
-and make the next revision in the manifest rather than patching the derived
-VSQX as the only source of truth.
+After that:
+
+1. `vocaloid_render_vocal_stems` renders each vocal track separately through
+   the original Editor; `vocaloid_render_instrument_stems` renders the
+   arrangement tracks. Both record hash-bound stem artifacts.
+2. `vocaloid_render_stem_mix` applies the manifest's effect chains and section
+   dynamics (see `notes/stem-mix-workflow.md`).
+3. `vocaloid_master_manifest_delivery` loudness-masters the current mix into a
+   listening delivery. `vocaloid_render_manifest_master` is the shortcut that
+   renders the built VSQX in one Editor pass instead of per-track stems.
+
+Analyze the result (`vocaloid_analyze_wav`, `vocaloid_analyze_vocal_stem`,
+`vocaloid_review_audio`), then make the next change in the manifest. Never
+patch a derived VSQX as the only record of a decision.

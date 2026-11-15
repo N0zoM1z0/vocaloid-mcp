@@ -31,21 +31,22 @@ The implementation intentionally exposes uncertainty:
 
 ## Agent workflow
 
-1. Call `vocaloid_japanese_g2p` with displayed `text` and, when necessary,
-   an explicit kana `reading`. Inspect every mora, fallback, and warning.
-2. Design pitches and rhythm slots with stable IDs. Call
-   `vocaloid_align_japanese_phrase`.
-3. In `sequential` mode, supply exactly one voiced slot per mora; arbitrary
+1. Design pitches and rhythm slots with stable IDs, then call
+   `vocaloid_align_japanese_phrase` with the displayed `text` and, for any
+   kanji, an explicit kana `reading`. Inspect the returned G2P units,
+   fallbacks, and warnings before using the phrase.
+2. In `sequential` mode, supply exactly one voiced slot per mora; arbitrary
    rests may sit between them. This is suitable for dense 1/16–1/64 lyrics.
-4. In `explicit` mode, set `mora_index` on every voiced slot. Consecutive
+3. In `explicit` mode, set `mora_index` on every voiced slot. Consecutive
    repeated indices compile to native VSQX `-` lyric/phoneme continuations,
    so one lyric can span several pitches.
-5. Validate the returned manifest-compatible phrase. For a new vocal part,
-   include the first phrase in `vocaloid_upsert_manifest_vocal_part`; for every
-   later line, insert only that phrase with
-   `vocaloid_upsert_manifest_vocal_phrase`.
-6. Apply sparse, intentional expression with
-   `vocaloid_apply_tuning_gestures`, targeting direct-note or phrase-cell
+4. Validate the returned manifest-compatible phrase. For a new vocal part,
+   include the first phrase in a `vocaloid_edit_song` `upsert_vocal_part`
+   action; for every later line, insert only that phrase with
+   `upsert_vocal_phrase`.
+5. Apply sparse, intentional expression with the `apply_tuning` action
+   (set `materialize_existing: true` only to compile a declared but
+   unmaterialized gesture), targeting direct-note or phrase-cell
    stable IDs. Build a new VSQX revision, render an isolated vocal stem, and
    use score-versus-render evidence before revising.
 

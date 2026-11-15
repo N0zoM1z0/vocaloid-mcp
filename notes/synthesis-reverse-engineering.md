@@ -1,6 +1,14 @@
 # VOCALOID3 synthesis bridge reverse-engineering notes
 
-Last updated: 2026-07-18
+Last updated: 2026-07-18 (historical log)
+
+> Tool names in the dated sections below describe the July 2026 surface. The
+> direct-VSQX tools have since been removed; the current equivalents are
+> `vocaloid_render_manifest_master` / `vocaloid_render_vocal_stems` (was
+> `vocaloid_render_wav`), `vocaloid_build_song_manifest` (was
+> `vocaloid_create_song`), `vocaloid_render_instrument_stems` (was
+> `vocaloid_render_accompaniment`), and `vocaloid_master_manifest_delivery`
+> (was `vocaloid_master_wav`). The binary findings themselves are unchanged.
 
 These notes capture the read-only IDA investigation needed to add real vocal
 audio rendering to the MCP server. Addresses are for the exact binaries listed

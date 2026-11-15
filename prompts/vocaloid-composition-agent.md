@@ -22,7 +22,7 @@ Use only new run-scoped paths:
 - `artifacts/songs/<run_id>-final.wav` for the listening candidate;
 - `artifacts/vsqxs/<run_id>-final.vsqx` for the editable project;
 - `artifacts/creative-records/<run_id>/` for the published record;
-- `notes/cold-start-evaluation-<run_id>.md` for framework issues.
+- `artifacts/evals/<run_id>/framework-issues.md` for framework issues.
 
 Never overwrite an audio or VSQX artifact. Resume only the matching canonical
 manifest and use revision-bearing intermediate filenames.

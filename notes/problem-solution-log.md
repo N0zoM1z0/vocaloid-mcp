@@ -1,12 +1,23 @@
 # Problem and solution log
 
 This is the stable index for implementation problems discovered through real
-composition and listening. Detailed evidence belongs in a dated note; this file
-records the durable problem, scope, decision, and current status.
+composition and listening. It records the durable problem, scope, decision, and
+current status. Per-run evaluation notes from July 2026 were archived; their
+links point at the last commit that contained them.
+
+## 2026-11-15 — Voice probe blocked by a missing audio device
+
+- **The Editor's saved audio output device disappeared**
+  - Symptom: `vocaloid_probe_voice` failed in ~6 s at `wait_for_export_dialog`
+    with an unexpected `VOCALOID Editor` modal; no render ran.
+  - Root cause: host configuration, not code. See
+    [`notes/host-troubleshooting.md`](host-troubleshooting.md).
+  - Status: fixed on the host; the export helper now prints an actionable hint
+    for this dialog title.
 
 ## 2026-07-19 — High-BPM IA_ROCKS cold-start validation
 
-Detailed note: `notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md`
+Detailed note (archived): [cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md)
 
 - **A fresh agent could consume a bounded BPM range and finish a 190 BPM song**
   - Scope: a new `gpt-5.6-sol`/`xhigh` session received only the fixed prompt
@@ -86,7 +97,7 @@ Detailed note: `notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md`
 
 ## 2026-07-19 — Original-IA swordsmen cold-start validation
 
-Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
+Detailed note (archived): [cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md)
 
 - **Fresh-agent composition transfer succeeded, but orchestration is still bespoke**
   - Scope: a new `gpt-5.6-sol`/`xhigh` session independently authored and
@@ -146,7 +157,7 @@ Detailed note: `notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md`
 
 ## 2026-07-19 — Distant-lights cold-start follow-up
 
-Detailed note: `notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md`
+Detailed note (archived): [tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md)
 
 - **Reported sharp/separated vocal in final WAV**
   - Scope: absent in dry lead and processed-vocal anchor; present only after
@@ -184,7 +195,7 @@ Detailed note: `notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md`
 
 ## 2026-07-19 — IA visible in files but absent from Editor
 
-Detailed note: `notes/ia-voicebank-registration-2026-07-19.md`
+Detailed note: [`notes/host-troubleshooting.md`](host-troubleshooting.md)
 
 - **Metadata discovery was mistaken for singer availability**
   - Scope: IA and IA_ROCKS VVD/DDI/DDB files and `INSTALLED=1` entries existed,

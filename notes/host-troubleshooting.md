@@ -1,8 +1,31 @@
-# IA voicebank registration and identity verification
+# Host troubleshooting
 
-Date: 2026-07-19
+Problems that live in the local Windows/VOCALOID host rather than in a song.
+Start with `vocaloid_host_readiness`, then force a `vocaloid_probe_voice` for
+the exact component you plan to render; a verified probe is cached for a
+limited time per Editor/helper fingerprint, so rebuilding the native helper
+requires a new probe.
 
-## Reported symptom
+## Probe fails at `wait_for_export_dialog` with a "VOCALOID Editor" modal
+
+Observed 2026-11-15. The probe failed within seconds with
+`unexpected VOCALOID dialog: VOCALOID Editor` and
+`stage: wait_for_export_dialog`. Launching the Editor on the normal desktop
+showed the cause: **"Cannot find the selected audio output device."**, followed
+by the Preferences window. The Editor stores its output device in
+`HKCU\Software\VOCALOID3\VOCALOID Editor\Audio\AudioOut`; the saved device
+(headphones) was no longer present, so every launch on the helper's hidden
+desktop stopped at that modal. The helper cannot read that dialog's text across
+processes, so it now prints a hint when it sees the `VOCALOID Editor` or
+`Preferences` title instead of the export dialog.
+
+Fix: open the Editor once, choose a present device under Preferences → Audio
+Device, and press OK (or set `AudioOut` to the exact name of a present device).
+Then force a new probe.
+
+## IA visible in files but absent from the Editor (2026-07-19)
+
+### Reported symptom
 
 The local VVD scanner listed both IA (`BLRGDDR4M3WM2LC6`) and IA_ROCKS
 (`BDREB7P2KTWKYDC5`), while VOCALOID3 Editor exposed only IA_ROCKS.
@@ -15,7 +38,7 @@ IA_ROCKS had a non-zero marker. The IA entry later changed to a non-zero marker,
 and IA appeared in Editor. No repository script, bundled activation executable,
 registry token copying, or license bypass was used by this investigation.
 
-## False-positive probe discovered
+### False-positive probe discovered
 
 An old readiness cache had marked IA and IA_ROCKS verified even though their
 one-note probe WAVs had exactly the same SHA-256. A non-silent render alone
@@ -33,7 +56,7 @@ An absent registry tool yields `indeterminate` rather than inventing an
 activation conclusion. Only explicit missing/incomplete registration blocks the
 render early.
 
-## Current real-Editor evidence
+### Real-Editor evidence at the time
 
 After IA appeared in Editor, both voices were force-probed through the original
 VOCALOID3 Editor with the same locked Japanese phoneme, pitch, duration, and
@@ -60,7 +83,7 @@ current status is therefore **registration active, render identity
 inconclusive**—not unavailable and not verified. Do not select the trial bank
 for unattended production until a clean probe produces a distinct digest.
 
-## If the symptom returns
+### If the symptom returns
 
 Do not copy another singer's registry values and do not use untrusted activation
 tools. Check VVD metadata, the 32-bit VOICE3 entry, and the legitimate installer

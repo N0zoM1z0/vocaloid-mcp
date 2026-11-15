@@ -2,6 +2,7 @@
 
 ## A story involving IDA, MCP, IA, Win32 dialogs, music theory, swordsmen, summer nights, rain, cicadas, and “it still does not rock”
 
+
 > It really did begin as just for fun.
 
 We had VOCALOID3, IA and IA_ROCKS, a coding agent running inside WSL, and one extremely irresponsible but irresistible question:

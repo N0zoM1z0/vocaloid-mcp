@@ -1,9 +1,9 @@
 # Final VSQX delivery projects
 
 Each project here has the same basename as its QC-passed final WAV in
-`../songs/`. The style-evaluation runner publishes a pair only after verifying
-the current manifest artifacts, source SHA-256 values, and any pre-existing
-targets. A same-name file with different bytes is never overwritten.
+`../songs/`. A pair was published only after verifying the current manifest
+artifacts, source SHA-256 values, and any pre-existing targets. A same-name
+file with different bytes is never overwritten.
 
 Repository policy: this `artifacts/vsqxs/` directory is intentionally eligible
 for Git tracking and publication. The sibling `artifacts/songs/` directory is
