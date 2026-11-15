@@ -71,13 +71,6 @@ export function intervalClass(fromPitchClass: number, toPitchClass: number): num
   return normalizePitchClass(normalizePitchClass(toPitchClass) - normalizePitchClass(fromPitchClass));
 }
 
-export function signedSemitoneDistance(fromNote: number, toNote: number): number {
-  if (!Number.isInteger(fromNote) || !Number.isInteger(toNote)) {
-    throw new Error("Semitone distance requires integer note numbers");
-  }
-  return toNote - fromNote;
-}
-
 export function enharmonicEquivalent(left: string | number, right: string | number): boolean {
   const resolve = (value: string | number): number | null =>
     typeof value === "number" ? normalizePitchClass(value) : parsePitchName(value)?.pitchClass ?? null;

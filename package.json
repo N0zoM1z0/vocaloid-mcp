@@ -9,16 +9,11 @@
     "vocaloid-mcp-server": "dist/src/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "build:native": "scripts/build-native.sh",
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
-    "compose:intent-demo": "npm run build && node scripts/compose-intent-demo.mjs",
-    "compose:distant-lights": "npm run build && node scripts/compose-distant-lights.mjs",
     "compose:prompt": "npm run build && node scripts/render-composition-agent-prompt.mjs",
-    "eval:styles": "node scripts/generate-style-evals.mjs",
-    "eval:intent-first": "npm run build && node scripts/evaluate-intent-first-benchmark.mjs",
-    "eval:intent-first:finalize-trace": "npm run build && node scripts/finalize-intent-first-trace.mjs",
-    "eval:intent-first:prompt": "npm run build && node scripts/render-intent-first-prompt.mjs",
     "test": "npm run build && node --test dist/tests/*.test.js scripts/lib/*.test.mjs"
   },
   "engines": {

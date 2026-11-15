@@ -26,7 +26,6 @@ import type {
   ControlPointInput,
   CurveName,
   NormalizedControlPoint,
-  NoteExpressionUpdate,
   NoteInfo,
   NoteInput,
   Pagination,
@@ -99,24 +98,6 @@ interface PartSelection {
   partStart: number;
 }
 
-export interface CreateProjectOptions {
-  outputPath: string;
-  format: VsqxFormat;
-  voice: VoiceInfo;
-  bankSelect: number;
-  programChange: number;
-  sequenceName: string;
-  trackName: string;
-  partName: string;
-  bpm: number;
-  numerator: number;
-  denominator: number;
-  preMeasure: number;
-  notes: NoteInput[];
-  controlCurves?: Partial<Record<CurveName, ControlPointInput[]>>;
-  overwrite: boolean;
-}
-
 export interface MusicalPosition {
   /** Zero-based song measure, excluding the VSQX pre-measure count-in. */
   measure: number;
@@ -175,16 +156,6 @@ export interface VocalMixerUnitInfo {
   solo: boolean;
   sendLevel: number;
   sendEnabled: boolean;
-}
-
-export interface VocalMixerUpdate {
-  trackNumber: number;
-  volume?: number;
-  pan?: number;
-  mute?: boolean;
-  solo?: boolean;
-  sendLevel?: number;
-  sendEnabled?: boolean;
 }
 
 export interface VocalStemIsolationOptions {
@@ -1031,135 +1002,6 @@ function appendStyleAndSinger(
   appendElement(document, namespace, singer, format === "vsq4" ? "pc" : "vPC", programChange);
 }
 
-function createDocument(options: CreateProjectOptions): LoadedProject {
-  validateNotes(options.notes);
-  assertIntegerRange(options.bankSelect, 0, 127, "bankSelect");
-  assertIntegerRange(options.programChange, 0, 127, "programChange");
-  const namespace = FORMAT_NAMESPACE[options.format];
-  const document = new DOMImplementation().createDocument(namespace, options.format, null);
-  const root = document.documentElement;
-  if (!root) throw new Error("Could not create VSQX document root");
-  root.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xsi", XSI_NAMESPACE);
-  root.setAttributeNS(
-    XSI_NAMESPACE,
-    "xsi:schemaLocation",
-    `${namespace} ${options.format}.xsd`,
-  );
-  appendCdataElement(document, namespace, root, "vender", "Yamaha corporation");
-  appendCdataElement(
-    document,
-    namespace,
-    root,
-    "version",
-    options.format === "vsq4" ? "4.0.0.3" : "3.0.0.11",
-  );
-  const voices = appendElement(document, namespace, root, "vVoiceTable");
-  appendVoice(
-    document,
-    namespace,
-    voices,
-    options.format,
-    options.voice,
-    options.bankSelect,
-    options.programChange,
-  );
-  appendMixer(document, namespace, root, options.format);
-
-  const master = appendElement(document, namespace, root, "masterTrack");
-  appendCdataElement(document, namespace, master, "seqName", options.sequenceName);
-  appendCdataElement(
-    document,
-    namespace,
-    master,
-    "comment",
-    "Created by vocaloid-mcp-server",
-  );
-  appendElement(document, namespace, master, "resolution", 480);
-  appendElement(document, namespace, master, "preMeasure", options.preMeasure);
-  const signature = appendElement(document, namespace, master, "timeSig");
-  appendElement(document, namespace, signature, options.format === "vsq4" ? "m" : "posMes", 0);
-  appendElement(document, namespace, signature, options.format === "vsq4" ? "nu" : "nume", options.numerator);
-  appendElement(document, namespace, signature, options.format === "vsq4" ? "de" : "denomi", options.denominator);
-  const tempo = appendElement(document, namespace, master, "tempo");
-  appendElement(document, namespace, tempo, options.format === "vsq4" ? "t" : "posTick", 0);
-  appendElement(document, namespace, tempo, options.format === "vsq4" ? "v" : "bpm", Math.round(options.bpm * 100));
-
-  const track = appendElement(document, namespace, root, "vsTrack");
-  appendElement(document, namespace, track, options.format === "vsq4" ? "tNo" : "vsTrackNo", 0);
-  appendCdataElement(
-    document,
-    namespace,
-    track,
-    options.format === "vsq4" ? "name" : "trackName",
-    options.trackName,
-  );
-  appendCdataElement(document, namespace, track, "comment", "Vocal track");
-  const part = appendElement(
-    document,
-    namespace,
-    track,
-    options.format === "vsq4" ? "vsPart" : "musicalPart",
-  );
-  const measureTicks = Math.round((480 * 4 * options.numerator) / options.denominator);
-  appendElement(
-    document,
-    namespace,
-    part,
-    options.format === "vsq4" ? "t" : "posTick",
-    options.preMeasure * measureTicks,
-  );
-  const playTime = Math.max(
-    measureTicks * 4,
-    ...options.notes.map((note) => note.tick + note.duration),
-  );
-  appendElement(document, namespace, part, "playTime", playTime);
-  appendCdataElement(
-    document,
-    namespace,
-    part,
-    options.format === "vsq4" ? "name" : "partName",
-    options.partName,
-  );
-  appendCdataElement(document, namespace, part, "comment", "Musical part");
-  appendStyleAndSinger(
-    document,
-    namespace,
-    part,
-    options.format,
-    options.bankSelect,
-    options.programChange,
-  );
-  const project = {
-    path: options.outputPath,
-    document,
-    root,
-    format: options.format,
-    namespace,
-  };
-  const controls = Object.entries(options.controlCurves ?? {}) as Array<
-    [CurveName, ControlPointInput[]]
-  >;
-  for (const [curve, points] of controls) validateControlPoints(curve, points);
-  const orderedControls = controls
-    .flatMap(([curve, points]) => points.map((point) => ({ curve, point })))
-    .sort((left, right) => left.point.tick - right.point.tick
-      || left.curve.localeCompare(right.curve));
-  for (const { curve, point } of orderedControls) {
-    createControl(project, part, curve, point);
-  }
-  for (const note of [...options.notes].sort((left, right) => left.tick - right.tick)) {
-    appendNote(document, namespace, part, options.format, note);
-  }
-  if (options.format === "vsq4") {
-    appendElement(document, namespace, root, "monoTrack");
-    appendElement(document, namespace, root, "stTrack");
-  } else {
-    appendElement(document, namespace, root, "seTrack");
-    appendElement(document, namespace, root, "karaokeTrack");
-  }
-  return project;
-}
-
 const SONG_RESOLUTION = 480;
 
 function measureTicks(signature: SongTimeSignatureInput): number {
@@ -1710,98 +1552,6 @@ async function persist(
   };
 }
 
-export async function inspectProjectMixer(inputPath: string): Promise<{
-  path: string;
-  format: VsqxFormat;
-  panSemantics: string;
-  vocalUnits: VocalMixerUnitInfo[];
-}> {
-  const project = await loadProject(inputPath);
-  return {
-    path: project.path,
-    format: project.format,
-    panSemantics: "0=hard left, 64=center, 127=hard right",
-    vocalUnits: readVocalMixerUnits(project),
-  };
-}
-
-function validateMixerUpdates(updates: VocalMixerUpdate[]): void {
-  if (updates.length === 0) throw new Error("updates must not be empty");
-  const tracks = new Set<number>();
-  for (const [index, update] of updates.entries()) {
-    assertIntegerRange(update.trackNumber, 0, 127, `updates[${index}].trackNumber`);
-    if (tracks.has(update.trackNumber)) {
-      throw new Error(`updates contains duplicate trackNumber ${update.trackNumber}`);
-    }
-    tracks.add(update.trackNumber);
-    if (
-      update.volume === undefined
-      && update.pan === undefined
-      && update.mute === undefined
-      && update.solo === undefined
-      && update.sendLevel === undefined
-      && update.sendEnabled === undefined
-    ) {
-      throw new Error(`updates[${index}] must change at least one mixer field`);
-    }
-    if (update.volume !== undefined) {
-      assertIntegerRange(update.volume, -898, 600, `updates[${index}].volume`);
-    }
-    if (update.pan !== undefined) {
-      assertIntegerRange(update.pan, 0, 127, `updates[${index}].pan`);
-    }
-    if (update.sendLevel !== undefined) {
-      assertIntegerRange(update.sendLevel, -898, 0, `updates[${index}].sendLevel`);
-    }
-  }
-}
-
-export async function updateProjectMixer(
-  inputPath: string,
-  outputPath: string,
-  updates: VocalMixerUpdate[],
-  overwrite: boolean,
-): Promise<WriteResult & {
-  panSemantics: string;
-  before: VocalMixerUnitInfo[];
-  after: VocalMixerUnitInfo[];
-  updatedTrackNumbers: number[];
-}> {
-  validateMixerUpdates(updates);
-  const project = await loadProject(inputPath);
-  const before = readVocalMixerUnits(project);
-  const mixer = requiredChild(project.root, "mixer");
-  const fields = mixerUnitFields(project.format);
-  const units = new Map(
-    directChildren(mixer, "vsUnit").map((unit) => [integer(unit, fields.trackNumber), unit]),
-  );
-  for (const update of updates) {
-    const unit = units.get(update.trackNumber);
-    if (!unit) {
-      throw new Error(
-        `Mixer has no vocal unit for track ${update.trackNumber}; available tracks: ${[...units.keys()].sort((a, b) => a - b).join(", ")}`,
-      );
-    }
-    if (update.volume !== undefined) setText(unit, fields.volume, update.volume);
-    if (update.pan !== undefined) setText(unit, fields.pan, update.pan);
-    if (update.mute !== undefined) setText(unit, fields.mute, update.mute ? 1 : 0);
-    if (update.solo !== undefined) setText(unit, fields.solo, update.solo ? 1 : 0);
-    if (update.sendLevel !== undefined) setText(unit, fields.sendLevel, update.sendLevel);
-    if (update.sendEnabled !== undefined) {
-      setText(unit, fields.sendEnabled, update.sendEnabled ? 1 : 0);
-    }
-  }
-  const after = readVocalMixerUnits(project);
-  const result = await persist(project, outputPath, overwrite);
-  return {
-    ...result,
-    panSemantics: "0=hard left, 64=center, 127=hard right",
-    before,
-    after,
-    updatedTrackNumbers: updates.map((update) => update.trackNumber),
-  };
-}
-
 export async function prepareVocalStemProject(
   inputPath: string,
   outputPath: string,
@@ -1881,11 +1631,6 @@ export async function prepareVocalStemProject(
   };
 }
 
-export async function createProject(options: CreateProjectOptions): Promise<WriteResult> {
-  const project = createDocument(options);
-  return persist(project, options.outputPath, options.overwrite);
-}
-
 export async function createSong(
   options: CreateSongOptions,
 ): Promise<WriteResult & {
@@ -1916,188 +1661,6 @@ export async function createSong(
       ),
       0,
     ),
-  };
-}
-
-function reorderDirectChildren(
-  parent: Element,
-  name: string,
-  nodes: Element[],
-  beforeNames: string[],
-): void {
-  for (const node of directChildren(parent, name)) parent.removeChild(node);
-  const before = elementChildren(parent).find((node) => beforeNames.includes(localName(node))) ?? null;
-  for (const node of nodes) parent.insertBefore(node, before);
-}
-
-export async function addNotesToProject(
-  inputPath: string,
-  outputPath: string,
-  trackNumber: number,
-  partIndex: number,
-  notes: NoteInput[],
-  overwrite: boolean,
-): Promise<WriteResult & { added: number; totalNotes: number }> {
-  validateNotes(notes);
-  const project = await loadProject(inputPath);
-  const selection = selectPart(project, trackNumber, partIndex);
-  const allNotes = directChildren(selection.part, "note");
-  for (const note of notes) {
-    allNotes.push(appendNote(project.document, project.namespace, selection.part, project.format, note));
-  }
-  allNotes.sort((left, right) => {
-    const fields = noteFields(project.format);
-    return integer(left, fields.tick) - integer(right, fields.tick);
-  });
-  reorderDirectChildren(selection.part, "note", allNotes, ["plane"]);
-  const fields = noteFields(project.format);
-  const maximumEnd = allNotes.reduce(
-    (maximum, note) => Math.max(maximum, integer(note, fields.tick) + integer(note, fields.duration)),
-    0,
-  );
-  if (maximumEnd > integer(selection.part, "playTime")) {
-    setText(selection.part, "playTime", maximumEnd);
-  }
-  const result = await persist(project, outputPath, overwrite);
-  return { ...result, added: notes.length, totalNotes: allNotes.length };
-}
-
-function replaceElementText(element: Element, value: string, cdata: boolean): void {
-  while (element.firstChild) element.removeChild(element.firstChild);
-  const document = element.ownerDocument;
-  if (!document) throw new Error(`Malformed VSQX: <${localName(element)}> has no owner document`);
-  element.appendChild(cdata ? document.createCDATASection(value) : document.createTextNode(value));
-}
-
-function setStyleValue(
-  project: LoadedProject,
-  style: Element,
-  id: string,
-  value: number,
-): void {
-  const valueName = project.format === "vsq4" ? "v" : "attr";
-  let entry = directChildren(style, valueName).find((candidate) => candidate.getAttribute("id") === id);
-  if (!entry) {
-    entry = project.document.createElementNS(project.namespace, valueName);
-    entry.setAttribute("id", id);
-    const firstSequence = elementChildren(style).find((candidate) => {
-      const name = localName(candidate);
-      return name === "seq" || name === "seqAttr";
-    }) ?? null;
-    style.insertBefore(entry, firstSequence);
-  }
-  replaceElementText(entry, String(value), false);
-}
-
-function replaceStyleSequence(
-  project: LoadedProject,
-  style: Element,
-  id: "vibDep" | "vibRate",
-  points: NormalizedControlPoint[],
-): void {
-  const sequenceName = project.format === "vsq4" ? "seq" : "seqAttr";
-  for (const sequence of directChildren(style, sequenceName)) {
-    if (sequence.getAttribute("id") === id) style.removeChild(sequence);
-  }
-  appendStyleSequence(project.document, project.namespace, style, project.format, id, points);
-}
-
-function validateNoteExpressionUpdates(updates: NoteExpressionUpdate[]): void {
-  const indices = new Set<number>();
-  const styleRanges: Record<string, readonly [number, number]> = {
-    accent: [0, 100],
-    bendDep: [0, 100],
-    bendLen: [0, 100],
-    decay: [0, 100],
-    fallPort: [0, 1],
-    opening: [0, 127],
-    risePort: [0, 1],
-  };
-  for (const [updateIndex, update] of updates.entries()) {
-    assertIntegerRange(update.noteIndex, 0, 2_147_483_647, `updates[${updateIndex}].noteIndex`);
-    if (indices.has(update.noteIndex)) {
-      throw new Error(`updates contains duplicate noteIndex ${update.noteIndex}`);
-    }
-    indices.add(update.noteIndex);
-    if (update.velocity !== undefined) {
-      assertIntegerRange(update.velocity, 0, 127, `updates[${updateIndex}].velocity`);
-    }
-    if ((update.lyric ?? "").length > 32) {
-      throw new Error(`updates[${updateIndex}].lyric exceeds 32 characters`);
-    }
-    if ((update.phonemes ?? "").length > 32) {
-      throw new Error(`updates[${updateIndex}].phonemes exceeds 32 characters`);
-    }
-    for (const [id, value] of Object.entries(update.style ?? {})) {
-      const range = styleRanges[id];
-      if (!range || value === undefined) continue;
-      assertIntegerRange(value, range[0], range[1], `updates[${updateIndex}].style.${id}`);
-    }
-    if (update.vibrato) validateVibrato(update.vibrato, `updates[${updateIndex}].vibrato`);
-  }
-}
-
-export async function updateNoteExpressionsInProject(
-  inputPath: string,
-  outputPath: string,
-  trackNumber: number,
-  partIndex: number,
-  updates: NoteExpressionUpdate[],
-  overwrite: boolean,
-): Promise<WriteResult & { updated: number; noteIndices: number[]; totalNotes: number }> {
-  validateNoteExpressionUpdates(updates);
-  const project = await loadProject(inputPath);
-  const selection = selectPart(project, trackNumber, partIndex);
-  const notes = directChildren(selection.part, "note");
-  const fields = noteFields(project.format);
-  for (const update of updates) {
-    const note = notes[update.noteIndex];
-    if (!note) {
-      throw new Error(
-        `Track ${trackNumber} part ${partIndex} has no note at index ${update.noteIndex}`,
-      );
-    }
-    if (update.velocity !== undefined) setText(note, fields.velocity, update.velocity);
-    if (update.lyric !== undefined) replaceElementText(requiredChild(note, fields.lyric), update.lyric, true);
-    if (update.phonemes !== undefined) {
-      replaceElementText(requiredChild(note, fields.phonemes), update.phonemes, true);
-    }
-    if (update.phonemeLocked !== undefined) {
-      const phonemes = requiredChild(note, fields.phonemes);
-      if (update.phonemeLocked) phonemes.setAttribute("lock", "1");
-      else phonemes.removeAttribute("lock");
-    }
-    let style = firstChild(note, fields.style);
-    if (!style) style = appendElement(project.document, project.namespace, note, fields.style);
-    for (const [id, value] of Object.entries(update.style ?? {})) {
-      if (value !== undefined) setStyleValue(project, style, id, value);
-    }
-    if (update.vibrato) {
-      if (update.vibrato.type !== undefined) {
-        setStyleValue(project, style, "vibType", update.vibrato.type);
-      }
-      if (update.vibrato.length !== undefined) {
-        setStyleValue(project, style, "vibLen", update.vibrato.length);
-      }
-      if (update.vibrato.depth !== undefined) {
-        replaceStyleSequence(project, style, "vibDep", update.vibrato.depth);
-      }
-      if (update.vibrato.rate !== undefined) {
-        replaceStyleSequence(project, style, "vibRate", update.vibrato.rate);
-      }
-      if (update.vibrato.type === 0) {
-        setStyleValue(project, style, "vibLen", 0);
-        replaceStyleSequence(project, style, "vibDep", []);
-        replaceStyleSequence(project, style, "vibRate", []);
-      }
-    }
-  }
-  const result = await persist(project, outputPath, overwrite);
-  return {
-    ...result,
-    updated: updates.length,
-    noteIndices: updates.map((update) => update.noteIndex),
-    totalNotes: notes.length,
   };
 }
 
@@ -2141,53 +1704,6 @@ function validateControlPoints(curve: CurveName, points: ControlPointInput[]): v
     if (ticks.has(point.tick)) throw new Error(`${curve} points contain duplicate tick ${point.tick}`);
     ticks.add(point.tick);
   }
-}
-
-export async function addControlPointsToProject(
-  inputPath: string,
-  outputPath: string,
-  trackNumber: number,
-  partIndex: number,
-  curve: CurveName,
-  points: ControlPointInput[],
-  replaceRange: boolean,
-  overwrite: boolean,
-): Promise<WriteResult & { curve: CurveName; added: number; totalControlPoints: number }> {
-  validateControlPoints(curve, points);
-  const project = await loadProject(inputPath);
-  const selection = selectPart(project, trackNumber, partIndex);
-  const controlName = trackFields(project.format).control;
-  let controls = directChildren(selection.part, controlName);
-  if (replaceRange && points.length > 0) {
-    const start = Math.min(...points.map((point) => point.tick));
-    const end = Math.max(...points.map((point) => point.tick));
-    controls = controls.filter((control, index) => {
-      const info = readControl(control, project.format, index);
-      return info.curve !== curve || info.tick < start || info.tick > end;
-    });
-  }
-  const keyed = new Map<string, Element>();
-  for (const [index, control] of controls.entries()) {
-    const info = readControl(control, project.format, index);
-    keyed.set(`${info.curve}:${info.tick}`, control);
-  }
-  for (const point of points) {
-    const control = createControl(project, selection.part, curve, point);
-    keyed.set(`${curve}:${point.tick}`, control);
-  }
-  controls = [...keyed.values()].sort((left, right) => {
-    const leftInfo = readControl(left, project.format, 0);
-    const rightInfo = readControl(right, project.format, 0);
-    return leftInfo.tick - rightInfo.tick || leftInfo.curve.localeCompare(rightInfo.curve);
-  });
-  reorderDirectChildren(selection.part, controlName, controls, ["note", "plane"]);
-  const result = await persist(project, outputPath, overwrite);
-  return {
-    ...result,
-    curve,
-    added: points.length,
-    totalControlPoints: controls.length,
-  };
 }
 
 export async function validateProject(

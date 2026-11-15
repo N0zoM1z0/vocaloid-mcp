@@ -9,7 +9,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { acquireEditorLease, type EditorLease } from "./editor-lease.js";

@@ -50,10 +50,9 @@ import {
   type MusicalPosition,
   type PositionedNoteInput,
   type SongPartInput,
-  type SongTimeSignatureInput,
   type SongTrackInput,
 } from "./vsqx.js";
-import type { CurveName, NoteInput, VibratoInput, VsqxFormat } from "./types.js";
+import type { CurveName, VibratoInput, VsqxFormat } from "./types.js";
 
 export { songIntentHash };
 
