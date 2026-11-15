@@ -2228,16 +2228,16 @@ The `full` profile exposes 49 tools, including lower-level VSQX creation/editing
 Detailed checkpoint evidence remains available in the repository:
 
 - [`notes/synthesis-reverse-engineering.md`](../notes/synthesis-reverse-engineering.md) — native DLL, Vsq3 loader, DSE investigation, and editor automation;
-- [`notes/long-form-workflows.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/long-form-workflows.md) — rapid lyrics, melisma, patterns, and long-song examples;
+- [`notes/long-form-workflows.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/long-form-workflows.md) — rapid lyrics, melisma, patterns, and long-song examples;
 - [`notes/song-manifest-design.md`](../notes/song-manifest-design.md) — canonical state and concurrency contract;
 - [`notes/song-manifest-workflows.md`](../notes/song-manifest-workflows.md) — bounded agent mutation examples;
 - [`notes/stem-mix-workflow.md`](../notes/stem-mix-workflow.md) — alignment, effect order, and mix hashing;
 - [`notes/score-render-analysis.md`](../notes/score-render-analysis.md) — vocal measurement method and limitations;
 - [`notes/japanese-lyrics-and-gestures.md`](../notes/japanese-lyrics-and-gestures.md) — phoneme evidence, mora timing, and gesture compilation;
-- [`notes/codex-mcp-v1-eval.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/codex-mcp-v1-eval.md) — isolated creative Codex evaluation;
-- [`notes/production-profile-eval-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/production-profile-eval-2026-07-18.md) — compact-profile routing evaluation;
-- [`notes/capability-audit-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/capability-audit-2026-07-18.md) — evidence-driven gap audit;
-- [`notes/style-eval-closure-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/style-eval-closure-2026-07-18.md) — exact final-song hashes, QC metrics, and resume defects.
+- [`notes/codex-mcp-v1-eval.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/codex-mcp-v1-eval.md) — isolated creative Codex evaluation;
+- [`notes/production-profile-eval-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/production-profile-eval-2026-07-18.md) — compact-profile routing evaluation;
+- [`notes/capability-audit-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/capability-audit-2026-07-18.md) — evidence-driven gap audit;
+- [`notes/style-eval-closure-2026-07-18.md`](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/style-eval-closure-2026-07-18.md) — exact final-song hashes, QC metrics, and resume defects.
 
 ---
 

@@ -17,7 +17,7 @@ links point at the last commit that contained them.
 
 ## 2026-07-19 — High-BPM IA_ROCKS cold-start validation
 
-Detailed note (archived): [cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md)
+Detailed note (archived): [cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/cold-start-evaluation-natsu-ame-semi-ia-rocks-20260719.md)
 
 - **A fresh agent could consume a bounded BPM range and finish a 190 BPM song**
   - Scope: a new `gpt-5.6-sol`/`xhigh` session received only the fixed prompt
@@ -97,7 +97,7 @@ Detailed note (archived): [cold-start-evaluation-natsu-ame-semi-ia-rocks-2026071
 
 ## 2026-07-19 — Original-IA swordsmen cold-start validation
 
-Detailed note (archived): [cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md)
+Detailed note (archived): [cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19.md)
 
 - **Fresh-agent composition transfer succeeded, but orchestration is still bespoke**
   - Scope: a new `gpt-5.6-sol`/`xhigh` session independently authored and
@@ -157,7 +157,7 @@ Detailed note (archived): [cold-start-evaluation-kaze-wa-na-o-yobanai-2026-07-19
 
 ## 2026-07-19 — Distant-lights cold-start follow-up
 
-Detailed note (archived): [tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/b40a673/notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md)
+Detailed note (archived): [tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md](https://github.com/N0zoM1z0/vocaloid-mcp/blob/58436eb/notes/tooi-hi-aoi-yoru-root-cause-and-grammar-2026-07-19.md)
 
 - **Reported sharp/separated vocal in final WAV**
   - Scope: absent in dry lead and processed-vocal anchor; present only after

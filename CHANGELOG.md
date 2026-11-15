@@ -7,7 +7,7 @@ All notable repository-level milestones are recorded here. Detailed implementati
 ### Removed
 
 - The `full` and `legacy-vsqx` MCP profiles and their 29 tools. Every granular manifest mutation remains available as a `vocaloid_edit_song` action; direct VSQX mutation (`createProject`, `addNotesToProject`, mixer edits, and so on) is gone. `VOCALOID_MCP_PROFILE` is ignored.
-- The intent-first benchmark harness (it was never run), the per-song compose scripts, the IDA/UI debugging scripts, the historical plan, and dated evaluation notes. Remaining docs link to commit `b40a673` for archived material.
+- The intent-first benchmark harness (it was never run), the per-song compose scripts, the IDA/UI debugging scripts, the historical plan, and dated evaluation notes. Remaining docs link to commit `58436eb` for archived material.
 
 ### Changed
 
